@@ -79,14 +79,14 @@ One prompt per node, shared by all fincas. Finca-specific values (category catal
 
 The first development increment must let Andreu validate that the agents work correctly before any paid API is used:
 
-- LLM: local Ollama (`qwen3.5:4b` by default, `qwen3:8b` for quality checks). LiteLLM and paid providers are not used in this phase.
+- LLM: local Ollama (`qwen3.5:4b` by default, `qwen3:8b` for quality checks). LiveKit, paid voice providers and paid LLM APIs are not used in this phase. LiteLLM is likewise deferred until a paid provider is introduced.
 - Speech: the browser Web Speech API (SpeechRecognition for STT, SpeechSynthesis for TTS). No paid voice provider.
 - Frontend: a React + TypeScript + Vite + Ant Design console that starts a simulated call, streams the conversation, shows the current graph node, the structured extraction, the validations applied and the resulting incident, and allows text input as a fallback when the microphone is unavailable.
 - Backend: FastAPI exposing the call session API used by the console; the same API will later be driven by the telephony integration.
 
 ## Out of scope for this document
 
-Telephony provider, real STT/TTS vendors, LiteLLM routing, Langfuse prompt migration and the observability platform are covered by other specifications or are pending.
+Telephony provider and real-time media layer (LiveKit is the candidate, self-hosted preferred), real STT/TTS vendors, LiteLLM routing, Langfuse prompt migration and the observability platform are covered by other specifications or are pending.
 
 ## Success Criteria
 
