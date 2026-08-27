@@ -6,3 +6,5 @@ __pycache__/
 .mcp-*
 .env
 .venv/
+.worktrees/
+.superpowers/
