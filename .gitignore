@@ -8,3 +8,6 @@ __pycache__/
 .venv/
 .worktrees/
 .superpowers/
+node_modules/
+dist/
+frontend/dist/
