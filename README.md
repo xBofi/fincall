@@ -12,7 +12,7 @@ gh auth status
 
 Configura `config/codex-mcp.toml` en Codex y `config/claude-mcp.json` en Claude. Ambos usan el mismo proceso MCP y la misma bóveda. El transporte es `stdio`: el cliente lo levanta bajo demanda y lo termina al cerrar la sesión.
 
-## RAG local
+## RAG local y GraphRAG
 
 El MCP incluye `rebuild_rag_index`, `rag_search` y `rag_context`. El índice SQLite FTS5 se guarda en `%LOCALAPPDATA%\BuildingCallAssistant\rag.sqlite3`, fuera de la bóveda y de Git. Se actualiza incrementalmente antes de buscar y puede reconstruirse con:
 
@@ -20,7 +20,13 @@ El MCP incluye `rebuild_rag_index`, `rag_search` y `rag_context`. El índice SQL
 .\scripts\rebuild-rag-index.ps1
 ```
 
-La recuperación devuelve texto fuente con sus rutas; no genera respuestas ni llama a modelos externos. La interfaz queda preparada para añadir embeddings o GraphRAG más adelante.
+Para recuperación semántica y relacional, el MCP también ofrece `rebuild_graph_index`, `hybrid_search`, `graph_context`, `graph_inspect` y `evaluate_rag`. Usa únicamente Ollama local: `mxbai-embed-large:latest` para embeddings y `qwen3.5:4b` para extraer relaciones con evidencia literal. El modo `quality` usa `qwen3:8b`.
+
+```powershell
+.\scripts\rebuild-graphrag-index.ps1
+```
+
+El índice híbrido fusiona FTS5 y vectores, deduplica por documento y conserva cada relación con su fragmento de evidencia. Las comunidades son componentes conectados deterministas; no se generan resúmenes inventados. Evalúa el retrieval contra el conjunto versionado en `mcp_server/evals/graphrag_gold.jsonl` mediante `evaluate_rag`.
 
 ## Git de la bóveda
 
