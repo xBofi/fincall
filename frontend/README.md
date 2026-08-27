@@ -1,32 +1,27 @@
-# React + TypeScript + Vite
+# Consola de validación
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite + Ant Design. Simula una llamada con el voicebot y mide la latencia.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev      # http://localhost:5173 (proxy /api -> http://127.0.0.1:8000)
+npm run build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Requiere el backend en marcha (`cd ../backend; uv run building-call`). Micrófono y reconocimiento
+de voz del navegador solo en Chrome/Edge.
+
+## Pipeline de voz (`src/voz.ts`)
+
+- **Captura con VAD**: `MediaRecorder` + `AudioContext`; fin de turno por silencio (por defecto
+  550 ms, ajustable). `finVozAt` es el inicio de ese silencio.
+- **STT**: `navegador` (Web Speech API) o `servidor` (faster-whisper vía `POST /api/llamadas/{id}/audio`).
+- **TTS**: `SpeechSynthesis`; el instante `onstart` marca el inicio real del audio del asistente.
+- **Barge-in**: si el vecino habla mientras el asistente responde, se corta la locución.
+- **Manos libres**: tras cada respuesta vuelve a escuchar automáticamente.
+
+## Métricas (pestaña "Latencia")
+
+`respuesta_ms` = `ttsInicioAt - finVozAt`, con desglose VAD / STT / servidor (LLM) / red / TTS.
+Umbrales: ≤700 excelente · ≤1200 objetivo · ≤1500 tolerable · ≤2000 mal · >2000 muy mal. Cada
+turno se envía a `POST /api/llamadas/{id}/metricas` para agregarlo en el servidor (`GET /api/metricas`).

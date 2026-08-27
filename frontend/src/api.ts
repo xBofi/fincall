@@ -34,8 +34,20 @@ export interface DatosLlamada {
   intentos_vivienda: number | null
 }
 
+export interface TiemposServidor {
+  turno?: number
+  servidor_ms?: number
+  grafo_ms?: number
+  stt_ms?: number
+  interpretacion_ms?: number
+  clasificacion_ms?: number
+  llm_llamadas?: number
+  origen_interpretacion?: string
+}
+
 export interface VistaLlamada {
   llamada_id: string
+  turno: number
   nodo_actual: string
   esperando_usuario: boolean
   finalizada: boolean
@@ -44,8 +56,13 @@ export interface VistaLlamada {
   traza: Traza[]
   validaciones: string[]
   senales_confianza: Record<string, unknown> | null
+  interpretacion: Record<string, unknown> | null
+  pendientes: Record<string, string>
+  tiempos: TiemposServidor
   configuracion: Record<string, unknown> | null
   datos: DatosLlamada
+  transcripcion?: string
+  sin_voz?: boolean
 }
 
 export interface Salud {
@@ -53,7 +70,10 @@ export interface Salud {
   repositorio: string
   modelo: string
   modelo_disponible: boolean
+  stt_servidor: string
+  stt_disponible: boolean
   grafos: string[]
+  umbrales_ms: Record<string, number>
 }
 
 export interface Finca {
@@ -64,26 +84,66 @@ export interface Finca {
   viviendas: string[]
 }
 
+export interface MetricasCliente {
+  turno: number
+  vad_silencio_ms?: number
+  red_ms?: number
+  tts_inicio_ms?: number
+  respuesta_ms?: number
+  stt_cliente?: string
+  extra?: Record<string, unknown>
+}
+
+export interface Resumen {
+  n: number
+  p50: number | null
+  p95: number | null
+  max: number | null
+}
+
+export interface Agregados {
+  turnos: number
+  respuesta_ms: Resumen
+  calificaciones: Record<string, number>
+  servidor_ms: Resumen
+  servidor_ms_con_llm: Resumen
+  servidor_ms_sin_llm: Resumen
+  stt_ms: Resumen
+  interpretacion_ms: Resumen
+  clasificacion_ms: Resumen
+  vad_silencio_ms: Resumen
+  tts_inicio_ms: Resumen
+  umbrales_ms: Record<string, number>
+}
+
 async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  })
+  const r = await fetch(url, init)
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`)
   return (await r.json()) as T
 }
+
+const json = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+})
 
 export const api = {
   salud: () => pedir<Salud>('/api/salud'),
   fincas: () => pedir<Finca[]>('/api/fincas'),
   iniciar: (telefono?: string) =>
-    pedir<VistaLlamada>('/api/llamadas', {
-      method: 'POST',
-      body: JSON.stringify({ telefono_llamante: telefono ?? null }),
-    }),
+    pedir<VistaLlamada>('/api/llamadas', json({ telefono_llamante: telefono ?? null })),
   mensaje: (id: string, texto: string) =>
-    pedir<VistaLlamada>(`/api/llamadas/${id}/mensajes`, {
-      method: 'POST',
-      body: JSON.stringify({ texto }),
-    }),
+    pedir<VistaLlamada>(`/api/llamadas/${id}/mensajes`, json({ texto })),
+  audio: (id: string, blob: Blob, mime: string) => {
+    const form = new FormData()
+    form.append('fichero', blob, 'turno.webm')
+    form.append('mime', mime)
+    return pedir<VistaLlamada>(`/api/llamadas/${id}/audio`, { method: 'POST', body: form })
+  },
+  metricas: (id: string, cuerpo: MetricasCliente) =>
+    pedir<unknown>(`/api/llamadas/${id}/metricas`, json(cuerpo)),
+  metricasLlamada: (id: string) =>
+    pedir<{ agregados: Agregados; turnos: Record<string, unknown>[] }>(`/api/llamadas/${id}/metricas`),
+  metricasGlobales: () => pedir<{ agregados: Agregados }>('/api/metricas'),
 }

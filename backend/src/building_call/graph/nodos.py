@@ -2,6 +2,11 @@
 
 Reglas (bóveda, 04 Arquitectura): el LLM interpreta y extrae; el código valida y decide.
 Cada nodo es una función reutilizable por cualquier grafo del registro.
+
+Naturalidad: cada turno del vecino pasa por una interpretación (determinista si basta, LLM si
+no) que extrae todo lo que dijo y una intención global. `siguiente_paso` consume esos datos y
+salta las preguntas ya respondidas; las intenciones globales (repetir, corregir, humano,
+colgar, fuera de ámbito, pregunta) se atienden desde cualquier nodo.
 """
 
 from __future__ import annotations
@@ -11,6 +16,7 @@ import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
+from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
@@ -23,6 +29,16 @@ from building_call.domain.configuracion import (
 from building_call.domain.entidades import Incidencia, Llamada, Vivienda
 from building_call.graph.estado import EstadoLlamada, Traza
 from building_call.llm.base import ModeloLenguaje
+from building_call.llm.interpretacion import (
+    VERSION_INTERPRETACION,
+    Interpretacion,
+    interpretar,
+)
+from building_call.llm.prompts import (
+    VERSION_CLASIFICACION,
+    esquema_clasificacion,
+    sistema_clasificacion,
+)
 from building_call.repos.base import Repositorio
 
 UMBRAL_FINCA = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
@@ -32,6 +48,9 @@ UMBRAL_FINCA = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
 class Dependencias:
     repo: Repositorio
     llm: ModeloLenguaje
+
+
+# --------------------------------------------------------------------------- normalización
 
 
 def _nuevo_id(prefijo: str) -> str:
@@ -89,7 +108,9 @@ def _normalizar(texto: str) -> str:
     """Normalización para direcciones: números en letra a cifras y sin palabras vacías."""
     texto = _numeros_a_cifras(_normalizar_basico(texto))
     texto = re.sub(
-        r"\b(calle|c|avenida|avda|av|plaza|pza|paseo|numero|n|del|de|la|el|los|las)\b", " ", texto
+        r"\b(calle|c|avenida|avda|av|plaza|pza|paseo|numero|n|del|de|la|el|los|las|en|vivo|llamo|desde|es)\b",
+        " ",
+        texto,
     )
     return re.sub(r"\s+", " ", texto).strip()
 
@@ -106,7 +127,6 @@ def _similitud_direccion(entrada: str, direccion: str) -> float:
 
 _SI = {
     "si",
-    "sí",
     "correcto",
     "exacto",
     "vale",
@@ -114,39 +134,32 @@ _SI = {
     "afirmativo",
     "eso es",
     "asi es",
-    "así es",
     "ok",
+    "efectivamente",
+    "perfecto",
 }
-_NO = {"no", "incorrecto", "negativo", "para nada", "que no", "no es"}
+_NO = {"no", "incorrecto", "negativo", "para nada", "que no", "no es", "tampoco"}
 
 
 def _respuesta_si_no(texto: str) -> bool | None:
-    t = _normalizar(texto)
+    t = _normalizar_basico(texto)
     palabras = set(t.split())
-    if palabras & {_normalizar(s) for s in _SI} or t in {_normalizar(s) for s in _SI}:
-        if not (palabras & {_normalizar(s) for s in _NO}):
-            return True
-    if palabras & {_normalizar(s) for s in _NO} or t.startswith("no"):
+    si = {_normalizar_basico(s) for s in _SI}
+    no = {_normalizar_basico(s) for s in _NO}
+    if (palabras & si or t in si) and not (palabras & no):
+        return True
+    if palabras & no or t.startswith("no"):
         return False
     return None
 
 
 _PISOS = {
-    "bajo": "0",
-    "primero": "1",
-    "primer": "1",
-    "segundo": "2",
-    "tercero": "3",
-    "tercer": "3",
-    "cuarto": "4",
-    "quinto": "5",
-    "sexto": "6",
-    "septimo": "7",
-    "octavo": "8",
-    "noveno": "9",
-    "decimo": "10",
-    "atico": "atico",
-}
+    "bajo": "0", "primero": "1", "primer": "1", "primera": "1", "segundo": "2", "segunda": "2",
+    "tercero": "3", "tercer": "3", "tercera": "3", "cuarto": "4", "cuarta": "4", "quinto": "5",
+    "quinta": "5", "sexto": "6", "sexta": "6", "septimo": "7", "septima": "7", "octavo": "8",
+    "octava": "8", "noveno": "9", "novena": "9", "decimo": "10", "decima": "10", "atico": "atico",
+    "entresuelo": "entresuelo", "principal": "principal",
+}  # fmt: skip
 
 
 def _normalizar_portal(valor: str | None) -> str | None:
@@ -172,10 +185,11 @@ def _normalizar_puerta(valor: str | None) -> str | None:
     if valor is None:
         return None
     v = _normalizar_basico(str(valor)).replace("puerta", "").replace("letra", "").strip()
+    v = {"izquierda": "izq", "derecha": "dcha"}.get(v, v)
     return v.upper() or None
 
 
-_ORDINALES = "|".join(k for k in _PISOS if k not in {"bajo", "atico"})
+_ORDINALES = "|".join(k for k in _PISOS if k not in {"bajo", "atico", "entresuelo", "principal"})
 
 
 def _extraer_vivienda_regex(texto: str) -> tuple[str | None, str | None, str | None]:
@@ -186,7 +200,9 @@ def _extraer_vivienda_regex(texto: str) -> tuple[str | None, str | None, str | N
     resto = re.sub(r"\bportal\s+\w+", " ", t)
     m_piso = re.search(rf"\b(\d{{1,2}}|{_ORDINALES}|bajo|atico)\b\s*(?:piso|planta)?", resto)
     piso = _normalizar_piso(m_piso.group(1)) if m_piso else None
-    m_puerta = re.search(r"(?:\bpuerta\s+|\bletra\s+)?\b([a-h]|\d{1,2})\b\s*$", resto.strip())
+    m_puerta = re.search(
+        r"(?:\bpuerta\s+|\bletra\s+)?\b([a-h]|\d{1,2}|izquierda|derecha)\b\s*$", resto.strip()
+    )
     puerta = None
     if m_puerta and (m_piso is None or m_puerta.start() > m_piso.start()):
         puerta = _normalizar_puerta(m_puerta.group(1))
@@ -210,6 +226,9 @@ def _buscar_vivienda(
     return sin_portal[0] if len(sin_portal) == 1 else None
 
 
+# --------------------------------------------------------------------------- utilidades de estado
+
+
 def _con_traza(estado: EstadoLlamada, nodo: str, accion: str, detalle: str = "") -> list[Traza]:
     return [*estado.get("traza", []), Traza(nodo=nodo, accion=accion, detalle=detalle)]
 
@@ -224,6 +243,7 @@ def _preguntar(estado: EstadoLlamada, nodo: str, texto: str, **extra: Any) -> di
         **extra,
         "mensajes_bot": [*estado.get("mensajes_bot", []), texto],
         "historial": [*base, {"rol": "bot", "texto": texto}],
+        "ultima_pregunta": texto,
     }
 
 
@@ -256,6 +276,20 @@ def _config(estado: EstadoLlamada) -> ConfiguracionEfectiva:
     return ConfiguracionEfectiva.model_validate(doc) if doc else DEFAULTS
 
 
+def _catalogo(estado: EstadoLlamada) -> list[str]:
+    return [*_config(estado).catalogo_categorias, CATEGORIA_NO_CLASIFICABLE]
+
+
+def _tiempos(estado: EstadoLlamada, **valores: Any) -> dict[str, Any]:
+    t = dict(estado.get("tiempos_turno", {}))
+    for k, v in valores.items():
+        if k == "llm_llamadas":
+            t[k] = t.get(k, 0) + v
+        else:
+            t[k] = v
+    return t
+
+
 def _llamada_desde(estado: EstadoLlamada, resultado: str, motivo: str | None = None) -> Llamada:
     return Llamada(
         id=estado["llamada_id"],
@@ -273,58 +307,452 @@ def _llamada_desde(estado: EstadoLlamada, resultado: str, motivo: str | None = N
     )
 
 
+# --------------------------------------------------------------------------- interpretación
+
+
+_PREFIJOS_NOMBRE = re.compile(
+    r"^(?:hola[, ]*)?(?:soy|me llamo|mi nombre es|aqui)\s+", re.IGNORECASE
+)
+
+
+def _nombre_simple(texto: str) -> str | None:
+    """'Soy Marta López' -> 'Marta López' sin LLM; None si la frase no es solo un nombre."""
+    limpio = _PREFIJOS_NOMBRE.sub("", texto.strip().strip(".!"))
+    return limpio.title() if _es_nombre_simple(limpio) else None
+
+
+def _es_nombre_simple(texto: str) -> bool:
+    t = _normalizar_basico(texto)
+    palabras = t.split()
+    return (
+        1 <= len(palabras) <= 3
+        and not any(ch.isdigit() for ch in t)
+        and not (
+            set(palabras)
+            & {"no", "si", "que", "hola", "es", "el", "la", "en", "un", "una", "por", "para"}
+        )
+    )
+
+
+def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[str, str]:
+    pend = dict(estado.get("pendientes", {}))
+    for campo in ("direccion", "portal", "piso", "puerta", "nombre", "problema"):
+        valor = getattr(interp, campo)
+        if valor:
+            pend[campo] = valor
+    if interp.problema:
+        pend["problema_corto"] = interp.problema
+        for campo in ("categoria", "urgencia"):
+            valor = getattr(interp, campo)
+            if valor:
+                pend[campo] = valor
+    return pend
+
+
+_FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
+    (
+        ("grab", "registr"),
+        "Sí: la llamada se registra para gestionar su incidencia y para control de calidad. ",
+    ),
+    (
+        ("tard", "cuando", "plazo", "vend"),
+        "El plazo depende del especialista; el administrador le informará del seguimiento. ",
+    ),
+    (("nombre", "para que"), "Solo necesito su nombre para saber quién comunica la incidencia. "),
+    (
+        ("quien", "maquina", "robot", "persona"),
+        "Soy el asistente automático del administrador de su comunidad. ",
+    ),
+    (("coste", "cuesta", "pagar", "precio"), "Esta llamada no tiene coste adicional para usted. "),
+)
+
+
+def _responder_pregunta(texto: str) -> str:
+    t = _normalizar_basico(texto)
+    for claves, respuesta in _FAQ:
+        if any(c in t for c in claves):
+            return respuesta
+    return "Solo puedo gestionar incidencias y solicitudes de su finca. "
+
+
+def _es_pregunta_faq(texto: str) -> bool:
+    """Pregunta al asistente reconocible sin LLM: interrogación + palabra clave y sin datos."""
+    t = texto.strip()
+    if not (t.startswith("¿") or t.endswith("?")):
+        return False
+    n = _normalizar_basico(t)
+    if any(ch.isdigit() for ch in n):
+        return False
+    return any(c in n for claves, _ in _FAQ for c in claves)
+
+
 def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     """Devuelve {nombre_nodo: función async} para registrarlos en un grafo."""
+
+    async def _interpretar(
+        estado: EstadoLlamada, entrada: str, nodo: str, *, si_no: bool = False
+    ) -> tuple[Interpretacion, dict[str, Any]]:
+        """Determinista cuando basta; si no, una llamada al LLM. Devuelve (interp, tiempos)."""
+        if si_no:
+            r = _respuesta_si_no(entrada)
+            if r is not None and len(entrada.split()) <= 4:
+                interp = Interpretacion(confirma=r, origen="determinista")
+                return interp, _tiempos(estado, origen_interpretacion="determinista")
+        if _es_pregunta_faq(entrada):
+            interp = Interpretacion(intencion="pregunta", pregunta=entrada, origen="determinista")
+            return interp, _tiempos(estado, origen_interpretacion="determinista")
+        if nodo == "registrar_nombre" and (nombre := _nombre_simple(entrada)):
+            interp = Interpretacion(nombre=nombre, origen="determinista")
+            return interp, _tiempos(estado, origen_interpretacion="determinista")
+        interp = await interpretar(
+            deps.llm, estado.get("ultima_pregunta"), entrada, nodo, catalogo=_catalogo(estado)
+        )
+        return interp, _tiempos(
+            estado, interpretacion_ms=interp.llm_ms, llm_llamadas=1, origen_interpretacion="llm"
+        )
+
+    def _vista_interp(interp: Interpretacion) -> dict[str, Any]:
+        return {
+            **interp.model_dump(exclude_none=True),
+            "origen": interp.origen,
+            "llm_ms": interp.llm_ms,
+        }
+
+    def _intencion_global(
+        estado: EstadoLlamada,
+        nodo: str,
+        interp: Interpretacion,
+        historial: list[dict[str, str]],
+        extra: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Atiende repetir/pregunta/fuera_ambito/humano/colgar. None si el turno sigue su curso."""
+        ultima = estado.get("ultima_pregunta") or "¿En qué puedo ayudarle?"
+        aporta_datos = bool(interp.campos_presentes()) or interp.confirma is not None
+        if interp.intencion == "repetir":
+            return _preguntar(
+                estado,
+                nodo,
+                f"Claro, le repito. {ultima}",
+                historial=historial,
+                traza=_con_traza(estado, nodo, "intencion", "repetir"),
+                **extra,
+            )
+        if (interp.intencion == "pregunta" or interp.pregunta) and not aporta_datos:
+            return _preguntar(
+                estado,
+                nodo,
+                _responder_pregunta(interp.pregunta or estado.get("entrada_usuario") or "")
+                + ultima,
+                historial=historial,
+                traza=_con_traza(estado, nodo, "intencion", "pregunta"),
+                **extra,
+            )
+        if interp.intencion == "fuera_ambito" and not aporta_datos:
+            return _preguntar(
+                estado,
+                nodo,
+                "Lo siento, solo puedo gestionar incidencias y solicitudes de la finca. " + ultima,
+                historial=historial,
+                traza=_con_traza(estado, nodo, "intencion", "fuera_ambito"),
+                **extra,
+            )
+        if interp.intencion == "humano":
+            return _avanzar(
+                estado,
+                "derivar_humano",
+                historial=historial,
+                traza=_con_traza(estado, nodo, "intencion", "humano"),
+                **extra,
+            )
+        if interp.intencion == "colgar" and not aporta_datos:
+            return _avanzar(
+                estado,
+                "despedida",
+                historial=historial,
+                traza=_con_traza(estado, nodo, "intencion", "colgar"),
+                **extra,
+            )
+        return None
+
+    async def _turno(
+        estado: EstadoLlamada, nodo: str, *, si_no: bool = False
+    ) -> tuple[Interpretacion, list[dict[str, str]], dict[str, Any], dict[str, Any] | None]:
+        """Registra la entrada, interpreta y atiende intenciones globales.
+
+        Devuelve (interp, historial, extra_estado, salida_global_o_None)."""
+        entrada = estado["entrada_usuario"] or ""
+        historial = _registrar_entrada(estado)
+        interp, tiempos = await _interpretar(estado, entrada, nodo, si_no=si_no)
+        extra = {"tiempos_turno": tiempos, "interpretacion": _vista_interp(interp)}
+        salida = _intencion_global(estado, nodo, interp, historial, extra)
+        return interp, historial, extra, salida
+
+    # ------------------------------------------------------------------ enrutador determinista
+
+    async def siguiente_paso(estado: EstadoLlamada) -> dict[str, Any]:
+        """Decide el siguiente nodo según lo que falta, consumiendo lo que el vecino ya dijo."""
+        nodo = "siguiente_paso"
+        pend = dict(estado.get("pendientes", {}))
+        cambios: dict[str, Any] = {}
+        traza = list(estado.get("traza", []))
+        validaciones = list(estado.get("validaciones", []))
+
+        if not estado.get("finca_id"):
+            direccion = pend.pop("direccion", None)
+            if direccion:
+                fincas = await deps.repo.listar_fincas()
+                puntuadas = sorted(
+                    ((_similitud_direccion(direccion, f.direccion), f) for f in fincas),
+                    key=lambda p: p[0],
+                    reverse=True,
+                )
+                if puntuadas and puntuadas[0][0] >= UMBRAL_FINCA:
+                    puntuacion, finca = puntuadas[0]
+                    traza.append(
+                        Traza(
+                            nodo=nodo,
+                            accion="candidata",
+                            detalle=f"{finca.direccion} ({puntuacion:.2f})",
+                        )
+                    )
+                    return _preguntar(
+                        estado,
+                        "identificar_finca",
+                        f"He identificado {finca.direccion}. ¿Es correcto?",
+                        finca_candidata_id=finca.id,
+                        pendientes=pend,
+                        traza=traza,
+                    )
+                return _reintento_finca(
+                    estado,
+                    "No he encontrado esa dirección entre las fincas gestionadas.",
+                    pend,
+                    traza,
+                )
+            return _avanzar(estado, "identificar_finca", pendientes=pend, traza=traza)
+
+        if not estado.get("vivienda_id"):
+            piso, puerta = pend.get("piso"), pend.get("puerta")
+            if piso and puerta:
+                portal = _normalizar_portal(pend.get("portal"))
+                np_, npu = _normalizar_piso(piso), _normalizar_puerta(puerta)
+                viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
+                vivienda = _buscar_vivienda(viviendas, portal, np_, npu)
+                for k in ("portal", "piso", "puerta"):
+                    pend.pop(k, None)
+                traza.append(
+                    Traza(
+                        nodo=nodo,
+                        accion="vivienda",
+                        detalle=f"portal={portal} piso={np_} puerta={npu}",
+                    )
+                )
+                if vivienda:
+                    cambios.update(vivienda_id=vivienda.id, vivienda_etiqueta=vivienda.etiqueta())
+                    validaciones.append("vivienda_existe_en_finca")
+                    estado = {**estado, **cambios}  # type: ignore[assignment]
+                else:
+                    return _reintento_vivienda(estado, pend, traza)
+            else:
+                return _avanzar(
+                    estado, "identificar_vivienda", pendientes=pend, traza=traza, **cambios
+                )
+
+        if not estado.get("nombre_declarado"):
+            nombre = pend.pop("nombre", None)
+            if nombre:
+                cambios["nombre_declarado"] = nombre
+                traza.append(Traza(nodo=nodo, accion="nombre_registrado", detalle=nombre))
+                estado = {**estado, **cambios}  # type: ignore[assignment]
+            else:
+                return _avanzar(
+                    estado,
+                    "registrar_nombre",
+                    pendientes=pend,
+                    traza=traza,
+                    validaciones=validaciones,
+                    **cambios,
+                )
+
+        if not estado.get("solicitud"):
+            problema = pend.pop("problema", None)
+            if problema:
+                cambios["solicitud"] = problema
+                for k in ("categoria", "urgencia", "resumen"):
+                    v = pend.pop(k, None)
+                    if v:
+                        cambios["urgencia_declarada" if k == "urgencia" else k] = v
+                if cambios.get("categoria"):
+                    # El resumen corto lo da la interpretación; si falta, vale la propia solicitud
+                    cambios.setdefault("resumen", pend.pop("problema_corto", None) or problema)
+                    cambios["senales_confianza"] = {
+                        "modelo": deps.llm.nombre,
+                        "version_prompt": VERSION_INTERPRETACION,
+                        "categoria_en_catalogo": cambios["categoria"] in _catalogo(estado),
+                        "fusionada_con_interpretacion": True,
+                    }
+                traza.append(Traza(nodo=nodo, accion="solicitud_recogida", detalle=problema[:60]))
+                estado = {**estado, **cambios}  # type: ignore[assignment]
+            else:
+                return _avanzar(
+                    estado,
+                    "recoger_solicitud",
+                    pendientes=pend,
+                    traza=traza,
+                    validaciones=validaciones,
+                    **cambios,
+                )
+
+        if not estado.get("categoria"):
+            destino = "clasificar_problema"
+        elif not estado.get("urgencia"):
+            destino = "determinar_urgencia"
+        elif estado.get("confirmado") is not True:
+            destino = "confirmar_resumen"
+        else:
+            destino = "validar_datos"
+        return _avanzar(
+            estado, destino, pendientes=pend, traza=traza, validaciones=validaciones, **cambios
+        )
+
+    def _reintento_finca(
+        estado: EstadoLlamada,
+        prefijo: str,
+        pend: dict[str, str],
+        traza: list[Traza],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        intentos = estado.get("intentos_finca", 0) + 1
+        if intentos >= DEFAULTS.intentos_finca:
+            return _avanzar(
+                estado,
+                "finca_no_identificada",
+                intentos_finca=intentos,
+                finca_candidata_id=None,
+                pendientes=pend,
+                traza=[
+                    *traza,
+                    Traza(
+                        nodo="identificar_finca", accion="agotados_intentos", detalle=str(intentos)
+                    ),
+                ],
+                **(extra or {}),
+            )
+        return _preguntar(
+            estado,
+            "identificar_finca",
+            f"{prefijo} ¿Puede repetirme la calle y el número?",
+            intentos_finca=intentos,
+            finca_candidata_id=None,
+            pendientes=pend,
+            traza=[
+                *traza,
+                Traza(nodo="identificar_finca", accion="reintento", detalle=str(intentos)),
+            ],
+            **(extra or {}),
+        )
+
+    def _reintento_vivienda(
+        estado: EstadoLlamada,
+        pend: dict[str, str],
+        traza: list[Traza],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        intentos = estado.get("intentos_vivienda", 0) + 1
+        if intentos >= _config(estado).intentos_vivienda:
+            return _avanzar(
+                estado,
+                "vivienda_no_identificada",
+                intentos_vivienda=intentos,
+                pendientes=pend,
+                traza=traza,
+                **(extra or {}),
+            )
+        return _preguntar(
+            estado,
+            "identificar_vivienda",
+            "No encuentro esa vivienda en la finca. ¿Puede repetirme el piso y la puerta, y el portal si lo hay?",
+            intentos_vivienda=intentos,
+            pendientes=pend,
+            traza=traza,
+            **(extra or {}),
+        )
+
+    async def _coincide_finca(direccion: str) -> bool:
+        fincas = await deps.repo.listar_fincas()
+        return any(_similitud_direccion(direccion, f.direccion) >= UMBRAL_FINCA for f in fincas)
+
+    # ------------------------------------------------------------------ nodos que preguntan
 
     async def identificar_finca(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "identificar_finca"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             return _preguntar(
                 estado,
                 nodo,
                 "Hola, soy el asistente de incidencias de su comunidad. "
                 "¿En qué finca se encuentra? Dígame la calle y el número.",
-                historial=historial,
             )
-
-        # Confirmación verbal de una candidata previa
         candidata = estado.get("finca_candidata_id")
         if candidata:
-            respuesta = _respuesta_si_no(entrada)
-            if respuesta is True:
+            interp, historial, extra, salida = await _turno(estado, nodo, si_no=True)
+            if salida:
+                return salida
+            if interp.confirma is True and not interp.direccion:
                 finca = await deps.repo.obtener_finca(candidata)
                 assert finca is not None
                 cfg, cfg_id = await deps.repo.configuracion_efectiva(finca.id)
                 return _avanzar(
                     estado,
-                    "identificar_vivienda",
+                    "siguiente_paso",
                     historial=historial,
                     finca_id=finca.id,
                     finca_direccion=finca.direccion,
                     finca_candidata_id=None,
                     configuracion=cfg.model_dump(),
                     configuracion_id=cfg_id,
+                    pendientes=_fusionar_pendientes(estado, interp),
                     validaciones=[*estado.get("validaciones", []), "finca_confirmada_verbalmente"],
                     traza=_con_traza(estado, nodo, "finca_confirmada", finca.direccion),
+                    **extra,
                 )
-            if respuesta is False:
-                return await _reintentar_finca(estado, nodo, historial, "Entendido, no es esa.")
+            if interp.direccion:
+                # Rechaza la candidata aportando otra dirección: se evalúa sin gastar intento extra
+                return _avanzar(
+                    estado,
+                    "siguiente_paso",
+                    historial=historial,
+                    finca_candidata_id=None,
+                    pendientes=_fusionar_pendientes(estado, interp),
+                    traza=_con_traza(estado, nodo, "candidata_rechazada", "nueva dirección"),
+                    **extra,
+                )
+            if interp.confirma is False:
+                return _reintento_finca(
+                    {**estado, "historial": historial},
+                    "Entendido, no es esa.",
+                    _fusionar_pendientes(estado, interp),
+                    estado.get("traza", []),
+                    extra,
+                )
             return _preguntar(
                 estado,
                 nodo,
                 "Perdone, ¿es correcta esa finca? Responda sí o no.",
                 historial=historial,
+                **extra,
             )
 
+        # Sin candidata: primero coincidencia determinista de la frase completa (0 llamadas LLM)
+        historial = _registrar_entrada(estado)
         fincas = await deps.repo.listar_fincas()
         puntuadas = sorted(
             ((_similitud_direccion(entrada, f.direccion), f) for f in fincas),
             key=lambda p: p[0],
             reverse=True,
         )
-        if puntuadas and puntuadas[0][0] >= UMBRAL_FINCA:
+        if puntuadas and puntuadas[0][0] >= UMBRAL_FINCA and len(entrada.split()) <= 8:
             puntuacion, finca = puntuadas[0]
             return _preguntar(
                 estado,
@@ -332,49 +760,37 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 f"He identificado {finca.direccion}. ¿Es correcto?",
                 historial=historial,
                 finca_candidata_id=finca.id,
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={"direccion": entrada, "origen": "determinista", "llm_ms": 0},
                 traza=_con_traza(
                     estado, nodo, "candidata", f"{finca.direccion} ({puntuacion:.2f})"
                 ),
             )
-        return await _reintentar_finca(
-            estado, nodo, historial, "No he encontrado esa dirección entre las fincas gestionadas."
-        )
-
-    async def _reintentar_finca(
-        estado: EstadoLlamada, nodo: str, historial: list[dict[str, str]], prefijo: str
-    ) -> dict[str, Any]:
-        intentos = estado.get("intentos_finca", 0) + 1
-        if intentos >= DEFAULTS.intentos_finca:
-            return _avanzar(
-                estado,
-                "finca_no_identificada",
-                historial=historial,
-                intentos_finca=intentos,
-                finca_candidata_id=None,
-                traza=_con_traza(estado, nodo, "agotados_intentos", str(intentos)),
+        interp, historial, extra, salida = await _turno(estado, nodo)
+        if salida:
+            return salida
+        pend = _fusionar_pendientes(estado, interp)
+        if not interp.direccion:
+            return _reintento_finca(
+                {**estado, "historial": historial},
+                "No he entendido la dirección de la finca.",
+                pend,
+                estado.get("traza", []),
+                extra,
             )
-        return _preguntar(
-            estado,
-            nodo,
-            f"{prefijo} ¿Puede repetirme la calle y el número?",
-            historial=historial,
-            intentos_finca=intentos,
-            finca_candidata_id=None,
-            traza=_con_traza(estado, nodo, "reintento", str(intentos)),
-        )
+        return _avanzar(estado, "siguiente_paso", historial=historial, pendientes=pend, **extra)
 
     async def finca_no_identificada(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "finca_no_identificada"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             return _preguntar(
                 estado,
                 nodo,
                 "Lo siento, no consigo identificar la finca; puede que no esté gestionada por este "
                 "administrador. Si quiere, cuénteme brevemente qué quería comunicar y quedará registrado.",
-                historial=historial,
             )
+        historial = _registrar_entrada(estado)
         llamada = _llamada_desde(
             {**estado, "historial": historial, "solicitud": entrada}, "finca_no_identificada"
         )
@@ -393,85 +809,65 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     async def identificar_vivienda(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "identificar_vivienda"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
-        cfg = _config(estado)
         if entrada is None:
             return _preguntar(
                 estado,
                 nodo,
                 "Gracias. ¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta.",
-                historial=historial,
             )
-
-        extraido = await deps.llm.extraer(
-            "Extrae la localización de una vivienda a partir de lo que dice un vecino en español. "
-            "Devuelve null en los campos que no se mencionen. No inventes datos.",
-            entrada,
-            {
-                "title": "vivienda",
-                "type": "object",
-                "properties": {
-                    "portal": {"type": ["string", "null"]},
-                    "piso": {"type": ["string", "null"]},
-                    "puerta": {"type": ["string", "null"]},
+        # Formato corto y reconocible: sin LLM (bóveda: regex solo para formatos)
+        portal, piso, puerta = _extraer_vivienda_regex(entrada)
+        if piso and puerta and len(entrada.split()) <= 5:
+            pend = {**estado.get("pendientes", {}), "piso": piso, "puerta": puerta}
+            if portal:
+                pend["portal"] = portal
+            return _avanzar(
+                estado,
+                "siguiente_paso",
+                historial=_registrar_entrada(estado),
+                pendientes=pend,
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={
+                    "portal": portal,
+                    "piso": piso,
+                    "puerta": puerta,
+                    "origen": "determinista",
+                    "llm_ms": 0,
                 },
-                "required": ["portal", "piso", "puerta"],
-            },
-        )
-        portal = _normalizar_portal(extraido.get("portal"))
-        piso = _normalizar_piso(extraido.get("piso"))
-        puerta = _normalizar_puerta(extraido.get("puerta"))
-        # Regex solo para formatos (bóveda, 04 Arquitectura): completa lo que el LLM no extrajo
-        respaldo = _extraer_vivienda_regex(entrada)
-        portal = portal or respaldo[0]
-        piso = piso or respaldo[1]
-        puerta = puerta or respaldo[2]
-        assert estado.get("finca_id")
-        viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
-        vivienda = _buscar_vivienda(viviendas, portal, piso, puerta) if piso and puerta else None
-        traza = _con_traza(
-            estado, nodo, "extraccion", f"portal={portal} piso={piso} puerta={puerta}"
-        )
-        if vivienda:
-            return _avanzar(
-                estado,
-                "registrar_nombre",
-                historial=historial,
-                vivienda_id=vivienda.id,
-                vivienda_etiqueta=vivienda.etiqueta(),
-                traza=traza,
-                validaciones=[*estado.get("validaciones", []), "vivienda_existe_en_finca"],
+                traza=_con_traza(
+                    estado, nodo, "extraccion_regex", f"portal={portal} piso={piso} puerta={puerta}"
+                ),
             )
-        intentos = estado.get("intentos_vivienda", 0) + 1
-        if intentos >= cfg.intentos_vivienda:
-            return _avanzar(
-                estado,
-                "vivienda_no_identificada",
-                historial=historial,
-                intentos_vivienda=intentos,
-                traza=traza,
+        interp, historial, extra, salida = await _turno(estado, nodo)
+        if salida:
+            return salida
+        pend = _fusionar_pendientes(estado, interp)
+        if not (pend.get("piso") and pend.get("puerta")):
+            # El LLM no lo sacó; el regex puede completar
+            pend.setdefault("piso", piso) if piso else None
+            pend.setdefault("puerta", puerta) if puerta else None
+            if portal:
+                pend.setdefault("portal", portal)
+        if not (pend.get("piso") and pend.get("puerta")):
+            return _reintento_vivienda(
+                {**estado, "historial": historial},
+                {k: v for k, v in pend.items() if k not in ("portal", "piso", "puerta")},
+                estado.get("traza", []),
+                extra,
             )
-        return _preguntar(
-            estado,
-            nodo,
-            "No encuentro esa vivienda en la finca. ¿Puede repetirme el piso y la puerta, y el portal si lo hay?",
-            historial=historial,
-            intentos_vivienda=intentos,
-            traza=traza,
-        )
+        return _avanzar(estado, "siguiente_paso", historial=historial, pendientes=pend, **extra)
 
     async def vivienda_no_identificada(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "vivienda_no_identificada"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             return _preguntar(
                 estado,
                 nodo,
                 "No he podido identificar correctamente la vivienda. Cuénteme igualmente su solicitud; "
                 "enviaré un resumen al administrador con su número de teléfono.",
-                historial=historial,
             )
+        historial = _registrar_entrada(estado)
         cfg = _config(estado)
         destino = cfg.contacto.correo if cfg.contacto else "administrador"
         llamada = _llamada_desde(
@@ -496,75 +892,78 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     async def registrar_nombre(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "registrar_nombre"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             return _preguntar(
                 estado,
                 nodo,
                 f"Perfecto, {estado.get('vivienda_etiqueta')}. ¿Con quién hablo? Dígame su nombre.",
-                historial=historial,
             )
-        extraido = await deps.llm.extraer(
-            "Extrae el nombre con el que se presenta la persona. Devuelve solo el nombre tal como lo dice, "
-            "sin títulos ni frases. Si no hay nombre, devuelve null.",
-            entrada,
-            {
-                "title": "nombre",
-                "type": "object",
-                "properties": {"nombre": {"type": ["string", "null"]}},
-                "required": ["nombre"],
-            },
-        )
-        nombre = (extraido.get("nombre") or entrada).strip()
-        return _avanzar(
-            estado,
-            "recoger_solicitud",
-            historial=historial,
-            nombre_declarado=nombre,
-            traza=_con_traza(estado, nodo, "nombre_registrado", nombre),
-        )
+        interp, historial, extra, salida = await _turno(estado, nodo)
+        if salida:
+            return salida
+        pend = _fusionar_pendientes(estado, interp)
+        if not pend.get("nombre"):
+            return _preguntar(
+                estado,
+                nodo,
+                "Perdone, no he entendido su nombre. ¿Me lo puede repetir?",
+                historial=historial,
+                pendientes=pend,
+                **extra,
+            )
+        return _avanzar(estado, "siguiente_paso", historial=historial, pendientes=pend, **extra)
 
     async def recoger_solicitud(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "recoger_solicitud"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             saludo = (
                 f"Gracias, {estado.get('nombre_declarado')}. "
                 if estado.get("nombre_declarado")
                 else ""
             )
-            return _preguntar(estado, nodo, f"{saludo}Cuénteme, ¿qué ocurre?", historial=historial)
+            return _preguntar(estado, nodo, f"{saludo}Cuénteme, ¿qué ocurre?")
+        interp, historial, extra, salida = await _turno(estado, nodo)
+        if salida:
+            return salida
+        pend = _fusionar_pendientes(estado, interp)
+        if not pend.get("problema"):
+            # Aquí lo que diga el vecino es la solicitud, aunque el modelo no lo haya marcado
+            pend["problema"] = entrada.strip()
+        else:
+            pend["problema"] = entrada.strip()  # la descripción literal manda; el resumen va aparte
         return _avanzar(
-            estado, "clasificar_problema", historial=historial, solicitud=entrada, confirmado=None
+            estado, "siguiente_paso", historial=historial, pendientes=pend, confirmado=None, **extra
         )
 
     async def clasificar_problema(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "clasificar_problema"
-        cfg = _config(estado)
-        catalogo = [*cfg.catalogo_categorias, CATEGORIA_NO_CLASIFICABLE]
-        extraido = await deps.llm.extraer(
-            "Eres el clasificador de incidencias de una comunidad de propietarios. Clasifica la solicitud "
-            f"del vecino en exactamente una categoría del catálogo cerrado: {', '.join(catalogo)}. "
-            f"Si no encaja claramente, usa '{CATEGORIA_NO_CLASIFICABLE}'. Estima la urgencia: baja "
-            "(molestia sin riesgo), media (afecta al uso normal), alta (daños en curso o servicio esencial "
-            "interrumpido), emergencia (riesgo para personas). Resume en una frase en español, en tercera "
-            "persona, sin inventar datos.",
-            estado.get("solicitud") or "",
-            {
-                "title": "clasificacion",
-                "type": "object",
-                "properties": {
-                    "categoria": {"type": "string", "enum": catalogo},
-                    "urgencia": {"type": "string", "enum": list(URGENCIAS)},
-                    "resumen": {"type": "string"},
-                },
-                "required": ["categoria", "urgencia", "resumen"],
-            },
-        )
-        categoria = extraido.get("categoria")
-        urgencia = extraido.get("urgencia")
+        catalogo = _catalogo(estado)
         validaciones = list(estado.get("validaciones", []))
+        categoria = estado.get("categoria")
+        urgencia = estado.get("urgencia_declarada")
+        resumen = estado.get("resumen")
+        tiempos = dict(estado.get("tiempos_turno", {}))
+        senales = dict(estado.get("senales_confianza") or {})
+        if not categoria:
+            t0 = perf_counter()
+            extraido = await deps.llm.extraer(
+                sistema_clasificacion(catalogo),
+                estado.get("solicitud") or "",
+                esquema_clasificacion(catalogo),
+            )
+            ms = int((perf_counter() - t0) * 1000)
+            tiempos = _tiempos(estado, clasificacion_ms=ms, llm_llamadas=1)
+            categoria, urgencia, resumen = (
+                extraido.get("categoria"),
+                extraido.get("urgencia"),
+                extraido.get("resumen"),
+            )
+            senales = {
+                "modelo": deps.llm.nombre,
+                "version_prompt": VERSION_CLASIFICACION,
+                "urgencia_valida": urgencia in URGENCIAS,
+            }
         if categoria not in catalogo:
             validaciones.append("categoria_fuera_de_catalogo->no_clasificable")
             categoria = CATEGORIA_NO_CLASIFICABLE
@@ -573,20 +972,16 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if urgencia not in URGENCIAS:
             validaciones.append("urgencia_invalida->media")
             urgencia = "media"
-        senales = {
-            "modelo": deps.llm.nombre,
-            "categoria_en_catalogo": categoria != CATEGORIA_NO_CLASIFICABLE,
-            "urgencia_valida": extraido.get("urgencia") in URGENCIAS,
-            "version_prompt": "clasificacion-v1",
-        }
+        senales["categoria_en_catalogo"] = categoria != CATEGORIA_NO_CLASIFICABLE
         return _avanzar(
             estado,
             "determinar_urgencia",
             categoria=categoria,
             urgencia_declarada=urgencia,
-            resumen=(extraido.get("resumen") or estado.get("solicitud") or "").strip(),
+            resumen=(resumen or estado.get("solicitud") or "").strip(),
             senales_confianza=senales,
             validaciones=validaciones,
+            tiempos_turno=tiempos,
             traza=_con_traza(estado, nodo, "clasificado", f"{categoria} / {urgencia}"),
         )
 
@@ -606,7 +1001,6 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     async def confirmar_resumen(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "confirmar_resumen"
         entrada = estado.get("entrada_usuario")
-        historial = _registrar_entrada(estado)
         if entrada is None:
             categoria = estado.get("categoria")
             texto_cat = (
@@ -619,30 +1013,69 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 nodo,
                 f"He entendido lo siguiente: {estado.get('resumen')}. {texto_cat.capitalize()}, con urgencia "
                 f"{estado.get('urgencia')}. ¿Es correcto?",
+            )
+        interp, historial, extra, salida = await _turno(estado, nodo, si_no=True)
+        if salida:
+            return salida
+        # Correcciones: el vecino rectifica datos en lugar de decir sí/no
+        cambios: dict[str, Any] = {}
+        pend = dict(estado.get("pendientes", {}))
+        # Prioridad: problema > vivienda > finca. Una corrección del problema no toca la finca.
+        if interp.problema and interp.confirma is not True:
+            cambios.update(
+                solicitud=None,
+                categoria=None,
+                urgencia=None,
+                urgencia_declarada=None,
+                resumen=None,
+                confirmado=None,
+            )
+            pend["problema"] = entrada.strip()
+            pend["problema_corto"] = interp.problema
+            for k in ("categoria", "urgencia"):
+                if getattr(interp, k):
+                    pend[k] = getattr(interp, k)
+        elif interp.piso or interp.puerta or interp.portal:
+            cambios.update(vivienda_id=None, vivienda_etiqueta=None, confirmado=None)
+            for k in ("portal", "piso", "puerta"):
+                if getattr(interp, k):
+                    pend[k] = getattr(interp, k)
+        elif (
+            interp.direccion
+            and interp.confirma is not True
+            and await _coincide_finca(interp.direccion)
+        ):
+            # Solo si la nueva dirección es una finca conocida: evita borrar la finca por un
+            # "direccion" espurio del modelo ("es en el garaje")
+            cambios.update(
+                finca_id=None,
+                finca_direccion=None,
+                vivienda_id=None,
+                vivienda_etiqueta=None,
+                confirmado=None,
+            )
+            pend["direccion"] = interp.direccion
+        if cambios:
+            return _avanzar(
+                estado,
+                "siguiente_paso",
+                "De acuerdo, lo corrijo.",
                 historial=historial,
+                pendientes=pend,
+                traza=_con_traza(estado, nodo, "correccion", ", ".join(sorted(pend))),
+                **cambios,
+                **extra,
             )
-        respuesta = _respuesta_si_no(entrada)
-        if respuesta is None:
-            extraido = await deps.llm.extraer(
-                "El vecino responde a la pregunta '¿Es correcto?'. Indica si confirma (true), rechaza (false) o no queda claro (null).",
-                entrada,
-                {
-                    "title": "confirmacion",
-                    "type": "object",
-                    "properties": {"confirma": {"type": ["boolean", "null"]}},
-                    "required": ["confirma"],
-                },
-            )
-            respuesta = extraido.get("confirma")
-        if respuesta is True:
+        if interp.confirma is True:
             return _avanzar(
                 estado,
                 "validar_datos",
                 historial=historial,
                 confirmado=True,
                 traza=_con_traza(estado, nodo, "confirmado"),
+                **extra,
             )
-        if respuesta is False:
+        if interp.confirma is False:
             return _preguntar(
                 estado,
                 "recoger_solicitud",
@@ -650,14 +1083,22 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 historial=historial,
                 confirmado=False,
                 solicitud=None,
+                categoria=None,
+                urgencia=None,
+                urgencia_declarada=None,
+                resumen=None,
                 traza=_con_traza(estado, nodo, "rechazado", "vuelve a recoger_solicitud"),
+                **extra,
             )
         return _preguntar(
             estado,
             nodo,
             "Perdone, no le he entendido. ¿Es correcto el resumen? Responda sí o no.",
             historial=historial,
+            **extra,
         )
+
+    # ------------------------------------------------------------------ nodos de trabajo y cierre
 
     async def validar_datos(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "validar_datos"
@@ -694,8 +1135,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         nodo = "no_clasificable"
         cfg = _config(estado)
         destino = cfg.contacto.correo if cfg.contacto else "administrador"
-        llamada = _llamada_desde(estado, "no_clasificable", estado.get("motivo_revision"))
-        await deps.repo.guardar_llamada(llamada)
+        await deps.repo.guardar_llamada(
+            _llamada_desde(estado, "no_clasificable", estado.get("motivo_revision"))
+        )
         return _avanzar(
             estado,
             "fin",
@@ -708,6 +1150,37 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             traza=_con_traza(
                 estado, nodo, "correo_simulado", f"resumen para revisión -> {destino}"
             ),
+        )
+
+    async def derivar_humano(estado: EstadoLlamada) -> dict[str, Any]:
+        nodo = "derivar_humano"
+        cfg = _config(estado)
+        destino = cfg.contacto.correo if cfg.contacto else "administrador"
+        await deps.repo.guardar_llamada(
+            _llamada_desde(estado, "derivada_administrador", "vecino pide persona")
+        )
+        return _avanzar(
+            estado,
+            "fin",
+            "De acuerdo. Envío ahora un resumen de su llamada al administrador para que una persona "
+            "se ponga en contacto con usted lo antes posible. Gracias, hasta luego.",
+            resultado="derivada_administrador",
+            finalizada=True,
+            canal_aviso="correo",
+            destino_aviso=destino,
+            traza=_con_traza(estado, nodo, "correo_simulado", f"derivación -> {destino}"),
+        )
+
+    async def despedida(estado: EstadoLlamada) -> dict[str, Any]:
+        nodo = "despedida"
+        await deps.repo.guardar_llamada(_llamada_desde(estado, "abandonada"))
+        return _avanzar(
+            estado,
+            "fin",
+            "De acuerdo. Gracias por llamar; puede volver a llamar cuando quiera. Hasta luego.",
+            resultado="abandonada",
+            finalizada=True,
+            traza=_con_traza(estado, nodo, "llamada_registrada"),
         )
 
     async def asignar_especialista(estado: EstadoLlamada) -> dict[str, Any]:
@@ -740,7 +1213,6 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
 
     async def crear_ticket(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "crear_ticket"
-        ahora = datetime.now(UTC)
         incidencia = Incidencia(
             id=_nuevo_id("inc"),
             llamada_id=estado["llamada_id"],
@@ -751,7 +1223,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             especialista_id=estado.get("especialista_id"),
             urgencia=estado["urgencia"],  # type: ignore[arg-type]
             estado="asignada" if estado.get("especialista_id") else "pendiente",
-            creada_en=ahora,
+            creada_en=datetime.now(UTC),
         )
         await deps.repo.guardar_llamada(_llamada_desde(estado, "incidencia_creada"))
         await deps.repo.guardar_incidencia(incidencia)
@@ -769,19 +1241,15 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         regla = cfg.regla_para(estado["urgencia"])  # type: ignore[arg-type]
         canal = regla.canal if regla else "ticket"
         destino_regla = regla.destino if regla else "especialista"
+        especialista = estado.get("especialista_nombre")
         if destino_regla == "especialista":
-            destino = estado.get("especialista_nombre") or "especialista"
+            destino = especialista or "especialista"
+            aviso = f"Se avisará a {especialista} por {canal}."
         elif destino_regla == "coordinador":
             destino = cfg.contacto.correo if cfg.contacto else "coordinador"
+            aviso = f"Por su urgencia, se avisa por {canal} al coordinador del servicio y se asigna a {especialista}."
         else:
             destino = destino_regla
-        especialista = estado.get("especialista_nombre")
-        if destino_regla == "coordinador":
-            aviso = (
-                f"Por su urgencia, se avisa por {canal} al coordinador del servicio y se asigna "
-                f"a {especialista}."
-            )
-        else:
             aviso = f"Se avisará a {especialista} por {canal}."
         mensaje = (
             f"He registrado su incidencia con referencia {estado.get('incidencia_id')}. "
@@ -798,6 +1266,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         )
 
     return {
+        "siguiente_paso": siguiente_paso,
         "identificar_finca": identificar_finca,
         "finca_no_identificada": finca_no_identificada,
         "identificar_vivienda": identificar_vivienda,
@@ -809,6 +1278,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         "confirmar_resumen": confirmar_resumen,
         "validar_datos": validar_datos,
         "no_clasificable": no_clasificable,
+        "derivar_humano": derivar_humano,
+        "despedida": despedida,
         "asignar_especialista": asignar_especialista,
         "crear_ticket": crear_ticket,
         "avisar_canal": avisar_canal,

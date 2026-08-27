@@ -3,6 +3,9 @@
 Cada turno de conversación es una invocación del grafo: el estado entra con `entrada_usuario`
 y sale con `mensajes_bot` y `esperando_usuario=True` (o `finalizada=True`). El grafo decide el
 siguiente nodo a partir de `nodo_actual`; el LLM nunca elige nodos.
+
+`pendientes` guarda datos que el vecino dijo antes de que se le preguntaran (interpretación de
+turno); `siguiente_paso` los consume y salta las preguntas ya respondidas.
 """
 
 from __future__ import annotations
@@ -20,14 +23,22 @@ class EstadoLlamada(TypedDict, total=False):
     llamada_id: str
     iniciada_en: str
     telefono_llamante: str | None
+    turno: int
     nodo_actual: str
     entrada_usuario: str | None
+    ultima_pregunta: str | None
     mensajes_bot: list[str]
     historial: list[dict[str, str]]
     traza: list[Traza]
     validaciones: list[str]
     esperando_usuario: bool
     finalizada: bool
+    # Tiempos del turno en curso (los rellenan los nodos; el gestor los registra)
+    tiempos_turno: dict[str, Any]
+    # Última interpretación LLM/determinista del turno (para la consola)
+    interpretacion: dict[str, Any] | None
+    # Datos dichos por el vecino aún no consumidos por su nodo
+    pendientes: dict[str, str]
 
     # Configuración efectiva resuelta al identificar la finca
     configuracion: dict[str, Any] | None
@@ -68,14 +79,19 @@ def estado_inicial(llamada_id: str, iniciada_en: str, grafo: str) -> EstadoLlama
         llamada_id=llamada_id,
         iniciada_en=iniciada_en,
         telefono_llamante=None,
-        nodo_actual="identificar_finca",
+        turno=0,
+        nodo_actual="siguiente_paso",
         entrada_usuario=None,
+        ultima_pregunta=None,
         mensajes_bot=[],
         historial=[],
         traza=[],
         validaciones=[],
         esperando_usuario=False,
         finalizada=False,
+        tiempos_turno={},
+        interpretacion=None,
+        pendientes={},
         configuracion=None,
         configuracion_id=None,
         grafo=grafo,

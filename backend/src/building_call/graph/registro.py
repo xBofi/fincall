@@ -18,6 +18,7 @@ from building_call.graph.nodos import Dependencias, construir_nodos
 ConstructorGrafo = Callable[[Dependencias], Any]
 
 _ORDEN_ESTANDAR = [
+    "siguiente_paso",
     "identificar_finca",
     "finca_no_identificada",
     "identificar_vivienda",
@@ -29,6 +30,8 @@ _ORDEN_ESTANDAR = [
     "confirmar_resumen",
     "validar_datos",
     "no_clasificable",
+    "derivar_humano",
+    "despedida",
     "asignar_especialista",
     "crear_ticket",
     "avisar_canal",
@@ -42,7 +45,7 @@ def _siguiente(estado: EstadoLlamada) -> str:
 
 
 def _entrada(estado: EstadoLlamada) -> str:
-    return estado.get("nodo_actual") or "identificar_finca"
+    return estado.get("nodo_actual") or "siguiente_paso"
 
 
 def construir_estandar(deps: Dependencias) -> Any:

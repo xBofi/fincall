@@ -6,6 +6,7 @@ interface SpeechRecognitionAlternative {
 
 interface SpeechRecognitionResult {
   readonly length: number
+  readonly isFinal: boolean
   [index: number]: SpeechRecognitionAlternative
 }
 
@@ -22,9 +23,13 @@ interface SpeechRecognition extends EventTarget {
   lang: string
   interimResults: boolean
   maxAlternatives: number
+  continuous: boolean
   onresult: ((e: SpeechRecognitionEvent) => void) | null
   onerror: ((e: Event & { error?: string }) => void) | null
   onend: (() => void) | null
+  onspeechstart: (() => void) | null
+  onspeechend: (() => void) | null
   start(): void
   stop(): void
+  abort(): void
 }

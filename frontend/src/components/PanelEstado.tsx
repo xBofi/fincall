@@ -119,6 +119,25 @@ export function PanelEstado({ vista }: { vista: VistaLlamada | null }) {
             ),
           },
           {
+            key: 'interpretacion',
+            label: `Interpretación del último turno${vista.interpretacion?.origen ? ` (${String(vista.interpretacion.origen)}${vista.interpretacion.llm_ms ? `, ${String(vista.interpretacion.llm_ms)} ms` : ''})` : ''}`,
+            children: (
+              <div>
+                <pre style={{ margin: 0 }}>{JSON.stringify(vista.interpretacion, null, 2)}</pre>
+                {Object.keys(vista.pendientes ?? {}).length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <Typography.Text type="secondary">Datos dichos pendientes de usar: </Typography.Text>
+                    {Object.entries(vista.pendientes).map(([k, v]) => (
+                      <Tag key={k}>
+                        {k}: {v}
+                      </Tag>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
             key: 'confianza',
             label: 'Señales de confianza del clasificador',
             children: <pre style={{ margin: 0 }}>{JSON.stringify(vista.senales_confianza, null, 2)}</pre>,

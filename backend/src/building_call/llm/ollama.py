@@ -4,6 +4,9 @@ Nota operativa (Ollama 0.23.x + qwen3.5): `format` con JSON Schema y `think=fals
 petición colgada hasta el timeout, y con `think=true` el modelo razona decenas de miles de
 tokens. `format="json"` + `think=false` responde en ~1 s. El esquema se usa aquí solo para
 describir las claves en el prompt y validar la respuesta en código.
+
+Latencia: el prompt de sistema va primero y es estable por tarea para que Ollama reutilice la
+caché KV del prefijo; el contexto variable va al final. `num_predict` acota la salida.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ def _extraer_json(contenido: str) -> dict[str, Any]:
     return datos
 
 
-def _describir_esquema(esquema: dict[str, Any]) -> str:
+def describir_esquema(esquema: dict[str, Any], omitir_nulos: bool = True) -> str:
     props: dict[str, Any] = esquema.get("properties", {})
     lineas = []
     for clave, spec in props.items():
@@ -50,9 +53,13 @@ def _describir_esquema(esquema: dict[str, Any]) -> str:
         if "enum" in spec:
             tipo_txt += " (uno de: " + ", ".join(map(str, spec["enum"])) + ")"
         lineas.append(f'- "{clave}": {tipo_txt}')
-    return "Responde únicamente con un objeto JSON con exactamente estas claves:\n" + "\n".join(
-        lineas
+    cabecera = "Responde únicamente con un objeto JSON. Claves posibles:\n"
+    pie = (
+        "\nOmite las claves cuyo valor sería null: incluye solo lo que el texto diga."
+        if omitir_nulos
+        else "\nIncluye todas las claves."
     )
+    return cabecera + "\n".join(lineas) + pie
 
 
 def _validar(datos: dict[str, Any], esquema: dict[str, Any]) -> dict[str, Any]:
@@ -69,23 +76,50 @@ def _validar(datos: dict[str, Any], esquema: dict[str, Any]) -> dict[str, Any]:
 
 
 class ModeloOllama:
-    def __init__(self, url: str, modelo: str, timeout_s: float = 120.0) -> None:
+    def __init__(
+        self,
+        url: str,
+        modelo: str,
+        timeout_s: float = 120.0,
+        num_predict: int = 160,
+        num_ctx: int = 2048,
+        keep_alive: str = "30m",
+    ) -> None:
         self.url = url.rstrip("/")
         self.modelo = modelo
         self.nombre = f"ollama/{modelo}"
+        self.num_predict = num_predict
+        self.num_ctx = num_ctx
+        self.keep_alive = keep_alive
         self._cliente = httpx.AsyncClient(timeout=timeout_s)
 
-    async def extraer(self, sistema: str, usuario: str, esquema: dict[str, Any]) -> dict[str, Any]:
+    async def extraer(
+        self,
+        sistema: str,
+        usuario: str,
+        esquema: dict[str, Any],
+        instruccion_formato: str | None = None,
+    ) -> dict[str, Any]:
+        """`instruccion_formato=None` describe el esquema automáticamente; "" indica que el
+        prompt de sistema ya incluye el formato."""
+        if instruccion_formato is None:
+            instruccion_formato = describir_esquema(esquema)
+        contenido = f"{sistema}\n\n{instruccion_formato}" if instruccion_formato else sistema
         cuerpo = {
             "model": self.modelo,
             "messages": [
-                {"role": "system", "content": f"{sistema}\n\n{_describir_esquema(esquema)}"},
-                {"role": "user", "content": f'Texto del vecino: """{usuario}"""'},
+                {"role": "system", "content": contenido},
+                {"role": "user", "content": usuario},
             ],
             "format": "json",
             "stream": False,
             "think": False,
-            "options": {"temperature": 0},
+            "keep_alive": self.keep_alive,
+            "options": {
+                "temperature": 0,
+                "num_predict": self.num_predict,
+                "num_ctx": self.num_ctx,
+            },
         }
         try:
             r = await self._cliente.post(f"{self.url}/api/chat", json=cuerpo)
@@ -102,3 +136,14 @@ class ModeloOllama:
             return r.status_code == 200 and any(m["name"] == self.modelo for m in modelos)
         except (httpx.HTTPError, ValueError):
             return False
+
+    async def calentar(self) -> None:
+        """Carga el modelo en GPU para que el primer turno real no pague la carga."""
+        try:
+            await self.extraer(
+                "Devuelve JSON.",
+                "hola",
+                {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+            )
+        except LLMError:
+            pass

@@ -17,6 +17,7 @@ ResultadoLlamada = Literal[
     "finca_no_identificada",
     "vivienda_no_identificada",
     "no_clasificable",
+    "derivada_administrador",
     "abandonada",
 ]
 

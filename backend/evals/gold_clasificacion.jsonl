@@ -1,0 +1,16 @@
+{"solicitud": "Hay una fuga de agua en el baño y está inundando el suelo", "categoria": "fontaneria", "urgencias": ["alta", "emergencia"]}
+{"solicitud": "El ascensor se ha quedado parado entre dos plantas y hay una señora dentro", "categoria": "ascensor", "urgencias": ["alta", "emergencia"]}
+{"solicitud": "No funciona la luz del portal y las escaleras están a oscuras", "categoria": "electricidad", "urgencias": ["media", "alta"]}
+{"solicitud": "La bombilla del descansillo del segundo lleva una semana fundida", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "Gotea un poco el grifo del patio comunitario", "categoria": "fontaneria", "urgencias": ["baja"]}
+{"solicitud": "La puerta del portal no cierra bien y se queda abierta por la noche", "categoria": "cerrajeria", "urgencias": ["media", "alta"]}
+{"solicitud": "Se me ha quedado la llave dentro y no puedo entrar al trastero", "categoria": "cerrajeria", "urgencias": ["media", "baja"]}
+{"solicitud": "La basura del portal lleva días sin recogerse y huele fatal", "categoria": "limpieza", "urgencias": ["media", "baja"]}
+{"solicitud": "Hay una grieta grande en la fachada y se están cayendo cascotes a la acera", "categoria": "albanileria", "urgencias": ["alta", "emergencia"]}
+{"solicitud": "Se ha desprendido un azulejo en la entrada", "categoria": "albanileria", "urgencias": ["baja", "media"]}
+{"solicitud": "Quiero pedir una copia del acta de la última junta", "categoria": "administrativo", "urgencias": ["baja"]}
+{"solicitud": "Huele a gas en el rellano del tercero", "categoria": "no_clasificable", "urgencias": ["emergencia", "alta"]}
+{"solicitud": "He visto un ovni en la azotea", "categoria": "no_clasificable", "urgencias": ["baja"]}
+{"solicitud": "El ascensor hace un ruido raro pero funciona", "categoria": "ascensor", "urgencias": ["baja", "media"]}
+{"solicitud": "Salta el diferencial de la comunidad cada dos por tres y nos quedamos sin luz en el garaje", "categoria": "electricidad", "urgencias": ["media", "alta"]}
+{"solicitud": "El interfono de mi piso no suena cuando llaman", "categoria": "electricidad", "urgencias": ["baja", "media"]}

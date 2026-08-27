@@ -1,26 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Space, Tag, Typography } from 'antd'
-import { AudioOutlined, AudioMutedOutlined, SendOutlined } from '@ant-design/icons'
+import { AudioOutlined, LoadingOutlined, SendOutlined, SoundOutlined } from '@ant-design/icons'
 import type { Turno } from '../api'
-import { escuchar, sttDisponible } from '../voz'
+
+export type EstadoVoz = 'inactivo' | 'esperando_voz' | 'hablando' | 'procesando' | 'respondiendo'
+
+const ETIQUETA: Record<EstadoVoz, { texto: string; color: string; icono?: React.ReactNode }> = {
+  inactivo: { texto: 'En espera', color: 'default' },
+  esperando_voz: { texto: 'Escuchando… hable cuando quiera', color: 'processing', icono: <AudioOutlined /> },
+  hablando: { texto: 'Le oigo…', color: 'green', icono: <AudioOutlined /> },
+  procesando: { texto: 'Pensando…', color: 'gold', icono: <LoadingOutlined /> },
+  respondiendo: { texto: 'Asistente hablando (puede interrumpir)', color: 'blue', icono: <SoundOutlined /> },
+}
 
 interface Props {
   historial: Turno[]
+  parcial: string | null
+  estadoVoz: EstadoVoz
   ocupado: boolean
   finalizada: boolean
+  manosLibres: boolean
   onEnviar: (texto: string) => void
+  onEscuchar: () => void
 }
 
-export function Conversacion({ historial, ocupado, finalizada, onEnviar }: Props) {
+export function Conversacion({ historial, parcial, estadoVoz, ocupado, finalizada, manosLibres, onEnviar, onEscuchar }: Props) {
   const [texto, setTexto] = useState('')
-  const [escuchando, setEscuchando] = useState(false)
-  const [errorVoz, setErrorVoz] = useState<string | null>(null)
-  const pararRef = useRef<(() => void) | null>(null)
   const finRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [historial])
+  }, [historial, parcial])
 
   const enviar = () => {
     const t = texto.trim()
@@ -28,39 +38,17 @@ export function Conversacion({ historial, ocupado, finalizada, onEnviar }: Props
     onEnviar(t)
     setTexto('')
   }
-
-  const alternarMicro = () => {
-    if (escuchando) {
-      pararRef.current?.()
-      return
-    }
-    setErrorVoz(null)
-    const parar = escuchar(
-      (t) => {
-        setTexto('')
-        onEnviar(t)
-      },
-      (m) => setErrorVoz(m),
-      () => setEscuchando(false),
-    )
-    if (parar) {
-      pararRef.current = parar
-      setEscuchando(true)
-    }
-  }
+  const etiqueta = ETIQUETA[estadoVoz]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          padding: 12,
-        }}
-      >
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+        <Tag color={etiqueta.color} icon={etiqueta.icono}>
+          {etiqueta.texto}
+        </Tag>
+        {manosLibres && !finalizada && <Tag>manos libres</Tag>}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
         {historial.map((t, i) => (
           <div key={i} className={`burbuja ${t.rol}`}>
             <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
@@ -69,28 +57,30 @@ export function Conversacion({ historial, ocupado, finalizada, onEnviar }: Props
             {t.texto}
           </div>
         ))}
+        {parcial && (
+          <div className="burbuja vecino" style={{ opacity: 0.6 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
+              Vecino (transcribiendo)
+            </Typography.Text>
+            {parcial}
+          </div>
+        )}
         <div ref={finRef} />
       </div>
       <div style={{ padding: 12, borderTop: '1px solid #f0f0f0' }}>
-        {errorVoz && (
-          <Tag color="warning" style={{ marginBottom: 8 }}>
-            Micrófono: {errorVoz}
-          </Tag>
-        )}
         <Space.Compact style={{ width: '100%' }}>
           <Button
-            type={escuchando ? 'primary' : 'default'}
-            danger={escuchando}
-            icon={escuchando ? <AudioMutedOutlined /> : <AudioOutlined />}
-            onClick={alternarMicro}
-            disabled={!sttDisponible() || ocupado || finalizada}
-            title={sttDisponible() ? 'Hablar' : 'Reconocimiento de voz no disponible en este navegador'}
+            type={estadoVoz === 'esperando_voz' || estadoVoz === 'hablando' ? 'primary' : 'default'}
+            icon={<AudioOutlined />}
+            onClick={onEscuchar}
+            disabled={ocupado || finalizada || estadoVoz !== 'inactivo'}
+            title="Escuchar un turno"
           />
           <Input
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             onPressEnter={enviar}
-            placeholder={finalizada ? 'Llamada finalizada' : 'Escriba lo que diría el vecino…'}
+            placeholder={finalizada ? 'Llamada finalizada' : 'O escriba lo que diría el vecino…'}
             disabled={ocupado || finalizada}
           />
           <Button type="primary" icon={<SendOutlined />} onClick={enviar} loading={ocupado} disabled={finalizada}>

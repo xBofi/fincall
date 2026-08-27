@@ -21,21 +21,38 @@ uv run alembic upgrade head
 uv run python -m building_call.repos.semilla   # datos de demostración
 ```
 
-## Modelo
+## Modelo y latencia
 
-Solo Ollama local en esta fase (`qwen3.5:4b`). El cliente usa `format="json"` con `think=false`:
-el esquema JSON estricto con este modelo/versión de Ollama cuelga la petición.
+Solo Ollama local en esta fase (`qwen3.5:4b`: 96 % de exactitud en interpretación, ~600-700 ms).
+El cliente usa `format="json"` con `think=false`: el esquema JSON estricto con este modelo/versión
+de Ollama cuelga la petición. Comparar modelos y formatos de prompt:
+
+```powershell
+uv run python evals/comparar_modelos.py --modelos qwen3.5:4b,qwen3:1.7b --verboso
+```
+
+Métricas de latencia por etapa: `GET /api/metricas`. El navegador envía `respuesta_ms` (fin de
+voz del vecino → inicio de voz del bot) a `POST /api/llamadas/{id}/metricas`. Umbrales en
+`metricas.py`. Spec: `docs/superpowers/specs/2026-08-28-voice-pipeline-latency-design.md`.
+
+## STT en servidor (opcional)
+
+`BC_STT=whisper` activa faster-whisper (`BC_WHISPER_MODELO=small|base|turbo`, `BC_WHISPER_DISPOSITIVO=cuda|cpu`).
+Instalar con `uv pip install faster-whisper` (opcional, no está en el lock). Sin él, el navegador transcribe (Web Speech API).
 
 ## Estructura
 
 ```text
 src/building_call/
   domain/        configuración por capas (defaults -> administrador -> finca) y entidades
-  graph/         estado, nodos reutilizables y registro de grafos (hoy solo `estandar`)
-  llm/           contrato ModeloLenguaje y cliente Ollama
+  graph/         estado, nodos reutilizables, `siguiente_paso` y registro de grafos (hoy solo `estandar`)
+  llm/           contrato ModeloLenguaje, cliente Ollama, interpretación de turno y prompts versionados
+  metricas.py    tiempos por turno, agregados p50/p95 y calificación por umbrales
+  stt.py         reconocimiento de voz en servidor (faster-whisper, opcional)
   repos/         Repositorio (protocolo), memoria, PostgreSQL, modelos SQL, semilla
   api/           FastAPI: /api/salud, /api/fincas, /api/llamadas, /api/incidencias
   servicios.py   GestorLlamadas: estado por llamada e invocación del grafo por turno
 alembic/         migraciones
-tests/           pytest con LLM falso determinista
+evals/           gold sets y comparativa de modelos (exactitud + latencia)
+tests/           pytest con LLM falso determinista (flujo, naturalidad, API, métricas)
 ```

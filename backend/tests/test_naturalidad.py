@@ -1,0 +1,148 @@
+"""El vecino habla a su manera; la máquina de estados se adapta sin perder el control."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from building_call.repos.memoria import RepositorioMemoria
+from building_call.servicios import GestorLlamadas
+
+
+async def _conversar(gestor: GestorLlamadas, turnos: list[str]) -> dict:
+    estado = await gestor.iniciar()
+    for texto in turnos:
+        estado = await gestor.mensaje(estado["llamada_id"], texto)
+    return estado
+
+
+async def test_todo_en_una_frase_salta_las_preguntas_ya_respondidas(
+    gestor: GestorLlamadas, repo: RepositorioMemoria
+) -> None:
+    estado = await _conversar(
+        gestor,
+        [
+            "Hola, llamo desde Avenida de la Alameda 5, portal 2, tercero A. Soy Carmen "
+            "y hay una fuga de agua en el baño",
+            "sí",
+        ],
+    )
+    # Tras confirmar la finca ya sabe vivienda, nombre y problema: va directo al resumen
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert estado["vivienda_id"] == "finca-alameda-5-2-3A"
+    assert estado["nombre_declarado"] == "Carmen"
+    assert estado["categoria"] == "fontaneria"
+    preguntas = [h["texto"] for h in estado["historial"] if h["rol"] == "bot"]
+    assert not any("¿Cuál es su vivienda?" in p for p in preguntas)
+    assert not any("Dígame su nombre" in p for p in preguntas)
+    estado = await gestor.mensaje(estado["llamada_id"], "sí")
+    assert estado["resultado"] == "incidencia_creada"
+    assert len(await repo.listar_incidencias()) == 1
+
+
+async def test_datos_sueltos_se_acumulan_y_se_usan_despues(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "Cuarto A. Me llamo Pedro y no hay luz en la escalera"]
+    )
+    assert estado["vivienda_id"] == "finca-mayor-12-u-4A"
+    assert estado["nombre_declarado"] == "Pedro"
+    assert estado["solicitud"]
+    assert estado["nodo_actual"] == "confirmar_resumen"
+
+
+async def test_pedir_repetir_repite_la_pregunta(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "¿Cómo? No le he oído bien"])
+    assert estado["nodo_actual"] == "identificar_vivienda"
+    assert estado["mensajes_bot"][-1].startswith("Claro, le repito.")
+    assert "vivienda" in estado["mensajes_bot"][-1]
+
+
+async def test_pregunta_del_vecino_se_responde_y_se_retoma(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["¿Esta llamada se está grabando?"])
+    assert estado["nodo_actual"] == "identificar_finca"
+    assert "se registra" in estado["mensajes_bot"][-1]
+    assert "finca" in estado["mensajes_bot"][-1]
+    assert estado["intentos_finca"] == 0  # no cuenta como intento fallido
+
+
+async def test_fuera_de_ambito_explica_y_retoma(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "2 B", "Ana", "¿Cuánto pago de cuota al mes?"]
+    )
+    assert estado["nodo_actual"] == "recoger_solicitud"
+    assert "solo puedo gestionar incidencias" in estado["mensajes_bot"][-1].lower()
+
+
+async def test_pedir_una_persona_deriva_al_administrador(
+    gestor: GestorLlamadas, repo: RepositorioMemoria
+) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "Quiero hablar con una persona"])
+    assert estado["finalizada"] is True
+    assert estado["resultado"] == "derivada_administrador"
+    assert estado["destino_aviso"] == "mayor12@demo.test"
+    assert repo.llamadas[estado["llamada_id"]].resultado == "derivada_administrador"
+
+
+async def test_despedida_cierra_la_llamada(
+    gestor: GestorLlamadas, repo: RepositorioMemoria
+) -> None:
+    estado = await _conversar(gestor, ["Adiós, ya llamaré en otro momento"])
+    assert estado["finalizada"] is True
+    assert estado["resultado"] == "abandonada"
+    assert await repo.listar_incidencias() == []
+
+
+async def test_rechazar_candidata_con_otra_direccion_no_gasta_intento(
+    gestor: GestorLlamadas,
+) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "No, no, la avenida de la Alameda 5"])
+    assert estado["finca_candidata_id"] == "finca-alameda-5"
+    assert estado["intentos_finca"] == 0
+    assert "Alameda 5" in estado["mensajes_bot"][-1]
+
+
+async def test_correccion_en_el_resumen_reclasifica(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
+    )
+    assert estado["categoria"] == "electricidad"
+    estado = await gestor.mensaje(
+        estado["llamada_id"], "No, me he equivocado, es una fuga de agua en el baño"
+    )
+    assert estado["categoria"] == "fontaneria"
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert estado["mensajes_bot"][0] == "De acuerdo, lo corrijo."
+
+
+async def test_correccion_de_vivienda_en_el_resumen(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
+    )
+    estado = await gestor.mensaje(estado["llamada_id"], "No, antes le he dicho 3 B pero es 3 A")
+    assert estado["vivienda_id"] == "finca-mayor-12-u-3A"
+    assert estado["nodo_actual"] == "confirmar_resumen"
+
+
+async def test_turnos_deterministas_no_llaman_al_llm(gestor: GestorLlamadas, llm: Any) -> None:
+    await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B", "Soy Marta"])
+    # dirección corta, sí/no, vivienda por regex y nombre simple: cero llamadas al modelo
+    assert llm.llamadas == []
+    agregados = gestor.metricas.agregados()
+    assert agregados["turnos"] == 5
+    assert agregados["servidor_ms_sin_llm"]["n"] == 5
+
+
+async def test_metricas_registran_llamadas_llm_y_tiempos(gestor: GestorLlamadas, llm: Any) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
+    )
+    turnos = gestor.metricas.turnos(estado["llamada_id"])
+    ultimo = turnos[-1]
+    assert ultimo.llm_llamadas == 1  # interpretación fusionada con clasificación
+    assert ultimo.origen_interpretacion == "llm"
+    assert ultimo.servidor_ms is not None
+    assert estado["tiempos_turno"]["servidor_ms"] >= 0
+    completado = gestor.metricas.completar_cliente(
+        estado["llamada_id"], ultimo.turno, {"respuesta_ms": 1100, "vad_silencio_ms": 500}
+    )
+    assert completado is not None and completado.calificacion == "objetivo"
+    assert gestor.metricas.agregados()["calificaciones"]["objetivo"] == 1
