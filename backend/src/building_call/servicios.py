@@ -10,11 +10,36 @@ from uuid import uuid4
 from building_call.graph.estado import EstadoLlamada, estado_inicial
 from building_call.graph.nodos import Dependencias
 from building_call.graph.registro import obtener_grafo
+from building_call.llm.redaccion import redactar
 from building_call.metricas import RegistroMetricas, TiemposTurno
 
 
 class LlamadaNoEncontrada(KeyError):
     pass
+
+
+def _datos_para_redaccion(estado: EstadoLlamada) -> dict[str, Any]:
+    return {
+        "finca": estado.get("finca_direccion"),
+        "vivienda": estado.get("vivienda_etiqueta"),
+        "nombre": estado.get("nombre_declarado"),
+        "problema": estado.get("resumen") or estado.get("solicitud"),
+        "categoria": estado.get("categoria"),
+        "urgencia": estado.get("urgencia"),
+        "nodo": estado.get("nodo_actual"),
+    }
+
+
+def _merece_redaccion(estado: EstadoLlamada, entrada: str | None) -> bool:
+    """Redactar cuesta una llamada LLM (~0,5-1 s). Solo cuando aporta naturalidad: el vecino ha
+    dicho algo que no era la respuesta esperada (turno interpretado por LLM o intención global)
+    y el mensaje no es un cierre largo lleno de hechos (ahí la plantilla ya es completa)."""
+    if entrada is None or estado.get("finalizada"):
+        return False
+    tiempos = estado.get("tiempos_turno", {})
+    if tiempos.get("origen_interpretacion") != "llm":
+        return False
+    return len(" ".join(estado.get("mensajes_bot", []))) <= 260
 
 
 class GestorLlamadas:
@@ -23,8 +48,12 @@ class GestorLlamadas:
         deps: Dependencias,
         grafo_por_defecto: str = "estandar",
         metricas: RegistroMetricas | None = None,
+        redactor: Any | None = None,
     ) -> None:
+        """`redactor`: modelo que reformula las respuestas del grafo (paráfrasis controlada).
+        None = plantillas tal cual."""
         self.deps = deps
+        self.redactor = redactor
         self.grafo_por_defecto = grafo_por_defecto
         self.metricas = metricas or RegistroMetricas()
         self._grafos: dict[str, Any] = {}
@@ -57,8 +86,32 @@ class GestorLlamadas:
         }
         t0 = perf_counter()
         nuevo: EstadoLlamada = await self._grafo(nombre_grafo).ainvoke(preparado)
-        grafo_ms = int((perf_counter() - t0) * 1000)
         tiempos = dict(nuevo.get("tiempos_turno", {}))
+        if (
+            self.redactor is not None
+            and nuevo.get("mensajes_bot")
+            and _merece_redaccion(nuevo, entrada)
+        ):
+            plantilla = " ".join(nuevo["mensajes_bot"])
+            texto, metrica = await redactar(
+                self.redactor, plantilla, entrada, _datos_para_redaccion(nuevo)
+            )
+            tiempos.update(metrica)
+            if texto != plantilla:
+                nuevo["mensajes_bot"] = [texto]
+                # El historial guarda lo que realmente se dijo
+                # Los mensajes del grafo de este turno son los últimos del historial: se
+                # sustituyen por la redacción que realmente se dijo
+                historial = list(nuevo.get("historial", []))
+                while (
+                    historial
+                    and historial[-1]["rol"] == "bot"
+                    and historial[-1]["texto"] in plantilla
+                ):
+                    historial.pop()
+                historial.append({"rol": "bot", "texto": texto})
+                nuevo["historial"] = historial
+        grafo_ms = int((perf_counter() - t0) * 1000)
         servidor_ms = grafo_ms + (stt_ms or 0)
         self.metricas.registrar(
             TiemposTurno(

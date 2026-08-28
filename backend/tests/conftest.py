@@ -47,6 +47,9 @@ class LLMFalso:
         self.llamadas.append((titulo or "", usuario))
         if titulo == "interpretacion":
             return self._interpretar(usuario, esquema)
+        if titulo == "redaccion":
+            m = re.search(r'MENSAJE OBLIGATORIO: """(.*)"""', usuario, re.DOTALL)
+            return {"respuesta": "Vale. " + (m.group(1) if m else "")}
         if titulo == "clasificacion":
             catalogo = esquema["properties"]["categoria"]["enum"]
             cat, urg = _clasificar(usuario.lower(), catalogo)

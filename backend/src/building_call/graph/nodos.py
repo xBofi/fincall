@@ -143,6 +143,11 @@ _NO = {"no", "incorrecto", "negativo", "para nada", "que no", "no es", "tampoco"
 
 def _respuesta_si_no(texto: str) -> bool | None:
     t = _normalizar_basico(texto)
+    # AssemblyAI transcribe un "sí" corto como "S." y un "no" como "N." (medido 2026-08-28)
+    if t in {"s", "si si", "s s"}:
+        return True
+    if t in {"n", "no no"}:
+        return False
     palabras = set(t.split())
     si = {_normalizar_basico(s) for s in _SI}
     no = {_normalizar_basico(s) for s in _NO}
@@ -297,7 +302,10 @@ def _preguntar(estado: EstadoLlamada, nodo: str, texto: str, **extra: Any) -> di
         **extra,
         "mensajes_bot": [*estado.get("mensajes_bot", []), texto],
         "historial": [*base, {"rol": "bot", "texto": texto}],
-        "ultima_pregunta": texto,
+        # Para repetir/retomar se guarda solo la pregunta, sin saludos ni preámbulos
+        "ultima_pregunta": texto.split(". ", 1)[1]
+        if texto.startswith("Hola") and ". " in texto
+        else texto,
     }
 
 
@@ -987,14 +995,25 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if salida:
             return salida
         pend = _fusionar_pendientes(estado, interp)
-        if piso and puerta:
-            # El regex reconoce formatos ("piso 1, puerta A") sin inventar: manda sobre el LLM,
-            # que llegó a devolver portal="a" en "Pues sí, piso 1, puerta A" (2026-08-28)
-            pend["piso"], pend["puerta"] = piso, puerta
-            if portal:
-                pend["portal"] = portal
-            else:
-                pend.pop("portal", None)
+        # El LLM es la primera fuente de comprensión; el regex solo entra si lo que entendió el
+        # modelo no corresponde a ninguna vivienda de la finca (p. ej. inventó portal="a").
+        if piso and puerta and estado.get("finca_id"):
+            viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
+            portal_llm = _normalizar_portal(pend.get("portal"))
+            if portal_llm and not any(v.portal for v in viviendas):
+                portal_llm = None
+            del_llm = _candidatas_vivienda(
+                viviendas,
+                portal_llm,
+                _normalizar_piso(pend.get("piso")),
+                _normalizar_puerta(pend.get("puerta")),
+            )
+            if not del_llm and _candidatas_vivienda(viviendas, portal, piso, puerta):
+                pend["piso"], pend["puerta"] = piso, puerta
+                if portal:
+                    pend["portal"] = portal
+                else:
+                    pend.pop("portal", None)
         if not (pend.get("piso") and pend.get("puerta")):
             return await _reintento_vivienda(
                 {**estado, "historial": historial},

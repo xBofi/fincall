@@ -249,3 +249,9 @@ async def test_comentario_sobre_el_bot_no_es_una_correccion(
     assert estado["nodo_actual"] == "confirmar_resumen"
     assert "Responda sí o no" in estado["mensajes_bot"][-1]
     assert estado["solicitud"].startswith("Hay que pintar")
+
+
+async def test_si_transcrito_como_letra_confirma(gestor: GestorLlamadas, llm: Any) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "S."])
+    assert estado["finca_id"] == "finca-mayor-12"
+    assert llm.llamadas == []

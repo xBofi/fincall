@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Medido 2026-08-28: local 92%/p95 828 ms; Cloudflare 100%/p95 10 s; carrera+150 ms 96%/p95 831 ms.
     llm: str = "auto"
     carrera_espera_extra_ms: int = 150
+    # Redacción de respuestas: "llm" (paráfrasis controlada, +1 llamada por turno) | "plantilla"
+    redaccion: str = "llm"
 
     # Ollama local. qwen3.5:4b: 96% exactitud / ~600 ms por interpretación (evals/comparar_modelos.py)
     ollama_url: str = "http://localhost:11434"

@@ -153,7 +153,13 @@ def crear_app(
     if fabrica_streaming is AUTO:
         fabrica_streaming = _fabrica_streaming_por_defecto()
     reconocedor: ReconocedorVoz = stt
-    gestor = GestorLlamadas(deps)
+    redactor = None
+    if settings.redaccion == "llm":
+        # Redacción con el modelo local y salida corta: la carrera con el 27B tardaba 1,5 s aquí
+        redactor = ModeloOllama(
+            settings.ollama_url, settings.ollama_modelo, settings.ollama_timeout_s, num_predict=90
+        )
+    gestor = GestorLlamadas(deps, redactor=redactor)
 
     @asynccontextmanager
     async def ciclo_vida(_: FastAPI):  # type: ignore[no-untyped-def]
