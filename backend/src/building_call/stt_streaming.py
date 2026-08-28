@@ -53,7 +53,14 @@ class SesionStreamingAssemblyAI:
         sample_rate: int = 16000,
         host: str = HOST_STREAMING_EU,
         min_chunk_ms: int = 100,
+        eot_confianza: float = 0.8,
+        eot_silencio_ms: int = 450,
+        max_silencio_ms: int = 2400,
     ) -> None:
+        """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
+        terminado supera `eot_confianza` y hay `eot_silencio_ms` de silencio; si no está
+        seguro, espera `max_silencio_ms`. Los valores por defecto del proveedor (0.7 / 160 ms)
+        cortaban al vecino a mitad de frase (prueba de Andreu, 2026-08-28)."""
         if not api_key:
             raise AssemblyAIConfigError("Falta BC_ASSEMBLYAI_API_KEY")
         if not host.endswith(".eu.assemblyai.com"):
@@ -61,7 +68,14 @@ class SesionStreamingAssemblyAI:
         self.api_key = api_key
         self.sample_rate = sample_rate
         self._url = f"wss://{host}/v3/ws?" + urlencode(
-            {"sample_rate": sample_rate, "encoding": "pcm_s16le", "format_turns": "true"}
+            {
+                "sample_rate": sample_rate,
+                "encoding": "pcm_s16le",
+                "format_turns": "true",
+                "end_of_turn_confidence_threshold": eot_confianza,
+                "min_end_of_turn_silence_when_confident": eot_silencio_ms,
+                "max_turn_silence": max_silencio_ms,
+            }
         )
         self._min_bytes = int(sample_rate * min_chunk_ms / 1000) * 2
         self._buffer = bytearray()

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     assemblyai_api_key: str = ""
     assemblyai_api_base: str = "https://api.eu.assemblyai.com"
     assemblyai_streaming_host: str = "streaming.eu.assemblyai.com"
+    # Fin de turno (ver SesionStreamingAssemblyAI). Más silencio = menos cortes, más latencia.
+    assemblyai_eot_confianza: float = 0.8
+    assemblyai_eot_silencio_ms: int = 450
+    assemblyai_max_silencio_ms: int = 2400
 
     cors_origins: list[str] = ["http://localhost:5173"]
 

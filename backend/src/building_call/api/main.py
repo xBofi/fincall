@@ -114,7 +114,14 @@ def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
     host = settings.assemblyai_streaming_host
 
     def crear(sample_rate: int) -> SesionStreamingAssemblyAI:
-        return SesionStreamingAssemblyAI(settings.assemblyai_api_key, sample_rate, host)
+        return SesionStreamingAssemblyAI(
+            settings.assemblyai_api_key,
+            sample_rate,
+            host,
+            eot_confianza=settings.assemblyai_eot_confianza,
+            eot_silencio_ms=settings.assemblyai_eot_silencio_ms,
+            max_silencio_ms=settings.assemblyai_max_silencio_ms,
+        )
 
     return crear
 
