@@ -100,13 +100,18 @@ class Acceso:
 
     async def usuario_de_peticion(self, request: Request) -> Usuario | None:
         if self.modo == "desarrollo":
-            return Usuario(
+            usuario_dev = Usuario(
                 id="usr-desarrollo",
                 google_sub="desarrollo",
                 email=self.s.auth_dev_email,
                 rol=Rol.owner,
                 activo=True,
             )
+            if not getattr(self, "_dev_persistido", False):
+                # La auditoría referencia usuarios por clave ajena: el owner local debe existir
+                await self.repo.guardar_usuario(usuario_dev)
+                self._dev_persistido = True
+            return usuario_dev
         token = request.cookies.get(self.s.sesion_cookie)
         if not token:
             return None
