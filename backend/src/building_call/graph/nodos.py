@@ -349,6 +349,42 @@ def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[
     return pend
 
 
+_PALABRAS_PERSONA = (
+    "persona",
+    "humano",
+    "operador",
+    "operadora",
+    "alguien",
+    "hablar con",
+    "que me atienda",
+    "maquina",
+    "robot",
+    "administrador",
+)
+_PALABRAS_DESPEDIDA = (
+    "adios",
+    "hasta luego",
+    "hasta pronto",
+    "nada mas",
+    "ya llamare",
+    "dejalo",
+    "olvidalo",
+    "no quiero seguir",
+    "cuelgo",
+    "gracias adios",
+)
+
+
+def _pide_persona(texto: str) -> bool:
+    t = _normalizar_basico(texto)
+    return any(p in t for p in _PALABRAS_PERSONA)
+
+
+def _se_despide(texto: str) -> bool:
+    t = _normalizar_basico(texto)
+    return any(p in t for p in _PALABRAS_DESPEDIDA)
+
+
 _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("grab", "registr"),
@@ -456,7 +492,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 traza=_con_traza(estado, nodo, "intencion", "fuera_ambito"),
                 **extra,
             )
-        if interp.intencion == "humano":
+        # Derivar o colgar son irreversibles: exigen palabras explícitas del vecino, no solo la
+        # opinión del modelo (una dirección mal transcrita llegó a derivarse como "humano").
+        entrada = estado.get("entrada_usuario") or ""
+        if interp.intencion == "humano" and _pide_persona(entrada):
             return _avanzar(
                 estado,
                 "derivar_humano",
@@ -464,7 +503,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 traza=_con_traza(estado, nodo, "intencion", "humano"),
                 **extra,
             )
-        if interp.intencion == "colgar" and not aporta_datos:
+        if interp.intencion == "colgar" and not aporta_datos and _se_despide(entrada):
             return _avanzar(
                 estado,
                 "despedida",

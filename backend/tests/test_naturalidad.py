@@ -146,3 +146,15 @@ async def test_metricas_registran_llamadas_llm_y_tiempos(gestor: GestorLlamadas,
     )
     assert completado is not None and completado.calificacion == "objetivo"
     assert gestor.metricas.agregados()["calificaciones"]["objetivo"] == 1
+
+
+async def test_direccion_irreconocible_no_deriva_a_humano(gestor: GestorLlamadas, llm: Any) -> None:
+    # El modelo se equivoca y marca "humano" ante una transcripción sin sentido
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {"intencion": "humano"}  # type: ignore[method-assign]
+    estado = await _conversar(gestor, ["Estoy en la finca Carregüerdor del Saford, Doctor Mood"])
+    llm._interpretar = original  # type: ignore[method-assign]
+    assert estado["finalizada"] is False
+    assert estado["nodo_actual"] == "identificar_finca"
+    assert estado["intentos_finca"] == 1
+    assert "repetirme la calle" in estado["mensajes_bot"][-1]

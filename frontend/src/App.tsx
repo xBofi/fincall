@@ -335,6 +335,12 @@ export default function App() {
                 )}
                 {streamingInfo && <Tag color="blue">{streamingInfo}</Tag>}
               </Space>
+              <div style={{ marginTop: 6 }}>
+                <Typography.Text type="secondary">Fincas de demostración (diga una de estas): </Typography.Text>
+                {fincas.map((f) => (
+                  <Tag key={f.id}>{f.direccion}</Tag>
+                ))}
+              </div>
             </Card>
             <Card
               title="Llamada simulada"
