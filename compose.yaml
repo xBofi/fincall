@@ -1,0 +1,74 @@
+# Building Call Assistant — desarrollo local con Docker Compose.
+#
+#   docker compose up -d db            # solo PostgreSQL (backend y frontend en tu máquina)
+#   docker compose up -d               # todo: db + api + web
+#   docker compose --profile herramientas run --rm migraciones   # alembic upgrade head + semilla
+#
+# Secretos y claves de proveedores van en backend/.env (ignorado por git); aquí solo defaults.
+# Ollama corre en el host (GPU): la API lo alcanza en host.docker.internal:11434.
+
+name: building-call
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: building-call-db
+    environment:
+      POSTGRES_DB: building_call
+      POSTGRES_USER: building_call
+      POSTGRES_PASSWORD: ${BC_DB_PASSWORD:-building_call_dev}
+    ports:
+      - "127.0.0.1:5433:5432" # 5433 para no chocar con el PostgreSQL 17 instalado en Windows
+    volumes:
+      - db_datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U building_call -d building_call"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./backend
+    container_name: building-call-api
+    env_file:
+      - backend/.env
+    environment:
+      BC_REPOSITORIO: postgres
+      BC_DATABASE_URL: postgresql+asyncpg://building_call:${BC_DB_PASSWORD:-building_call_dev}@db:5432/building_call
+      BC_OLLAMA_URL: http://host.docker.internal:11434
+      BC_AUDIO_DIR: /datos/audio
+      BC_CORS_ORIGINS: '["http://localhost:5173","http://localhost:8080"]'
+    volumes:
+      - audio_privado:/datos/audio
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  migraciones:
+    build: ./backend
+    profiles: ["herramientas"]
+    env_file:
+      - backend/.env
+    environment:
+      BC_REPOSITORIO: postgres
+      BC_DATABASE_URL: postgresql+asyncpg://building_call:${BC_DB_PASSWORD:-building_call_dev}@db:5432/building_call
+    command: ["sh", "-c", "alembic upgrade head && python -m building_call.repos.semilla"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    container_name: building-call-web
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - api
+
+volumes:
+  db_datos:
+  audio_privado:
