@@ -143,8 +143,17 @@ export async function abrirStreaming(
     void ctx.close().catch(() => undefined)
     cb.onCerrado()
   }
-  ws.onclose = limpiar
+  let listo = false
+  ws.onclose = (e) => {
+    if (!listo) cb.onError(`El WebSocket de voz se cerró antes de estar listo (código ${e.code}). ¿Proxy sin ws:true o backend caído?`)
+    limpiar()
+  }
   ws.onerror = () => cb.onError('Error de conexión con el servidor de voz')
+  const onListoOriginal = cb.onListo
+  cb.onListo = (ms) => {
+    listo = true
+    onListoOriginal(ms)
+  }
 
   const enviar = (o: unknown) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(o))
   return {
