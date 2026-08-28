@@ -3,11 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "preinstall": "node scripts/enforce-pnpm.mjs",
+    "dev": "node scripts/enforce-pnpm.mjs && vite",
+    "build": "node scripts/enforce-pnpm.mjs && tsc -b && vite build",
+    "lint": "node scripts/enforce-pnpm.mjs && oxlint",
+    "preview": "node scripts/enforce-pnpm.mjs && vite preview",
+    "test:package-manager": "node --test scripts/enforce-pnpm.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
