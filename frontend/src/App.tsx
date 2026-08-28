@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Card, Col, Layout, Row, Segmented, Slider, Space, Switch, Tabs, Tag, Typography, message } from 'antd'
+import { Alert, Button, Segmented, Slider, Switch, message } from 'antd'
 import { PhoneOutlined, ReloadOutlined, SoundOutlined } from '@ant-design/icons'
-import { api, type Finca, type Salud, type VistaLlamada } from './api'
+import { api, type Salud, type VistaLlamada } from './api'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
-import { PanelEstado } from './components/PanelEstado'
-import { PanelLatencia, type TurnoMedido } from './components/PanelLatencia'
+import { type TurnoMedido } from './components/PanelLatencia'
 import { abrirStreaming, type SesionStreaming } from './streaming'
 import {
   VAD_POR_DEFECTO,
@@ -22,14 +21,13 @@ type ModoStt = 'navegador' | 'servidor' | 'streaming'
 
 export default function App() {
   const [salud, setSalud] = useState<Salud | null>(null)
-  const [fincas, setFincas] = useState<Finca[]>([])
   const [vista, setVista] = useState<VistaLlamada | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [estadoVoz, setEstadoVoz] = useState<EstadoVoz>('inactivo')
   const [parcial, setParcial] = useState<string | null>(null)
   const [vozActiva, setVozActiva] = useState(ttsDisponible())
   const [manosLibres, setManosLibres] = useState(true)
-  const [bargeIn, setBargeIn] = useState(true)
+  const [bargeIn] = useState(true)
   const [modoStt, setModoStt] = useState<ModoStt>('navegador')
   const [silencioMs, setSilencioMs] = useState(VAD_POR_DEFECTO.silencioMs)
   const [turnos, setTurnos] = useState<TurnoMedido[]>([])
@@ -54,7 +52,6 @@ export default function App() {
         else if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
       })
       .catch((e) => setError(String(e)))
-    api.fincas().then(setFincas).catch(() => undefined)
   }, [])
 
   const registrarTurno = useCallback((t: TurnoMedido) => {
@@ -273,7 +270,86 @@ export default function App() {
   const sttServidorOk = !!salud?.stt_disponible
   const sttStreamingOk = !!salud?.stt_streaming
   const sttNavegadorOk = sttNavegadorDisponible()
+  const respuestas = turnos
+    .map((turno) => turno.respuesta_ms)
+    .filter((valor): valor is number => typeof valor === 'number')
+    .sort((a, b) => a - b)
+  const p50 = respuestas.length ? respuestas[Math.floor(respuestas.length / 2)] : null
+  const resultado = vista?.datos.resultado as string | undefined
+  const resuelta = resultado === 'incidencia_creada'
 
+  return (
+      <main className="ops-shell">
+        <header className="ops-topbar">
+          <div className="ops-brand">
+            <span className="ops-brand-mark" aria-hidden="true">B</span>
+            <div>
+              <p className="ops-eyebrow">Building Call Assistant</p>
+              <h1>Centro operativo</h1>
+            </div>
+          </div>
+          <div className="ops-system">
+            <span className={`ops-signal ${salud?.modelo_disponible ? 'is-online' : ''}`} />
+            <span>{salud?.modelo_disponible ? 'Sistema operativo' : 'Modelo no disponible'}</span>
+            <Button className="ops-primary" type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
+              {vista ? 'Nueva llamada' : 'Iniciar llamada'}
+            </Button>
+          </div>
+        </header>
+
+        <section className="ops-metrics" aria-label="Indicadores operativos">
+          <article><p>Llamadas hoy</p><strong>{vista ? 1 : 0}</strong><span>en esta consola</span></article>
+          <article><p>Respuesta p50</p><strong>{p50 === null ? '—' : `${p50} ms`}</strong><span>{p50 !== null && p50 <= 1200 ? 'dentro del objetivo' : 'esperando medición'}</span></article>
+          <article><p>Turnos medidos</p><strong>{turnos.length}</strong><span>cliente → asistente</span></article>
+          <article><p>Resultado</p><strong className={resultado ? (resuelta ? 'is-good' : 'is-review') : ''}>{resultado ? (resuelta ? 'Resuelta' : 'A revisar') : 'En curso'}</strong><span>{resultado ?? 'aún sin cierre'}</span></article>
+        </section>
+
+        {error && <Alert className="ops-alert" type="error" message={error} showIcon />}
+
+        <section className="ops-workbench">
+          <aside className="ops-queue" aria-label="Cola de llamadas">
+            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Cola operativa</p><h2>Expedientes</h2></div><span>01</span></div>
+            <button className={`ops-call-row ${vista ? 'is-selected' : ''}`} type="button" onClick={() => vista ? undefined : void iniciar()}>
+              <span className="ops-row-state" />
+              <span><b>{vista?.datos.nombre_declarado ?? 'Nueva llamada'}</b><small>{vista?.datos.finca_direccion ?? 'Sin identificar'}</small></span>
+              <time>{vista ? 'ahora' : 'lista'}</time>
+            </button>
+            <div className="ops-queue-note">Las conversaciones finalizadas y las que requieren revisión aparecen aquí con su trazabilidad completa.</div>
+          </aside>
+
+          <section className="ops-dossier" aria-label="Dossier operativo">
+            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada</p><h2>{vista?.datos.finca_direccion ?? 'Esperando una llamada'}</h2></div><span className="ops-mono">{vista?.llamada_id?.slice(-6) ?? '—'}</span></div>
+            <dl className="ops-facts">
+              <div><dt>Vecino</dt><dd>{vista?.datos.nombre_declarado ?? 'No identificado'}</dd></div>
+              <div><dt>Vivienda</dt><dd>{vista?.datos.vivienda_etiqueta ?? 'Pendiente'}</dd></div>
+              <div><dt>Categoría</dt><dd>{vista?.datos.categoria ?? 'Sin clasificar'}</dd></div>
+              <div><dt>Urgencia</dt><dd>{vista?.datos.urgencia ?? '—'}</dd></div>
+            </dl>
+            <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{vista?.datos.resumen ?? 'El expediente se irá completando mientras el vecino responde.'}</p></div>
+            <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Flujo de decisión</p><h2>Rastro verificable</h2></div></div>
+              {vista?.traza?.length ? <ol>{vista.traza.slice(-5).map((paso, index) => <li key={`${paso.nodo}-${index}`}><span>{index + 1}</span><div><b>{paso.nodo}</b><small>{paso.accion}{paso.detalle ? ` · ${paso.detalle}` : ''}</small></div></li>)}</ol> : <p className="ops-empty">Cada decisión del grafo aparecerá aquí, con el motivo que la activó.</p>}
+            </div>
+          </section>
+
+          <aside className="ops-live" aria-label="Llamada en directo">
+            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>{vista?.finalizada ? 'Finalizada' : vista ? 'En curso' : 'Preparada'}</h2></div>{vista && !vista.finalizada && <Button danger onClick={colgar}>Colgar</Button>}</div>
+            <div className="ops-voice-controls">
+              <label><SoundOutlined /> Voz <Switch checked={vozActiva} onChange={setVozActiva} disabled={!ttsDisponible()} size="small" /></label>
+              <label>Manos libres <Switch checked={manosLibres} onChange={setManosLibres} size="small" /></label>
+              <Segmented size="small" value={modoStt} onChange={(valor) => setModoStt(valor as ModoStt)} options={[{ label: 'Streaming', value: 'streaming', disabled: !sttStreamingOk }, { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk }, { label: 'Whisper', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() }]} />
+              {modoStt === 'servidor' && <Slider min={300} max={1200} step={50} value={silencioMs} onChange={setSilencioMs} />}
+              {streamingInfo && <span className="ops-streaming-info">{streamingInfo}</span>}
+            </div>
+            <div className="ops-conversation">
+              {vista ? <Conversacion historial={vista.historial} parcial={parcial} estadoVoz={estadoVoz} ocupado={ocupado} finalizada={vista.finalizada} manosLibres={manosLibres} onEnviar={enviarTexto} onEscuchar={() => void escuchar()} /> : <div className="ops-call-placeholder"><span className="ops-radar" /><p>La línea está libre</p><small>Inicia una llamada para observar conversación, tiempos y decisiones en tiempo real.</small></div>}
+            </div>
+            <footer className="ops-retention">Grabaciones: acceso restringido a owner, administradores y calidad · retención de 14 días.</footer>
+          </aside>
+        </section>
+      </main>
+    )
+
+  /* Legacy validation-console layout retained temporarily while its minor controls are migrated.
   return (
     <Layout style={{ height: '100vh' }}>
       <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 16, color: '#fff' }}>
@@ -392,4 +468,5 @@ export default function App() {
       </Layout.Content>
     </Layout>
   )
+  */
 }
