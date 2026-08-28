@@ -46,7 +46,7 @@ async def test_fincas_incluye_viviendas(cliente: AsyncClient) -> None:
     assert "3º B" in next(f for f in fincas if f["id"] == "finca-mayor-12")["viviendas"]
 
 
-async def test_conversacion_por_api(cliente: AsyncClient) -> None:
+async def test_conversacion_por_api(cliente: AsyncClient, repo: object) -> None:
     r = await cliente.post("/api/llamadas", json={"telefono_llamante": "+34600111222"})
     assert r.status_code == 201
     llamada_id = r.json()["llamada_id"]
@@ -72,6 +72,10 @@ async def test_conversacion_por_api(cliente: AsyncClient) -> None:
 
     r = await cliente.get("/api/incidencias")
     assert len(r.json()) == 1
+    llamada = repo.llamadas[llamada_id]  # type: ignore[attr-defined]
+    assert llamada.estado == "finalizada"
+    assert llamada.finalizada_en is not None
+    assert llamada.requiere_revision is False
 
 
 async def test_turno_por_audio_usa_stt_del_servidor(cliente: AsyncClient) -> None:

@@ -78,6 +78,9 @@ class LlamadaSQL(Base):
     motivo_revision: Mapped[str | None] = mapped_column(Text, nullable=True)
     configuracion_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     grafo: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    estado: Mapped[str] = mapped_column(String(32), default="activa", index=True)
+    finalizada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    requiere_revision: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class UsuarioSQL(Base):

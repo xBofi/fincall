@@ -69,6 +69,9 @@ class Llamada(BaseModel):
     motivo_revision: str | None = None
     configuracion_id: str | None = None
     grafo: str | None = None
+    estado: Literal["activa", "finalizada"] = "activa"
+    finalizada_en: datetime | None = None
+    requiere_revision: bool = False
 
 
 class Incidencia(BaseModel):

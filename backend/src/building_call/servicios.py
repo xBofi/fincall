@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
+from building_call.domain.entidades import Llamada
 from building_call.graph.estado import EstadoLlamada, estado_inicial
 from building_call.graph.nodos import Dependencias
 from building_call.graph.registro import obtener_grafo
@@ -63,6 +64,30 @@ class GestorLlamadas:
         if nombre not in self._grafos:
             self._grafos[nombre] = obtener_grafo(nombre, self.deps)
         return self._grafos[nombre]
+
+    async def _guardar_operacion(self, estado: EstadoLlamada) -> None:
+        """Persiste el expediente tras cada turno, también mientras sigue activo."""
+        finalizada = bool(estado.get("finalizada"))
+        resultado = estado.get("resultado")
+        await self.deps.repo.guardar_llamada(
+            Llamada(
+                id=estado["llamada_id"],
+                iniciada_en=datetime.fromisoformat(estado["iniciada_en"]),
+                telefono_llamante=estado.get("telefono_llamante"),
+                finca_id=estado.get("finca_id"),
+                vivienda_id=estado.get("vivienda_id"),
+                nombre_declarado=estado.get("nombre_declarado"),
+                transcripcion=estado.get("historial", []),
+                resumen=estado.get("resumen") or estado.get("solicitud"),
+                resultado=resultado,
+                motivo_revision=estado.get("motivo_revision"),
+                configuracion_id=estado.get("configuracion_id"),
+                grafo=estado.get("grafo"),
+                estado="finalizada" if finalizada else "activa",
+                finalizada_en=datetime.now(UTC) if finalizada else None,
+                requiere_revision=finalizada and resultado != "incidencia_creada",
+            )
+        )
 
     async def _ejecutar(
         self, estado: EstadoLlamada, entrada: str | None, stt_ms: int | None = None
@@ -133,6 +158,7 @@ class GestorLlamadas:
             tiempos["stt_ms"] = stt_ms
         nuevo["tiempos_turno"] = tiempos
         self._estados[nuevo["llamada_id"]] = nuevo
+        await self._guardar_operacion(nuevo)
         return nuevo
 
     async def iniciar(self, telefono_llamante: str | None = None) -> EstadoLlamada:
