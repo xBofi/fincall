@@ -41,3 +41,40 @@ Ejecuta `scripts/sync-vault.ps1 -DryRun` para validar sin mutar GitHub. Los conf
 ## Autenticación
 
 Usa `gh auth login` con un token fine-grained limitado al repositorio `<private-vault-repo>`, con `Contents: Read and write`, `Pull requests: Read and write` y `Metadata: Read-only`. La clave se guarda en el keyring de GitHub CLI, no en este repositorio.
+
+## Arrancar la aplicación en local
+
+```powershell
+docker compose up -d db                       # PostgreSQL 17 (127.0.0.1:5433, datos en volumen)
+cd backend
+uv run alembic upgrade head                   # esquema
+uv run python -m building_call.repos.semilla  # fincas y administradores de demostración
+uv run building-call                          # API en :8000 (lee backend/.env)
+cd ../frontend; corepack pnpm run dev         # consola en :5173
+```
+
+Pila completa en contenedores: `docker compose up -d` (web en `http://localhost:8080`, Ollama sigue en el host).
+Con `backend/.env` en `BC_REPOSITORIO=postgres` y `BC_DATABASE_URL=postgresql+asyncpg://building_call:<contraseña>@127.0.0.1:5433/building_call`.
+
+### Acceso a la consola operativa con Google
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) crea (o elige) un proyecto.
+2. **APIs y servicios → Pantalla de consentimiento OAuth**: tipo *Externo*, rellena nombre y correo de contacto; en *Usuarios de prueba* añade los correos que entrarán (mientras la app esté en modo prueba solo entran ellos).
+3. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo *Aplicación web*.
+   - Orígenes autorizados: `http://localhost:5173` y `http://localhost:8000`.
+   - URI de redirección autorizada: `http://localhost:8000/api/auth/callback`.
+4. Google muestra el *ID de cliente* y el *secreto de cliente*. Cópialos solo en `backend/.env` (nunca en chat, notas ni commits):
+
+```dotenv
+BC_AUTH_MODO=google
+BC_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+BC_GOOGLE_CLIENT_SECRET=...
+BC_GOOGLE_REDIRECT_URL=http://localhost:8000/api/auth/callback
+BC_ACCESO_OWNERS=tu-correo@dominio.es          # allowlist por rol, separados por comas
+BC_ACCESO_ADMINISTRADORES=
+BC_ACCESO_CALIDAD=
+BC_SESION_SECRETO=<cadena aleatoria larga>       # p. ej. python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+5. Reinicia la API y entra desde la consola con **Entrar con Google**. `GET /api/salud` indica `acceso: google`.
+   Sin secreto o sin allowlist el acceso queda deshabilitado; `BC_AUTH_MODO=desarrollo` solo sirve en local.
