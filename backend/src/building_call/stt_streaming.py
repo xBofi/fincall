@@ -54,7 +54,7 @@ class SesionStreamingAssemblyAI:
         host: str = HOST_STREAMING_EU,
         min_chunk_ms: int = 100,
         eot_confianza: float = 0.7,
-        eot_silencio_ms: int = 300,
+        eot_silencio_ms: int = 220,
         max_silencio_ms: int = 800,
         keyterms: list[str] | None = None,
     ) -> None:
