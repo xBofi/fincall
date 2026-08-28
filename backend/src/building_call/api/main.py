@@ -15,9 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from building_call.graph.estado import EstadoLlamada
-from building_call.graph.nodos import Dependencias
+from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
 from building_call.graph.registro import REGISTRO
 from building_call.llm.carrera import ModeloCarrera
+from building_call.llm.interpretacion import interpretar
 from building_call.llm.ollama import ModeloOllama
 from building_call.llm.workers_ai import ModeloWorkersAI
 from building_call.metricas import UMBRALES_MS
@@ -207,7 +208,7 @@ def crear_app(
     if settings.redaccion == "llm":
         # Redacción con el modelo local y salida corta: la carrera con el 27B tardaba 1,5 s aquí
         redactor = ModeloOllama(
-            settings.ollama_url, settings.ollama_modelo, settings.ollama_timeout_s, num_predict=90
+            settings.ollama_url, settings.ollama_modelo, settings.ollama_timeout_s, num_predict=60
         )
     gestor = GestorLlamadas(deps, redactor=redactor)
 
@@ -338,10 +339,38 @@ def crear_app(
         silencio = b"\x00" * (int(sample_rate * 0.1) * 2)
         ultima_voz_at: float | None = None  # último audio con energía recibido del navegador
 
+        def especular(parcial: str) -> None:
+            """Lanza la interpretación LLM sobre el transcript parcial, antes del fin de turno.
+
+            Solo una en vuelo: un parcial nuevo cancela la anterior. Si el final coincide con el
+            último parcial, `_interpretar` reutiliza el resultado (medido: ahorra ~0,5-0,9 s)."""
+            if len(parcial.split()) < 2:
+                return
+            clave = clave_especulacion(parcial)
+            if clave in deps.especulaciones:
+                return
+            try:
+                estado_actual = gestor.obtener(llamada_id)
+            except LlamadaNoEncontrada:
+                return
+            for otra in deps.especulaciones.values():
+                otra.cancel()
+            deps.especulaciones.clear()
+            deps.especulaciones[clave] = asyncio.ensure_future(
+                interpretar(
+                    deps.llm,
+                    estado_actual.get("ultima_pregunta"),
+                    parcial,
+                    estado_actual.get("nodo_actual", ""),
+                    catalogo=catalogo_para(estado_actual),
+                )
+            )
+
         async def bombear_eventos() -> None:
             async for ev in sesion.eventos():
                 if ev.tipo == "parcial":
                     await ws.send_json({"type": "parcial", "texto": ev.texto})
+                    especular(ev.texto)
                 elif ev.tipo == "error":
                     await ws.send_json({"type": "error", "mensaje": ev.texto})
                 elif ev.tipo == "final":

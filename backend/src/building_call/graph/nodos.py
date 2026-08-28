@@ -11,9 +11,10 @@ colgar, fuera de ámbito, pregunta) se atienden desde cualquier nodo.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from time import perf_counter
@@ -48,6 +49,18 @@ UMBRAL_FINCA = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
 class Dependencias:
     repo: Repositorio
     llm: ModeloLenguaje
+    # Interpretaciones lanzadas sobre transcripts parciales (antes del fin de turno), por clave
+    # normalizada del texto. `_interpretar` las reutiliza si el final coincide con el parcial.
+    especulaciones: dict[str, asyncio.Future[Interpretacion]] = field(default_factory=dict)
+
+
+def clave_especulacion(texto: str) -> str:
+    """Clave para casar un transcript parcial con el final (sin puntuación ni mayúsculas)."""
+    return _normalizar_basico(texto)
+
+
+def catalogo_para(estado: EstadoLlamada) -> list[str]:
+    return _catalogo(estado)
 
 
 # --------------------------------------------------------------------------- normalización
@@ -603,6 +616,24 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if nodo == "registrar_nombre" and (nombre := _nombre_simple(entrada)):
             interp = Interpretacion(nombre=nombre, origen="determinista")
             return interp, _tiempos(estado, origen_interpretacion="determinista")
+        # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
+        # a que termine): solapa el LLM con la detección de fin de turno del STT.
+        futuro = deps.especulaciones.pop(clave_especulacion(entrada), None)
+        for otro in list(deps.especulaciones.values()):
+            otro.cancel()
+        deps.especulaciones.clear()
+        if futuro is not None and not futuro.cancelled():
+            t0 = perf_counter()
+            try:
+                interp = await futuro
+                return interp, _tiempos(
+                    estado,
+                    interpretacion_ms=int((perf_counter() - t0) * 1000),
+                    llm_llamadas=1,
+                    origen_interpretacion="llm_especulativo",
+                )
+            except Exception:  # noqa: BLE001 - la especulación falló: interpretación normal
+                pass
         interp = await interpretar(
             deps.llm, estado.get("ultima_pregunta"), entrada, nodo, catalogo=_catalogo(estado)
         )

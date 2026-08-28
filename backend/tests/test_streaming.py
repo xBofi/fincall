@@ -154,3 +154,27 @@ async def test_vocabulario_stt_incluye_direcciones_pisos_y_puertas(deps: Depende
     assert "Calle Mayor 12" in terminos and "Avenida de la Alameda 5" in terminos
     assert "puerta A" in terminos and "tercero B" in terminos and "portal 2" in terminos
     assert len(terminos) <= 100
+
+
+async def test_interpretacion_especulativa_se_reutiliza(deps: Dependencias, llm: Any) -> None:
+    import asyncio
+
+    from building_call.graph.nodos import clave_especulacion
+    from building_call.llm.interpretacion import Interpretacion
+    from building_call.servicios import GestorLlamadas
+
+    gestor = GestorLlamadas(deps)
+    estado = await gestor.iniciar()
+    for t in ["Calle Mayor 12", "sí"]:
+        estado = await gestor.mensaje(estado["llamada_id"], t)
+    # El parcial "vivo en el tercero b y me llamo marta" ya se interpretó antes del final
+    fut: asyncio.Future[Interpretacion] = asyncio.get_running_loop().create_future()
+    fut.set_result(Interpretacion(piso="3", puerta="B", nombre="Marta", origen="llm"))
+    deps.especulaciones[clave_especulacion("Vivo en el tercero B y me llamo Marta.")] = fut
+    n = len(llm.llamadas)
+    estado = await gestor.mensaje(estado["llamada_id"], "Vivo en el tercero B y me llamo Marta.")
+    assert len(llm.llamadas) == n  # no se volvió a llamar al modelo
+    assert estado["vivienda_id"] == "finca-mayor-12-u-3B"
+    assert estado["nombre_declarado"] == "Marta"
+    assert estado["tiempos_turno"]["origen_interpretacion"] == "llm_especulativo"
+    assert deps.especulaciones == {}

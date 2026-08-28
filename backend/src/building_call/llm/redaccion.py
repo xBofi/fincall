@@ -86,7 +86,7 @@ async def redactar(
     plantilla: str,
     entrada_vecino: str | None,
     datos: dict[str, Any],
-    timeout_s: float = 0.9,
+    timeout_s: float = 0.75,
 ) -> tuple[str, dict[str, Any]]:
     """Devuelve (texto_final, métrica). Si algo falla, texto_final es la plantilla."""
     inicio = perf_counter()
