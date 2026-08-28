@@ -3,10 +3,13 @@
 React 19 + TypeScript + Vite + Ant Design. Simula una llamada con el voicebot y mide la latencia.
 
 ```powershell
-npm install
-npm run dev      # http://localhost:5173 (proxy /api -> http://127.0.0.1:8000)
-npm run build
+corepack pnpm install
+corepack pnpm run dev      # http://localhost:5173 (proxy /api -> http://127.0.0.1:8000)
+corepack pnpm run build
 ```
+
+`npm` queda bloqueado de forma intencionada. Usa siempre `corepack pnpm` (o
+`pnpm` si Corepack ya lo ha activado).
 
 Requiere el backend en marcha (`cd ../backend; uv run building-call`). Micrófono y reconocimiento
 de voz del navegador solo en Chrome/Edge.
