@@ -167,7 +167,10 @@ def _normalizar_portal(valor: str | None) -> str | None:
         return None
     v = _numeros_a_cifras(_normalizar_basico(str(valor)))
     v = re.sub(r"\bportal\b", "", v).strip()
-    return v or None
+    # Un portal es un número o una letra/sigla corta; "el", "la", "sin"... son ruido del modelo
+    if not v or not re.fullmatch(r"[a-z0-9]{1,3}", v) or v in {"el", "la", "sin", "no", "un"}:
+        return None
+    return v
 
 
 def _normalizar_piso(valor: str | None) -> str | None:
@@ -209,9 +212,10 @@ def _extraer_vivienda_regex(texto: str) -> tuple[str | None, str | None, str | N
     return portal, piso, puerta
 
 
-def _buscar_vivienda(
+def _candidatas_vivienda(
     viviendas: list[Vivienda], portal: str | None, piso: str | None, puerta: str | None
-) -> Vivienda | None:
+) -> list[Vivienda]:
+    """Viviendas compatibles con lo dicho. Varias => falta el portal; ninguna => no existe."""
     candidatas = [
         v
         for v in viviendas
@@ -219,11 +223,34 @@ def _buscar_vivienda(
     ]
     if portal is not None:
         candidatas = [v for v in candidatas if _normalizar_portal(v.portal) == portal]
-    if len(candidatas) == 1:
-        return candidatas[0]
-    # Si la finca no tiene portales y el vecino no lo indicó, la coincidencia piso+puerta basta
-    sin_portal = [v for v in candidatas if v.portal is None]
-    return sin_portal[0] if len(sin_portal) == 1 else None
+    return candidatas
+
+
+def _buscar_vivienda(
+    viviendas: list[Vivienda], portal: str | None, piso: str | None, puerta: str | None
+) -> Vivienda | None:
+    candidatas = _candidatas_vivienda(viviendas, portal, piso, puerta)
+    return candidatas[0] if len(candidatas) == 1 else None
+
+
+_SALUDOS = (
+    "hola",
+    "buenas",
+    "buenos dias",
+    "buenas tardes",
+    "buenas noches",
+    "que tal",
+    "oiga",
+    "digame",
+)
+
+
+def _es_saludo(texto: str) -> bool:
+    """Solo saludo/muletilla, sin datos: no debe contar como intento fallido."""
+    t = _normalizar_basico(texto)
+    if any(ch.isdigit() for ch in t) or len(t.split()) > 5:
+        return False
+    return any(s in t for s in _SALUDOS)
 
 
 # --------------------------------------------------------------------------- utilidades de estado
@@ -576,21 +603,37 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 portal = _normalizar_portal(pend.get("portal"))
                 np_, npu = _normalizar_piso(piso), _normalizar_puerta(puerta)
                 viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
-                vivienda = _buscar_vivienda(viviendas, portal, np_, npu)
-                for k in ("portal", "piso", "puerta"):
-                    pend.pop(k, None)
+                candidatas = _candidatas_vivienda(viviendas, portal, np_, npu)
                 traza.append(
                     Traza(
                         nodo=nodo,
                         accion="vivienda",
-                        detalle=f"portal={portal} piso={np_} puerta={npu}",
+                        detalle=f"portal={portal} piso={np_} puerta={npu} candidatas={len(candidatas)}",
                     )
                 )
-                if vivienda:
+                if len(candidatas) == 1:
+                    vivienda = candidatas[0]
+                    for k in ("portal", "piso", "puerta"):
+                        pend.pop(k, None)
                     cambios.update(vivienda_id=vivienda.id, vivienda_etiqueta=vivienda.etiqueta())
                     validaciones.append("vivienda_existe_en_finca")
                     estado = {**estado, **cambios}  # type: ignore[assignment]
+                elif len(candidatas) > 1:
+                    # Mismo piso y puerta en varios portales: solo falta el portal (no es un fallo)
+                    pend.pop("portal", None)
+                    portales = sorted({v.portal or "" for v in candidatas})
+                    return _preguntar(
+                        estado,
+                        "identificar_vivienda",
+                        f"El {np_}º {npu} existe en varios portales. ¿En qué portal vive, "
+                        f"{' o '.join(portales)}?",
+                        pendientes=pend,
+                        traza=traza,
+                        **cambios,
+                    )
                 else:
+                    for k in ("portal", "piso", "puerta"):
+                        pend.pop(k, None)
                     return await _reintento_vivienda(estado, pend, traza)
             else:
                 return _avanzar(
@@ -808,6 +851,17 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
 
         # Sin candidata: primero coincidencia determinista de la frase completa (0 llamadas LLM)
         historial = _registrar_entrada(estado)
+        if _es_saludo(entrada):
+            # "Hola, buenas": se devuelve el saludo y se repite la pregunta sin gastar intento
+            return _preguntar(
+                estado,
+                nodo,
+                "Hola, buenas. ¿En qué finca se encuentra? Dígame la calle y el número.",
+                historial=historial,
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={"intencion": "saludo", "origen": "determinista", "llm_ms": 0},
+                traza=_con_traza(estado, nodo, "saludo", entrada),
+            )
         fincas = await deps.repo.listar_fincas()
         puntuadas = sorted(
             ((_similitud_direccion(entrada, f.direccion), f) for f in fincas),
@@ -1070,10 +1124,16 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 if categoria == CATEGORIA_NO_CLASIFICABLE
                 else f"lo he clasificado como {categoria}"
             )
+            # Se repiten nombre y vivienda para que el vecino pueda corregir lo que el STT oyó mal
+            quien = (
+                f"{estado.get('nombre_declarado')}, {estado.get('vivienda_etiqueta')}"
+                if estado.get("nombre_declarado")
+                else estado.get("vivienda_etiqueta")
+            )
             return _preguntar(
                 estado,
                 nodo,
-                f"He entendido lo siguiente: {estado.get('resumen')}. {texto_cat.capitalize()}, con urgencia "
+                f"Le resumo: {quien}. {estado.get('resumen')}. {texto_cat.capitalize()}, con urgencia "
                 f"{estado.get('urgencia')}. ¿Es correcto?",
             )
         interp, historial, extra, salida = await _turno(estado, nodo, si_no=True)
@@ -1083,6 +1143,24 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         cambios: dict[str, Any] = {}
         pend = dict(estado.get("pendientes", {}))
         # Prioridad: problema > vivienda > finca. Una corrección del problema no toca la finca.
+        if interp.nombre and interp.confirma is not True and not interp.problema:
+            cambios.update(nombre_declarado=interp.nombre, confirmado=None)
+            traza_nombre = _con_traza(estado, nodo, "correccion", f"nombre -> {interp.nombre}")
+            if interp.piso or interp.puerta or interp.portal:
+                cambios.update(vivienda_id=None, vivienda_etiqueta=None)
+                for k in ("portal", "piso", "puerta"):
+                    if getattr(interp, k):
+                        pend[k] = getattr(interp, k)
+            return _avanzar(
+                estado,
+                "siguiente_paso",
+                "De acuerdo, lo corrijo.",
+                historial=historial,
+                pendientes=pend,
+                traza=traza_nombre,
+                **cambios,
+                **extra,
+            )
         if interp.problema and interp.confirma is not True:
             cambios.update(
                 solicitud=None,
@@ -1315,22 +1393,38 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         canal = regla.canal if regla else "ticket"
         destino_regla = regla.destino if regla else "especialista"
         especialista = estado.get("especialista_nombre")
+        # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. No prometemos
+        # hora: nadie ha hablado aún con el profesional (regla de Andreu, 2026-08-28).
+        contacto = (
+            "le llamará a este mismo número"
+            if estado.get("telefono_llamante")
+            else "se pondrá en contacto con usted"
+        )
         if especialista is None:
             destino = cfg.contacto.correo if cfg.contacto else "administrador"
-            aviso = "El administrador la revisará y le asignará el profesional adecuado."
             canal = "correo"
-        elif destino_regla == "especialista":
-            destino = especialista or "especialista"
-            aviso = f"Se avisará a {especialista} por {canal}."
+            aviso = (
+                f"El administrador la revisará hoy mismo, le asignará el profesional adecuado y "
+                f"{contacto} para concertar la visita."
+            )
         elif destino_regla == "coordinador":
             destino = cfg.contacto.correo if cfg.contacto else "coordinador"
-            aviso = f"Por su urgencia, se avisa por {canal} al coordinador del servicio y se asigna a {especialista}."
+            aviso = (
+                f"Por su urgencia aviso ahora mismo al coordinador y a {especialista}. "
+                f"{especialista.capitalize()} {contacto} lo antes posible para decirle cuándo puede ir; "
+                f"todavía no puedo confirmarle la hora."
+            )
         else:
-            destino = destino_regla
-            aviso = f"Se avisará a {especialista} por {canal}."
+            destino = especialista if destino_regla == "especialista" else destino_regla
+            aviso = (
+                f"Se lo comunico ahora a {especialista}, que {contacto} para concertar la visita. "
+                f"Todavía no puedo darle hora porque depende de su disponibilidad; el siguiente paso "
+                f"es su llamada."
+            )
         mensaje = (
             f"He registrado su incidencia con referencia {estado.get('incidencia_id')}. "
-            f"{aviso} Gracias por su llamada, hasta luego."
+            f"{aviso} Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. "
+            f"Gracias por su llamada, hasta luego."
         )
         return _avanzar(
             estado,

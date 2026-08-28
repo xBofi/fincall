@@ -169,3 +169,42 @@ async def test_vivienda_inexistente_explica_la_estructura_de_la_finca(
     assert "puertas A o B" in estado["mensajes_bot"][-1]
     estado = await gestor.mensaje(estado["llamada_id"], "piso 1 puerta B")
     assert estado["vivienda_id"] == "finca-mayor-12-u-1B"
+
+
+async def test_saludo_no_cuenta_como_intento_de_finca(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Hola, buenas."])
+    assert estado["intentos_finca"] == 0
+    assert estado["mensajes_bot"][-1].startswith("Hola, buenas.")
+    estado = await gestor.mensaje(estado["llamada_id"], "Avenida de la Alameda 5")
+    assert estado["finca_candidata_id"] == "finca-alameda-5"
+
+
+async def test_piso_y_puerta_en_varios_portales_pregunta_el_portal(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Alameda 5", "sí", "El tercero A es mi vivienda"])
+    assert estado["nodo_actual"] == "identificar_vivienda"
+    assert estado["intentos_vivienda"] == 0
+    assert "¿En qué portal vive, 1 o 2?" in estado["mensajes_bot"][-1]
+    estado = await gestor.mensaje(estado["llamada_id"], "portal 1")
+    assert estado["vivienda_id"] == "finca-alameda-5-1-3A"
+
+
+async def test_resumen_incluye_nombre_y_permite_corregirlo(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "3 B", "Reubofibra", "No hay luz en la escalera"]
+    )
+    assert "Reubofibra, 3º B" in estado["mensajes_bot"][-1]
+    estado = await gestor.mensaje(estado["llamada_id"], "No, me llamo Andreu Bofi")
+    assert estado["nombre_declarado"] == "Andreu Bofi"
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert "Andreu Bofi" in estado["mensajes_bot"][-1]
+
+
+async def test_cierre_explica_el_siguiente_paso(gestor: GestorLlamadas) -> None:
+    estado = await gestor.iniciar(telefono_llamante="+34600000000")
+    for t in ["Calle Mayor 12", "sí", "3 B", "Marta", "Gotea el grifo del patio", "sí"]:
+        estado = await gestor.mensaje(estado["llamada_id"], t)
+    final = estado["mensajes_bot"][-1]
+    assert "Fontanería Pérez" in final
+    assert "le llamará a este mismo número" in final
+    assert "no puedo darle hora" in final.lower() or "no puedo confirmarle la hora" in final.lower()
+    assert "veinticuatro horas" in final
