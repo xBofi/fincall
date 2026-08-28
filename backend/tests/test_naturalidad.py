@@ -208,3 +208,44 @@ async def test_cierre_explica_el_siguiente_paso(gestor: GestorLlamadas) -> None:
     assert "le llamará a este mismo número" in final
     assert "no puedo darle hora" in final.lower() or "no puedo confirmarle la hora" in final.lower()
     assert "veinticuatro horas" in final
+
+
+async def test_vivienda_con_muletillas_usa_el_regex_y_no_inventa_portal(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    original = llm._interpretar
+    # El modelo se inventa un portal en una finca sin portales
+    llm._interpretar = lambda usuario, esquema: {
+        "portal": "a",
+        "piso": "1",
+        "puerta": "A",
+        "confirma": True,
+    }  # type: ignore[method-assign]
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "Ah, vale, perdón. Pues sí, piso 1, puerta A."]
+    )
+    llm._interpretar = original  # type: ignore[method-assign]
+    assert estado["vivienda_id"] == "finca-mayor-12-u-1A"
+
+
+async def test_comentario_sobre_el_bot_no_es_una_correccion(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "1 A", "Andreu", "Hay que pintar las paredes del corredor"]
+    )
+    assert (
+        "solicitud general" in estado["mensajes_bot"][-1] or "pintura" in estado["mensajes_bot"][-1]
+    )
+    assert "no he podido" not in estado["mensajes_bot"][-1].lower()
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {
+        "problema": "has podido clasificarlo con urgencia baja"
+    }  # type: ignore[method-assign]
+    estado = await gestor.mensaje(
+        estado["llamada_id"], "Dirás que has podido clasificarlo con una urgencia baja."
+    )
+    llm._interpretar = original  # type: ignore[method-assign]
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert "Responda sí o no" in estado["mensajes_bot"][-1]
+    assert estado["solicitud"].startswith("Hay que pintar")

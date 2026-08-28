@@ -233,6 +233,33 @@ def _buscar_vivienda(
     return candidatas[0] if len(candidatas) == 1 else None
 
 
+_META_BOT = (
+    "clasific",
+    "urgencia",
+    "resumen",
+    "entendido",
+    "has dicho",
+    "diras",
+    "dices",
+    "asistente",
+    "maquina",
+)
+
+
+def _es_correccion_real(nuevo: str, anterior: str, entrada: str) -> bool:
+    """Una corrección del problema debe aportar algo nuevo y hablar del problema, no del bot.
+
+    'Dirás que has podido clasificarlo con urgencia baja' es un comentario sobre el asistente:
+    el modelo lo devolvió como `problema` y el grafo lo tomó como corrección (2026-08-28)."""
+    e = _normalizar_basico(entrada)
+    if any(m in e for m in _META_BOT):
+        return False
+    a, b = set(_normalizar_basico(nuevo).split()), set(_normalizar_basico(anterior).split())
+    if not a:
+        return False
+    return len(a - b) / len(a) >= 0.4  # al menos un 40% de palabras nuevas
+
+
 _SALUDOS = (
     "hola",
     "buenas",
@@ -603,6 +630,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 portal = _normalizar_portal(pend.get("portal"))
                 np_, npu = _normalizar_piso(piso), _normalizar_puerta(puerta)
                 viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
+                if portal and not any(v.portal for v in viviendas):
+                    portal = None  # la finca no tiene portales: el "portal" es ruido
                 candidatas = _candidatas_vivienda(viviendas, portal, np_, npu)
                 traza.append(
                     Traza(
@@ -958,12 +987,14 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if salida:
             return salida
         pend = _fusionar_pendientes(estado, interp)
-        if not (pend.get("piso") and pend.get("puerta")):
-            # El LLM no lo sacó; el regex puede completar
-            pend.setdefault("piso", piso) if piso else None
-            pend.setdefault("puerta", puerta) if puerta else None
+        if piso and puerta:
+            # El regex reconoce formatos ("piso 1, puerta A") sin inventar: manda sobre el LLM,
+            # que llegó a devolver portal="a" en "Pues sí, piso 1, puerta A" (2026-08-28)
+            pend["piso"], pend["puerta"] = piso, puerta
             if portal:
-                pend.setdefault("portal", portal)
+                pend["portal"] = portal
+            else:
+                pend.pop("portal", None)
         if not (pend.get("piso") and pend.get("puerta")):
             return await _reintento_vivienda(
                 {**estado, "historial": historial},
@@ -1119,10 +1150,11 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         entrada = estado.get("entrada_usuario")
         if entrada is None:
             categoria = estado.get("categoria")
+            # Nunca se le dice al vecino que "no se ha podido clasificar": se registra igual
             texto_cat = (
-                "no he podido clasificarlo"
+                "lo registro como solicitud general para el administrador"
                 if categoria == CATEGORIA_NO_CLASIFICABLE
-                else f"lo he clasificado como {categoria}"
+                else f"lo he clasificado como {categoria.replace('_', ' ')}"
             )
             # Se repiten nombre y vivienda para que el vecino pueda corregir lo que el STT oyó mal
             quien = (
@@ -1161,7 +1193,11 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 **cambios,
                 **extra,
             )
-        if interp.problema and interp.confirma is not True:
+        if (
+            interp.problema
+            and interp.confirma is not True
+            and _es_correccion_real(interp.problema, estado.get("solicitud") or "", entrada)
+        ):
             cambios.update(
                 solicitud=None,
                 categoria=None,

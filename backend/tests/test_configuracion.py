@@ -30,7 +30,7 @@ def test_campo_ausente_hereda_default_global() -> None:
 
 def test_especialista_fuera_de_catalogo_es_error() -> None:
     with pytest.raises(ValidationError, match="fuera del catálogo"):
-        resolver(ConfiguracionParcial(especialista_por_categoria={"jardineria": "j1"}))
+        resolver(ConfiguracionParcial(especialista_por_categoria={"piscina": "p1"}))
 
 
 def test_emergencia_se_trata_como_alta_hasta_activarse() -> None:

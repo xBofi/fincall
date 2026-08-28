@@ -82,6 +82,9 @@ DEFAULTS = ConfiguracionEfectiva(
         "limpieza",
         "cerrajeria",
         "albanileria",
+        "pintura",
+        "jardineria",
+        "mantenimiento_general",
         "administrativo",
     ],
     reglas_aviso=[
