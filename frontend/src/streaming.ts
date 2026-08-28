@@ -51,6 +51,8 @@ export interface CallbacksStreaming {
   onRespuesta: (vista: VistaLlamada, ultimaVozAt: number) => void
   onError: (mensaje: string) => void
   onVoz: (hablando: boolean) => void
+  /** El vecino habla mientras el asistente está en pausa (reproduciendo): barge-in. */
+  onBargeIn?: () => void
   onCerrado: () => void
 }
 
@@ -58,6 +60,8 @@ export interface SesionStreaming {
   pausar: () => void
   reanudar: () => void
   forzarFinTurno: () => void
+  /** Ledger de salida: informa al servidor de qué parte del mensaje del turno llegó a sonar. */
+  informarEntrega: (turno: number, estado: string, ratio: number, textoEntregado: string) => void
   cerrar: () => void
 }
 
@@ -83,6 +87,7 @@ export async function abrirStreaming(
   ws.binaryType = 'arraybuffer'
 
   let pausado = false
+  let pausadoDesde = 0
   let ultimaVozAt = 0
   let hablando = false
   let vozDesde = 0
@@ -90,13 +95,27 @@ export async function abrirStreaming(
 
   const marcarVoz = (rms: number) => {
     const ahora = performance.now()
+    if (pausado) {
+      // Barge-in: el asistente está hablando; el altavoz puede colarse por el micrófono, así que
+      // el umbral es más alto, se exige voz sostenida y se ignoran los primeros 400 ms
+      if (rms >= umbralVoz * 2.5 && ahora - pausadoDesde > 400) {
+        vozDesde ||= ahora
+        if (ahora - vozDesde >= 250) {
+          vozDesde = 0
+          cb.onBargeIn?.()
+        }
+      } else {
+        vozDesde = 0
+      }
+      return
+    }
     if (rms >= umbralVoz) {
       vozDesde ||= ahora
-      if (!hablando && ahora - vozDesde >= 150 && !pausado) {
+      if (!hablando && ahora - vozDesde >= 150) {
         hablando = true
         cb.onVoz(true)
       }
-      if (!pausado) ultimaVozAt = ahora
+      ultimaVozAt = ahora
     } else {
       vozDesde = 0
       if (hablando && ahora - ultimaVozAt > 300) {
@@ -159,6 +178,8 @@ export async function abrirStreaming(
   return {
     pausar: () => {
       pausado = true
+      pausadoDesde = performance.now()
+      vozDesde = 0
       enviar({ type: 'pausa' })
     },
     reanudar: () => {
@@ -167,6 +188,8 @@ export async function abrirStreaming(
       enviar({ type: 'reanudar' })
     },
     forzarFinTurno: () => enviar({ type: 'fin_turno' }),
+    informarEntrega: (turno, estado, ratio, textoEntregado) =>
+      enviar({ type: 'entrega', turno, estado, ratio, texto_entregado: textoEntregado }),
     cerrar: () => {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close()
       limpiar()

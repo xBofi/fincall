@@ -27,6 +27,11 @@ class EstadoLlamada(TypedDict, total=False):
     nodo_actual: str
     entrada_usuario: str | None
     ultima_pregunta: str | None
+    # Lo último que dijo (o intentó decir) el bot y cuánto de ello llegó a sonar (ledger de salida)
+    ultimo_mensaje_bot: str | None
+    entrega_ultima: dict[str, Any] | None
+    # Turno de detalle del problema ya hecho (o no procede)
+    detalle_pedido: bool
     mensajes_bot: list[str]
     historial: list[dict[str, str]]
     traza: list[Traza]
@@ -83,6 +88,9 @@ def estado_inicial(llamada_id: str, iniciada_en: str, grafo: str) -> EstadoLlama
         nodo_actual="siguiente_paso",
         entrada_usuario=None,
         ultima_pregunta=None,
+        ultimo_mensaje_bot=None,
+        entrega_ultima=None,
+        detalle_pedido=False,
         mensajes_bot=[],
         historial=[],
         traza=[],

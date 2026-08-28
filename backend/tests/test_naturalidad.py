@@ -52,7 +52,7 @@ async def test_datos_sueltos_se_acumulan_y_se_usan_despues(gestor: GestorLlamada
 async def test_pedir_repetir_repite_la_pregunta(gestor: GestorLlamadas) -> None:
     estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "¿Cómo? No le he oído bien"])
     assert estado["nodo_actual"] == "identificar_vivienda"
-    assert estado["mensajes_bot"][-1].startswith("Claro, le repito.")
+    assert "le repito." in estado["mensajes_bot"][-1]
     assert "vivienda" in estado["mensajes_bot"][-1]
 
 
@@ -300,3 +300,44 @@ async def test_faq_sin_signos_de_interrogacion(gestor: GestorLlamadas, llm: Any)
     assert "se registra" in estado["mensajes_bot"][-1]
     assert estado["intentos_finca"] == 0
     assert llm.llamadas == []
+
+
+async def test_pregunta_de_detalle_antes_del_resumen(gestor_detalle: GestorLlamadas) -> None:
+    gestor = gestor_detalle
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", "No funciona la luz del pasillo del segundo"]
+    )
+    assert estado["nodo_actual"] == "pedir_detalle"
+    assert "electricista" in estado["mensajes_bot"][-1]
+    estado = await gestor.mensaje(estado["llamada_id"], "Son todas las del pasillo, no encienden")
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert "Detalle: Son todas las del pasillo" in estado["solicitud"]
+    estado = await gestor.mensaje(estado["llamada_id"], "sí")
+    assert estado["resultado"] == "incidencia_creada"
+
+
+async def test_descripcion_larga_no_pide_detalle(gestor_detalle: GestorLlamadas) -> None:
+    gestor = gestor_detalle
+    larga = (
+        "No funciona ninguna de las luces del pasillo del segundo piso desde ayer por la noche, "
+        "no encienden aunque le des al interruptor y el resto del edificio tiene luz"
+    )
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", larga])
+    assert estado["nodo_actual"] == "confirmar_resumen"
+
+
+async def test_repetir_devuelve_el_mensaje_completo_y_hola_tras_mensaje_no_oido(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", "Gotea el grifo"])
+    resumen = estado["mensajes_bot"][-1]
+    assert resumen.startswith("Le resumo")
+    # El navegador informa de que el mensaje se cortó al 20 %
+    gestor.registrar_entrega(estado["llamada_id"], estado["turno"], "interrumpida", 0.2, "Le re")
+    n = len(llm.llamadas)
+    estado = await gestor.mensaje(estado["llamada_id"], "¿Hola? ¿Estás ahí?")
+    assert len(llm.llamadas) == n  # determinista
+    assert estado["mensajes_bot"][-1] == f"Perdone, le repito. {resumen}"
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    estado = await gestor.mensaje(estado["llamada_id"], "¿Me lo repites?")
+    assert resumen in estado["mensajes_bot"][-1]

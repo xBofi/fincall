@@ -145,6 +145,8 @@ export const api = {
   },
   metricas: (id: string, cuerpo: MetricasCliente) =>
     pedir<unknown>(`/api/llamadas/${id}/metricas`, json(cuerpo)),
+  entrega: (id: string, turno: number, estado: string, ratio: number, texto_entregado: string) =>
+    pedir<unknown>(`/api/llamadas/${id}/entrega`, json({ turno, estado, ratio, texto_entregado })),
   metricasLlamada: (id: string) =>
     pedir<{ agregados: Agregados; turnos: Record<string, unknown>[] }>(`/api/llamadas/${id}/metricas`),
   metricasGlobales: () => pedir<{ agregados: Agregados }>('/api/metricas'),

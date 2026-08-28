@@ -4,12 +4,13 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1482,
-      1458,
-      839,
-      803,
-      3350,
-      1581
+      1492,
+      1415,
+      833,
+      914,
+      3629,
+      2424,
+      1390
     ],
     "transcripciones": [
       "Calle Mayor 12.",
@@ -17,17 +18,18 @@
       "Tercero B.",
       "Marta López.",
       "Hay una fuga de agua en el BAO.",
+      "Se ir con fuerza del techo.",
       "S."
     ]
   },
   {
     "nombre": "natural_todo_junto",
-    "ok": true,
-    "motivo": "",
+    "ok": false,
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None",
     "latencias_ms": [
-      3223,
-      1008,
-      837
+      3251,
+      915,
+      2380
     ],
     "transcripciones": [
       "Hola, buenas, mire, llamo desde la Avenida de la Alameda 5, portal 2, tercero A. Soy Carmen y tengo una fuga de agua en el piso A que está inundando el suelo.",
@@ -40,37 +42,39 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      944,
-      3062,
-      831,
-      110,
-      2882,
-      2998,
-      911
+      880,
+      2827,
+      857,
+      102,
+      2999,
+      3045,
+      2925,
+      803
     ],
     "transcripciones": [
       "Hola, buenas.",
       "Sí, vivo en la Calle Mayor en el número 12.",
       "Sí.",
-      "Vale.",
+      "Ah, vale, espéreme.",
       "Pues ese, piso 1, puerta A, con Andreu Bofipla.",
       "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
+      "El corredor del primero tiene humedad y desconchones.",
       "Ese es correcto."
     ]
   },
   {
     "nombre": "portal_ambiguo",
-    "ok": true,
-    "motivo": "",
+    "ok": false,
+    "motivo": "categoria: esperado 'ascensor', obtenido 'no_clasificable'",
     "latencias_ms": [
-      1401,
-      1424,
-      2251,
-      2593,
-      832,
-      3140,
-      2591,
-      1303
+      1375,
+      1445,
+      2416,
+      2574,
+      735,
+      2815,
+      2602,
+      1765
     ],
     "transcripciones": [
       "Avenida de la Alameda 5.",
@@ -80,7 +84,7 @@
       "Puerta.",
       "Juan.",
       "El ascensor hace un ruido raro.",
-      "S."
+      "Funciona, pero hace ruido al arrancar."
     ]
   },
   {
@@ -88,13 +92,14 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1475,
-      1502,
-      1024,
-      1419,
-      3231,
-      3182,
-      1584
+      1567,
+      1471,
+      947,
+      1370,
+      3016,
+      2529,
+      2817,
+      1482
     ],
     "transcripciones": [
       "Calle Mayor 12.",
@@ -102,6 +107,7 @@
       "segundo B.",
       "P.",
       "No funciona la luz de la escalera.",
+      "Son todas, no encienden.",
       "No, me llamo Pedro Garca.",
       "S."
     ]
@@ -111,10 +117,10 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1027,
-      1394,
-      1473,
-      1553
+      1103,
+      1316,
+      1492,
+      1498
     ],
     "transcripciones": [
       "Esta llamada se está grabando.",
@@ -128,13 +134,14 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1461,
-      1464,
-      1260,
-      902,
-      726,
-      2461,
-      1428
+      1588,
+      1535,
+      1561,
+      1015,
+      716,
+      3071,
+      2750,
+      1369
     ],
     "transcripciones": [
       "Calle Mayor 12.",
@@ -143,6 +150,7 @@
       "Piso 1, puerta B.",
       "Ana.",
       "Gotea el grifo del patio.",
+      "Una gota cada poco desde ayer.",
       "S."
     ]
   }

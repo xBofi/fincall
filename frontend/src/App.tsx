@@ -74,12 +74,19 @@ export default function App() {
       if (opcionesRef.current.vozActiva && texto) {
         setEstadoVoz('respondiendo')
         streamingRef.current?.pausar()
-        const rep = hablar(texto, opcionesRef.current.bargeIn && !v.finalizada)
+        // En streaming el barge-in lo detecta el propio micrófono de la sesión (onBargeIn);
+        // en los otros modos, la vigilancia interna de `hablar`
+        const rep = hablar(texto, opcionesRef.current.bargeIn && !v.finalizada && !streamingRef.current)
         cancelarHablaRef.current = rep.cancelar
         ttsInicioAt = await rep.inicio
         const fin = await rep.fin
         interrumpida = fin.interrumpida
         streamingRef.current?.reanudar()
+        // Ledger de salida: el servidor sabe qué parte del mensaje oyó el vecino
+        if (v.turno >= 0) {
+          if (streamingRef.current) streamingRef.current.informarEntrega(v.turno, fin.estado, fin.ratio, fin.textoEntregado)
+          else api.entrega(v.llamada_id, v.turno, fin.estado, fin.ratio, fin.textoEntregado).catch(() => undefined)
+        }
       }
       const t: TurnoMedido = {
         turno: v.turno,
@@ -168,6 +175,9 @@ export default function App() {
         },
         onError: (m) => message.error(m),
         onVoz: (hablando) => setEstadoVoz(hablando ? 'hablando' : 'esperando_voz'),
+        onBargeIn: () => {
+          if (opcionesRef.current.bargeIn) cancelarHablaRef.current()
+        },
         onCerrado: () => setStreamingInfo(null),
       })
     },

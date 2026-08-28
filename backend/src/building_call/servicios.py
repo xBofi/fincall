@@ -128,6 +128,9 @@ class GestorLlamadas:
                 origen_interpretacion=tiempos.get("origen_interpretacion", "ninguna"),
             )
         )
+        if nuevo.get("mensajes_bot"):
+            nuevo["ultimo_mensaje_bot"] = " ".join(nuevo["mensajes_bot"])
+            nuevo["entrega_ultima"] = None  # el navegador informará de lo que llegó a sonar
         tiempos.update(grafo_ms=grafo_ms, servidor_ms=servidor_ms, turno=turno)
         if stt_ms is not None:
             tiempos["stt_ms"] = stt_ms
@@ -148,6 +151,21 @@ class GestorLlamadas:
         if estado.get("finalizada"):
             return estado
         return await self._ejecutar(estado, texto, stt_ms)
+
+    def registrar_entrega(
+        self, llamada_id: str, turno: int, estado_entrega: str, ratio: float, texto: str | None
+    ) -> EstadoLlamada:
+        """Ledger de salida: qué parte del último mensaje llegó a reproducirse al vecino."""
+        estado = self.obtener(llamada_id)
+        if turno != estado.get("turno", 0):
+            return estado  # entrega de un turno ya superado: no altera el estado actual
+        estado["entrega_ultima"] = {
+            "estado": estado_entrega,
+            "ratio": max(0.0, min(1.0, ratio)),
+            "texto_entregado": texto,
+        }
+        self._estados[llamada_id] = estado
+        return estado
 
     def obtener(self, llamada_id: str) -> EstadoLlamada:
         try:

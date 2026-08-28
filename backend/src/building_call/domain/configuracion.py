@@ -38,6 +38,7 @@ class ConfiguracionParcial(BaseModel):
     contacto: Contacto | None = None
     intentos_finca: int | None = Field(default=None, ge=1)
     intentos_vivienda: int | None = Field(default=None, ge=1)
+    pedir_detalle: bool | None = None
     emergencias_activas: bool | None = None
 
 
@@ -51,6 +52,8 @@ class ConfiguracionEfectiva(BaseModel):
     contacto: Contacto | None = None
     intentos_finca: int = 3
     intentos_vivienda: int = 3
+    # Una pregunta de detalle sobre la incidencia antes del resumen (ayuda al técnico)
+    pedir_detalle: bool = True
     emergencias_activas: bool = False
 
     @model_validator(mode="after")

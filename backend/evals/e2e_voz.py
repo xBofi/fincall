@@ -40,6 +40,7 @@ ESCENARIOS: list[dict[str, Any]] = [
             "tercero B",
             "Marta López",
             "Hay una fuga de agua en el baño",
+            "sale con fuerza, del techo",
             "sí",
         ],
         "espera": {
@@ -53,6 +54,7 @@ ESCENARIOS: list[dict[str, Any]] = [
         "turnos": [
             "Hola, buenas, mire, llamo desde la Avenida de la Alameda cinco, portal dos, tercero A. Soy Carmen y tengo una fuga de agua en el baño que está inundando el suelo",
             "sí, eso es",
+            "sale con fuerza, creo que del techo",
             "sí, correcto",
         ],
         "espera": {
@@ -70,6 +72,7 @@ ESCENARIOS: list[dict[str, Any]] = [
             "Ah, vale, perdón. Pues sí, piso uno, puerta A.",
             "Con Andreu Bofi Pla.",
             "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
+            "El corredor del primero, tienen humedad y desconchones.",
             "Sí, es correcto.",
         ],
         "espera": {"resultado": "incidencia_creada", "vivienda_id": "finca-mayor-12-u-1A"},
@@ -81,9 +84,9 @@ ESCENARIOS: list[dict[str, Any]] = [
             "sí",
             "El tercero A es mi vivienda",
             "portal uno",
-            "puerta A",
             "Juan",
             "El ascensor hace un ruido raro",
+            "funciona, pero hace ruido al arrancar",
             "sí",
         ],
         "espera": {
@@ -100,6 +103,7 @@ ESCENARIOS: list[dict[str, Any]] = [
             "segundo B",
             "Pepe",
             "No funciona la luz de la escalera",
+            "son todas, no encienden",
             "No, me llamo Pedro García",
             "sí",
         ],
@@ -128,6 +132,7 @@ ESCENARIOS: list[dict[str, Any]] = [
             "piso uno, puerta B",
             "Ana",
             "Gotea el grifo del patio",
+            "una gota cada poco, desde ayer",
             "sí",
         ],
         "espera": {"resultado": "incidencia_creada", "vivienda_id": "finca-mayor-12-u-1B"},

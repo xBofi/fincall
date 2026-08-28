@@ -271,6 +271,40 @@ def _es_correccion_real(nuevo: str, anterior: str, entrada: str) -> bool:
     return len(a - b) / len(a) >= 0.4  # al menos un 40% de palabras nuevas
 
 
+_NO_OIDO = (
+    "estas ahi",
+    "esta ahi",
+    "sigues ahi",
+    "sigue ahi",
+    "me lo repite",
+    "me lo repites",
+    "repite",
+    "repita",
+    "no le he oido",
+    "no le oigo",
+    "no te oigo",
+    "que has dicho",
+    "que ha dicho",
+    "como dice",
+)
+
+
+def _no_lo_oyo(texto: str, estado: EstadoLlamada) -> bool:
+    """Pide repetir, o saluda/pregunta si hay alguien tras un mensaje que no llegó a sonar entero."""
+    t = _normalizar_basico(texto)
+    if any(ch.isdigit() for ch in t) or len(t.split()) > 7:
+        return False
+    if any(f in t for f in _NO_OIDO):
+        return True
+    entrega = estado.get("entrega_ultima") or {}
+    no_entregado = entrega.get("estado") in ("interrumpida", "no_reproducida") or (
+        entrega.get("ratio") is not None and entrega.get("ratio", 1.0) < 0.8
+    )
+    return bool(
+        no_entregado and (t in {"hola", "oiga", "oye", "diga", "hola hola"} or t.startswith("hola"))
+    )
+
+
 _RELLENO = (
     "espere",
     "esperame",
@@ -475,6 +509,18 @@ def _se_despide(texto: str) -> bool:
     return any(p in t for p in _PALABRAS_DESPEDIDA)
 
 
+_PREGUNTAS_DETALLE: dict[str, str] = {
+    "electricidad": "Para orientar al electricista: ¿es una sola luz o varias, y no encienden o parpadean?",
+    "fontaneria": "Para orientar al fontanero: ¿gotea o sale agua con fuerza, y sabe de dónde viene?",
+    "ascensor": "¿El ascensor está parado del todo o funciona a ratos? ¿Hay alguien dentro?",
+    "cerrajeria": "¿La puerta no cierra, no abre, o es la cerradura? ¿Desde cuándo?",
+    "limpieza": "¿En qué zona exactamente y desde cuándo?",
+    "albanileria": "¿Dónde exactamente está el daño y qué tamaño tiene, aproximadamente?",
+    "pintura": "¿Qué zona hay que pintar exactamente y qué le pasa: humedad, desconchones, pintadas?",
+    "_": "¿Puede darme algún detalle más: dónde exactamente y desde cuándo ocurre?",
+}
+
+
 _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("grab", "registr"),
@@ -553,10 +599,12 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         ultima = estado.get("ultima_pregunta") or "¿En qué puedo ayudarle?"
         aporta_datos = bool(interp.campos_presentes()) or interp.confirma is not None
         if interp.intencion == "repetir":
+            # Se repite el mensaje completo (resumen incluido), no solo la pregunta final
+            completo = estado.get("ultimo_mensaje_bot") or ultima
             return _preguntar(
                 estado,
                 nodo,
-                f"Claro, le repito. {ultima}",
+                f"Claro, le repito. {completo}",
                 historial=historial,
                 traza=_con_traza(estado, nodo, "intencion", "repetir"),
                 **extra,
@@ -609,6 +657,24 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         Devuelve (interp, historial, extra_estado, salida_global_o_None)."""
         entrada = estado["entrada_usuario"] or ""
         historial = _registrar_entrada(estado)
+        if _no_lo_oyo(entrada, estado):
+            completo = estado.get("ultimo_mensaje_bot") or estado.get("ultima_pregunta") or ""
+            salida_rep = _preguntar(
+                estado,
+                nodo,
+                f"Perdone, le repito. {completo}",
+                historial=historial,
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={"intencion": "repetir", "origen": "determinista", "llm_ms": 0},
+                traza=_con_traza(estado, nodo, "repetir_no_oido", entrada),
+            )
+            salida_rep["ultima_pregunta"] = estado.get("ultima_pregunta")
+            return (
+                Interpretacion(intencion="repetir", origen="determinista"),
+                historial,
+                {},
+                salida_rep,
+            )
         if _es_relleno(entrada):
             salida_relleno = _preguntar(
                 estado,
@@ -788,6 +854,13 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             destino = "clasificar_problema"
         elif not estado.get("urgencia"):
             destino = "determinar_urgencia"
+        elif (
+            not estado.get("detalle_pedido")
+            and _config(estado).pedir_detalle
+            and estado.get("confirmado") is None
+            and _merece_detalle(estado)
+        ):
+            destino = "pedir_detalle"
         elif estado.get("confirmado") is not True:
             destino = "confirmar_resumen"
         else:
@@ -1243,15 +1316,53 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             traza=_con_traza(estado, nodo, "clasificado", f"{categoria} / {urgencia}"),
         )
 
+    def _merece_detalle(estado: EstadoLlamada) -> bool:
+        """Una descripción corta se beneficia de una pregunta de detalle; una larga no."""
+        solicitud = estado.get("solicitud") or ""
+        return len(solicitud.split()) < 18
+
+    async def pedir_detalle(estado: EstadoLlamada) -> dict[str, Any]:
+        """Un solo turno para concretar la incidencia (dónde, cuántos, desde cuándo, cómo falla)."""
+        nodo = "pedir_detalle"
+        entrada = estado.get("entrada_usuario")
+        if entrada is None:
+            pregunta = _PREGUNTAS_DETALLE.get(
+                estado.get("categoria") or "", _PREGUNTAS_DETALLE["_"]
+            )
+            return _preguntar(estado, nodo, pregunta, detalle_pedido=True)
+        interp, historial, extra, salida = await _turno(estado, nodo)
+        if salida:
+            return salida
+        detalle = entrada.strip()
+        if _respuesta_si_no(entrada) is not None and len(entrada.split()) <= 3:
+            detalle = ""  # "no", "no sé": sin detalle útil
+        solicitud = estado.get("solicitud") or ""
+        if detalle:
+            solicitud = f"{solicitud} Detalle: {detalle}"
+        resumen = estado.get("resumen") or ""
+        if interp.problema and interp.problema.lower() not in resumen.lower():
+            resumen = f"{resumen}; {interp.problema}" if resumen else interp.problema
+        return _avanzar(
+            estado,
+            "siguiente_paso",
+            historial=historial,
+            solicitud=solicitud,
+            resumen=resumen,
+            detalle_pedido=True,
+            traza=_con_traza(estado, nodo, "detalle", detalle[:60]),
+            **extra,
+        )
+
     async def determinar_urgencia(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "determinar_urgencia"
         cfg = _config(estado)
         declarada = estado.get("urgencia_declarada") or "media"
         efectiva = cfg.urgencia_efectiva(declarada)  # type: ignore[arg-type]
         detalle = f"{declarada} -> {efectiva}" if declarada != efectiva else efectiva
+        # Vuelve al enrutador: puede tocar pedir un detalle antes del resumen
         return _avanzar(
             estado,
-            "confirmar_resumen",
+            "siguiente_paso",
             urgencia=efectiva,
             traza=_con_traza(estado, nodo, "urgencia_efectiva", detalle),
         )
@@ -1592,6 +1703,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         "registrar_nombre": registrar_nombre,
         "recoger_solicitud": recoger_solicitud,
         "clasificar_problema": clasificar_problema,
+        "pedir_detalle": pedir_detalle,
         "determinar_urgencia": determinar_urgencia,
         "confirmar_resumen": confirmar_resumen,
         "validar_datos": validar_datos,

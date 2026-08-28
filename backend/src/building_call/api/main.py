@@ -80,6 +80,15 @@ class Mensaje(BaseModel):
     texto: str
 
 
+class Entrega(BaseModel):
+    """Ledger de salida del navegador: qué parte del mensaje del turno llegó a sonar."""
+
+    turno: int
+    estado: str  # completada | interrumpida | no_reproducida
+    ratio: float = 1.0
+    texto_entregado: str | None = None
+
+
 class MetricasCliente(BaseModel):
     turno: int
     vad_silencio_ms: int | None = None
@@ -110,6 +119,7 @@ def _vista(estado: EstadoLlamada) -> dict[str, Any]:
         "senales_confianza": estado.get("senales_confianza"),
         "interpretacion": estado.get("interpretacion"),
         "pendientes": estado.get("pendientes", {}),
+        "entrega_ultima": estado.get("entrega_ultima"),
         "tiempos": estado.get("tiempos_turno", {}),
         "configuracion": estado.get("configuracion"),
         "datos": {c: estado.get(c) for c in campos},
@@ -369,6 +379,14 @@ def crear_app(
                     orden = json.loads(paquete["text"])
                     if orden.get("type") == "fin_turno":
                         await sesion.forzar_fin_turno()
+                    elif orden.get("type") == "entrega":
+                        gestor.registrar_entrega(
+                            llamada_id,
+                            int(orden.get("turno", 0)),
+                            str(orden.get("estado", "completada")),
+                            float(orden.get("ratio", 1.0)),
+                            orden.get("texto_entregado"),
+                        )
                     elif orden.get("type") == "pausa":
                         pausado = True
                     elif orden.get("type") == "reanudar":
@@ -403,6 +421,16 @@ def crear_app(
                 await ws.close()
             except Exception:  # noqa: BLE001
                 pass
+
+    @app.post("/api/llamadas/{llamada_id}/entrega")
+    async def entrega(llamada_id: str, cuerpo: Entrega) -> dict[str, Any]:
+        try:
+            estado = gestor.registrar_entrega(
+                llamada_id, cuerpo.turno, cuerpo.estado, cuerpo.ratio, cuerpo.texto_entregado
+            )
+        except LlamadaNoEncontrada as e:
+            raise HTTPException(404, "Llamada no encontrada") from e
+        return {"entrega_ultima": estado.get("entrega_ultima")}
 
     @app.post("/api/llamadas/{llamada_id}/metricas")
     async def metricas_cliente(llamada_id: str, cuerpo: MetricasCliente) -> dict[str, Any]:

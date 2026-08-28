@@ -238,11 +238,21 @@ export function reconocerEnNavegador(
   return { resultado, cancelar }
 }
 
+/** Ledger de salida: qué parte del texto llegó a sonar de verdad. */
+export interface ResultadoReproduccion {
+  interrumpida: boolean
+  /** 'completada' | 'interrumpida' | 'no_reproducida' */
+  estado: 'completada' | 'interrumpida' | 'no_reproducida'
+  /** Fracción del texto entregada (0-1), por límites de palabra del sintetizador. */
+  ratio: number
+  textoEntregado: string
+}
+
 export interface Reproduccion {
   /** Se resuelve cuando empieza a sonar el audio (performance.now()). */
   inicio: Promise<number>
-  /** Se resuelve al terminar (o al interrumpirse) con { interrumpida }. */
-  fin: Promise<{ interrumpida: boolean }>
+  /** Se resuelve al terminar (o al interrumpirse) con el ledger de lo entregado. */
+  fin: Promise<ResultadoReproduccion>
   cancelar: () => void
 }
 
@@ -266,16 +276,32 @@ if (ttsDisponible()) {
 /** Habla y permite barge-in: si `permitirInterrupcion`, al detectar voz del vecino se corta. */
 export function hablar(texto: string, permitirInterrupcion: boolean): Reproduccion {
   let resolverInicio: (t: number) => void = () => {}
-  let resolverFin: (r: { interrumpida: boolean }) => void = () => {}
+  let resolverFin: (r: ResultadoReproduccion) => void = () => {}
   const inicio = new Promise<number>((r) => (resolverInicio = r))
-  const fin = new Promise<{ interrumpida: boolean }>((r) => (resolverFin = r))
+  const fin = new Promise<ResultadoReproduccion>((r) => (resolverFin = r))
   let pararVigilancia = () => {}
   let terminado = false
+  let empezo = false
+  let charIndex = 0 // último límite de palabra alcanzado por el sintetizador
+  let inicioAt = 0
+  const ledger = (interrumpida: boolean): ResultadoReproduccion => {
+    if (!empezo) return { interrumpida, estado: 'no_reproducida', ratio: 0, textoEntregado: '' }
+    if (!interrumpida) return { interrumpida, estado: 'completada', ratio: 1, textoEntregado: texto }
+    // Si el navegador no emite límites de palabra, se estima por tiempo (~14 caracteres/s)
+    let corte = charIndex
+    if (corte === 0 && inicioAt) corte = Math.min(texto.length, Math.round(((performance.now() - inicioAt) / 1000) * 14))
+    return {
+      interrumpida,
+      estado: 'interrumpida',
+      ratio: Math.max(0, Math.min(1, corte / Math.max(1, texto.length))),
+      textoEntregado: texto.slice(0, corte),
+    }
+  }
   const terminar = (interrumpida: boolean) => {
     if (terminado) return
     terminado = true
     pararVigilancia()
-    resolverFin({ interrumpida })
+    resolverFin(ledger(interrumpida))
   }
   if (!ttsDisponible()) {
     resolverInicio(performance.now())
@@ -289,7 +315,9 @@ export function hablar(texto: string, permitirInterrupcion: boolean): Reproducci
   const voz = elegirVoz()
   if (voz) u.voice = voz
   u.onstart = () => {
-    resolverInicio(performance.now())
+    empezo = true
+    inicioAt = performance.now()
+    resolverInicio(inicioAt)
     if (permitirInterrupcion) {
       pararVigilancia = vigilarInterrupcion(() => {
         window.speechSynthesis.cancel()
@@ -297,10 +325,13 @@ export function hablar(texto: string, permitirInterrupcion: boolean): Reproducci
       })
     }
   }
+  u.onboundary = (e: SpeechSynthesisEvent) => {
+    if (typeof e.charIndex === 'number') charIndex = e.charIndex + (e.charLength || 0)
+  }
   u.onend = () => terminar(false)
   u.onerror = () => {
     resolverInicio(performance.now())
-    terminar(false)
+    terminar(!empezo ? false : true)
   }
   window.speechSynthesis.speak(u)
   return {

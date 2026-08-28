@@ -124,7 +124,17 @@ class LLMFalso:
 
 @pytest.fixture
 def repo() -> RepositorioMemoria:
-    return RepositorioMemoria()
+    # Los tests de flujo no piden el turno de detalle (configurable por administrador)
+    r = RepositorioMemoria()
+    r.config_administrador["adm-demo"] = r.config_administrador["adm-demo"].model_copy(
+        update={"pedir_detalle": False}
+    )
+    return r
+
+
+@pytest.fixture
+def gestor_detalle(llm: LLMFalso) -> GestorLlamadas:
+    return GestorLlamadas(Dependencias(repo=RepositorioMemoria(), llm=llm))
 
 
 @pytest.fixture

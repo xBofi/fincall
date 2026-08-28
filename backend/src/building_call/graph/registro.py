@@ -26,6 +26,7 @@ _ORDEN_ESTANDAR = [
     "registrar_nombre",
     "recoger_solicitud",
     "clasificar_problema",
+    "pedir_detalle",
     "determinar_urgencia",
     "confirmar_resumen",
     "validar_datos",

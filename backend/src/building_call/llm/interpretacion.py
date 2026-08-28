@@ -99,7 +99,7 @@ Claves:
 - direccion: calle y número de la finca, tal cual los dice.
 - portal, piso, puerta: si menciona la vivienda. Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número.
 - nombre: nombre con el que se presenta, sin frases.
-- problema: la incidencia o solicitud en máximo 8 palabras, con sus palabras (ej. "fuga de agua en el baño").
+- problema: la incidencia o solicitud en máximo 12 palabras, con sus palabras y conservando SIEMPRE dónde ocurre si lo dice (planta, zona, portal): "luz del pasillo del segundo no funciona", no "luz no funciona".
 - pregunta: la pregunta que hace al asistente, si la hace."""
 
 _SISTEMA_CLASIFICAR = """
