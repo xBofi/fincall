@@ -352,8 +352,8 @@ export default function App() {
   /* Legacy validation-console layout retained temporarily while its minor controls are migrated.
   return (
     <Layout style={{ height: '100vh' }}>
-      <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 16, color: '#fff' }}>
-        <Typography.Title level={4} style={{ color: '#fff', margin: 0, flex: 1 }}>
+      <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 16, color: 'var(--color-accent-ink)' }}>
+        <Typography.Title level={4} style={{ color: 'var(--color-accent-ink)', margin: 0, flex: 1 }}>
           Building Call Assistant · Consola de validación
         </Typography.Title>
         {salud && (

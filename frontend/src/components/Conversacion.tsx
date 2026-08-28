@@ -42,7 +42,7 @@ export function Conversacion({ historial, parcial, estadoVoz, ocupado, finalizad
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-rule)' }}>
         <Tag color={etiqueta.color} icon={etiqueta.icono}>
           {etiqueta.texto}
         </Tag>
@@ -67,7 +67,7 @@ export function Conversacion({ historial, parcial, estadoVoz, ocupado, finalizad
         )}
         <div ref={finRef} />
       </div>
-      <div style={{ padding: 12, borderTop: '1px solid #f0f0f0' }}>
+      <div style={{ padding: 12, borderTop: '1px solid var(--color-rule)' }}>
         <Space.Compact style={{ width: '100%' }}>
           <Button
             type={estadoVoz === 'esperando_voz' || estadoVoz === 'hablando' ? 'primary' : 'default'}
