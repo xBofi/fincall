@@ -25,8 +25,9 @@ class SesionFalsa:
 
     textos = ["Calle Mayor 12", "sí"]
 
-    def __init__(self, sample_rate: int) -> None:
+    def __init__(self, sample_rate: int, keyterms: list[str] | None = None) -> None:
         self.sample_rate = sample_rate
+        self.keyterms = keyterms or []
         self.audio = bytearray()
         self.conexion_ms = 7
         self._cola: asyncio.Queue[EventoTurno | None] = asyncio.Queue()
@@ -144,3 +145,12 @@ async def test_carrera_espera_al_preferido_si_llega_a_tiempo() -> None:
     assert (await con_margen.extraer("s", "u", {}))["a"] == "exacto"
     sin_margen = ModeloCarrera(preferido, rapido, preferido=0, espera_extra_ms=10)
     assert (await sin_margen.extraer("s", "u", {}))["a"] == "rapido"
+
+
+async def test_vocabulario_stt_incluye_direcciones_pisos_y_puertas(deps: Dependencias) -> None:
+    from building_call.api.main import vocabulario_stt
+
+    terminos = await vocabulario_stt(deps.repo)
+    assert "Calle Mayor 12" in terminos and "Avenida de la Alameda 5" in terminos
+    assert "puerta A" in terminos and "tercero B" in terminos and "portal 2" in terminos
+    assert len(terminos) <= 100

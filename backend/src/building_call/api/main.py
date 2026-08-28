@@ -40,8 +40,36 @@ def _hay_voz(pcm: bytes, umbral: int = 300) -> bool:
         return False
 
 
-# Fábrica de sesiones de streaming: (sample_rate) -> sesión con abrir/enviar_audio/eventos/cerrar
-FabricaStreaming = Callable[[int], Any]
+# Fábrica de sesiones de streaming: (sample_rate, keyterms) -> sesión con
+# abrir/enviar_audio/eventos/cerrar
+FabricaStreaming = Callable[[int, list[str]], Any]
+
+_ORDINALES_VOZ = {
+    "0": "bajo", "1": "primero", "2": "segundo", "3": "tercero", "4": "cuarto", "5": "quinto",
+    "6": "sexto", "7": "séptimo", "8": "octavo", "9": "noveno", "10": "décimo",
+}  # fmt: skip
+
+
+async def vocabulario_stt(repo: Any) -> list[str]:
+    """Términos que el STT debe reconocer bien: direcciones, portales, pisos y puertas reales."""
+    terminos: list[str] = ["portal", "piso", "puerta", "ático", "bajo", "sí", "no"]
+    fincas = await repo.listar_fincas()
+    puertas: set[str] = set()
+    pisos: set[str] = set()
+    portales: set[str] = set()
+    for f in fincas:
+        terminos.append(f.direccion)
+        for v in await repo.viviendas_de(f.id):
+            puertas.add(v.puerta)
+            pisos.add(v.piso)
+            if v.portal:
+                portales.add(v.portal)
+    terminos += [f"portal {p}" for p in sorted(portales)]
+    terminos += [f"puerta {p}" for p in sorted(puertas)]
+    for piso in sorted(pisos, key=lambda x: int(x) if x.isdigit() else 99):
+        ordinal = _ORDINALES_VOZ.get(piso, piso)
+        terminos += [f"{ordinal} {p}" for p in sorted(puertas)]
+    return list(dict.fromkeys(terminos))[:100]
 
 
 class NuevaLlamada(BaseModel):
@@ -124,7 +152,7 @@ def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
     validar_endpoint_eu(settings.assemblyai_api_base)
     host = settings.assemblyai_streaming_host
 
-    def crear(sample_rate: int) -> SesionStreamingAssemblyAI:
+    def crear(sample_rate: int, keyterms: list[str]) -> SesionStreamingAssemblyAI:
         return SesionStreamingAssemblyAI(
             settings.assemblyai_api_key,
             sample_rate,
@@ -132,6 +160,7 @@ def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
             eot_confianza=settings.assemblyai_eot_confianza,
             eot_silencio_ms=settings.assemblyai_eot_silencio_ms,
             max_silencio_ms=settings.assemblyai_max_silencio_ms,
+            keyterms=keyterms,
         )
 
     return crear
@@ -287,7 +316,7 @@ def crear_app(
             await ws.close(code=1008)
             return
         sample_rate = int(ws.query_params.get("sample_rate", "16000"))
-        sesion = fabrica_streaming(sample_rate)
+        sesion = fabrica_streaming(sample_rate, await vocabulario_stt(deps.repo))
         try:
             await sesion.abrir()
         except Exception as e:  # noqa: BLE001

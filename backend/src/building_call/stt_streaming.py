@@ -56,6 +56,7 @@ class SesionStreamingAssemblyAI:
         eot_confianza: float = 0.7,
         eot_silencio_ms: int = 300,
         max_silencio_ms: int = 800,
+        keyterms: list[str] | None = None,
     ) -> None:
         """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
         terminado supera `eot_confianza` y hay `eot_silencio_ms` de silencio; si no está
@@ -67,16 +68,20 @@ class SesionStreamingAssemblyAI:
             raise AssemblyAIConfigError(f"Host de streaming no europeo rechazado: {host}")
         self.api_key = api_key
         self.sample_rate = sample_rate
-        self._url = f"wss://{host}/v3/ws?" + urlencode(
-            {
-                "sample_rate": sample_rate,
-                "encoding": "pcm_s16le",
-                "format_turns": "true",
-                "end_of_turn_confidence_threshold": eot_confianza,
-                "min_end_of_turn_silence_when_confident": eot_silencio_ms,
-                "max_turn_silence": max_silencio_ms,
-            }
-        )
+        params: dict[str, Any] = {
+            "sample_rate": sample_rate,
+            "encoding": "pcm_s16le",
+            "format_turns": "true",
+            "end_of_turn_confidence_threshold": eot_confianza,
+            "min_end_of_turn_silence_when_confident": eot_silencio_ms,
+            "max_turn_silence": max_silencio_ms,
+        }
+        if keyterms:
+            # Vocabulario de la finca: sin él AssemblyAI se come las letras sueltas
+            # ("puerta A" -> "Puerta.", "tercero A" -> "tercero"). Medido 2026-08-28.
+            params["keyterms_prompt"] = json.dumps(keyterms[:100], ensure_ascii=False)
+        self.keyterms = list(keyterms or [])
+        self._url = f"wss://{host}/v3/ws?" + urlencode(params)
         self._min_bytes = int(sample_rate * min_chunk_ms / 1000) * 2
         self._buffer = bytearray()
         self._ws: Any = None
