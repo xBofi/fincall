@@ -1171,11 +1171,14 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             problemas.append("sin_finca")
         if not estado.get("vivienda_id"):
             problemas.append("sin_vivienda")
+        # Regla de Andreu (2026-08-28): nosotros sustituimos al administrador. Con finca, vivienda
+        # y solicitud confirmadas SIEMPRE se crea la incidencia; sin categoría o sin especialista
+        # queda pendiente a nombre del administrador, nunca "escapa a lo que puedo gestionar".
         categoria = estado.get("categoria")
         if categoria == CATEGORIA_NO_CLASIFICABLE or categoria not in cfg.catalogo_categorias:
-            problemas.append("sin_categoria")
+            validaciones.append("sin_categoria->pendiente_administrador")
         elif categoria not in cfg.especialista_por_categoria:
-            problemas.append("sin_especialista_para_categoria")
+            validaciones.append("sin_especialista->pendiente_administrador")
         if problemas:
             validaciones.extend(f"fallo:{p}" for p in problemas)
             return _avanzar(
@@ -1250,16 +1253,24 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         cfg = _config(estado)
         finca = await deps.repo.obtener_finca(estado["finca_id"])  # type: ignore[arg-type]
         assert finca is not None
-        especialista_id = cfg.especialista_por_categoria[estado["categoria"]]  # type: ignore[index]
+        especialista_id = cfg.especialista_por_categoria.get(estado.get("categoria") or "")
         especialistas = {e.id: e for e in await deps.repo.especialistas_de(finca.administrador_id)}
-        especialista = especialistas.get(especialista_id)
+        especialista = especialistas.get(especialista_id) if especialista_id else None
         if especialista is None:
+            # Sin especialista: la incidencia queda pendiente para el administrador
+            motivo = (
+                f"especialista_inexistente:{especialista_id}"
+                if especialista_id
+                else "sin_especialista_para_categoria"
+            )
             return _avanzar(
                 estado,
-                "no_clasificable",
-                motivo_revision=f"especialista_inexistente:{especialista_id}",
-                validaciones=[*estado.get("validaciones", []), "fallo:especialista_inexistente"],
-                traza=_con_traza(estado, nodo, "especialista_inexistente", especialista_id),
+                "crear_ticket",
+                especialista_id=None,
+                especialista_nombre=None,
+                motivo_revision=motivo,
+                validaciones=[*estado.get("validaciones", []), "pendiente_administrador"],
+                traza=_con_traza(estado, nodo, "sin_especialista", motivo),
             )
         return _avanzar(
             estado,
@@ -1304,7 +1315,11 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         canal = regla.canal if regla else "ticket"
         destino_regla = regla.destino if regla else "especialista"
         especialista = estado.get("especialista_nombre")
-        if destino_regla == "especialista":
+        if especialista is None:
+            destino = cfg.contacto.correo if cfg.contacto else "administrador"
+            aviso = "El administrador la revisará y le asignará el profesional adecuado."
+            canal = "correo"
+        elif destino_regla == "especialista":
             destino = especialista or "especialista"
             aviso = f"Se avisará a {especialista} por {canal}."
         elif destino_regla == "coordinador":

@@ -106,19 +106,26 @@ async def test_rechazar_resumen_vuelve_a_recoger_solicitud(gestor: GestorLlamada
     assert estado["nodo_actual"] == "confirmar_resumen"
 
 
-async def test_no_clasificable_envia_a_revision(
+async def test_no_clasificable_crea_incidencia_pendiente(
     gestor: GestorLlamadas, repo: RepositorioMemoria
 ) -> None:
     estado = await _conversar(
         gestor, ["Calle Mayor 12", "sí", "2 B", "Ana", "He visto un ovni en la azotea", "sí"]
     )
+    # Nosotros sustituimos al administrador: aunque no se clasifique, la incidencia se crea
+    # y queda pendiente para él
     assert estado["finalizada"] is True
-    assert estado["resultado"] == "no_clasificable"
-    assert "fallo:sin_categoria" in estado["validaciones"]
-    assert await repo.listar_incidencias() == []
+    assert estado["resultado"] == "incidencia_creada"
+    assert "sin_categoria->pendiente_administrador" in estado["validaciones"]
+    assert estado["especialista_id"] is None
+    incidencias = await repo.listar_incidencias()
+    assert len(incidencias) == 1 and incidencias[0].estado == "pendiente"
+    assert "administrador la revisará" in estado["mensajes_bot"][-1]
 
 
-async def test_categoria_sin_especialista_va_a_revision(gestor: GestorLlamadas) -> None:
+async def test_categoria_sin_especialista_queda_pendiente_del_administrador(
+    gestor: GestorLlamadas,
+) -> None:
     # "limpieza" está en el catálogo pero el administrador demo no tiene especialista asignado
     estado = await _conversar(
         gestor,
@@ -131,8 +138,9 @@ async def test_categoria_sin_especialista_va_a_revision(gestor: GestorLlamadas) 
             "sí",
         ],
     )
-    assert estado["resultado"] == "no_clasificable"
-    assert "fallo:sin_especialista_para_categoria" in estado["validaciones"]
+    assert estado["resultado"] == "incidencia_creada"
+    assert "sin_especialista->pendiente_administrador" in estado["validaciones"]
+    assert estado["destino_aviso"] == "mayor12@demo.test"
 
 
 async def test_mensaje_tras_finalizar_no_cambia_estado(gestor: GestorLlamadas) -> None:
