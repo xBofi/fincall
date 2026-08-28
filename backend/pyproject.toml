@@ -5,6 +5,7 @@ description = "Building Call Assistant: voicebot de incidencias para comunidades
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.19.1",
+    "authlib>=1.4.0",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.141.1",
     "httpx>=0.28.1",
