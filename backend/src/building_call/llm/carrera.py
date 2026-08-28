@@ -15,10 +15,17 @@ from building_call.llm.ollama import LLMError
 
 
 class ModeloCarrera:
-    def __init__(self, *modelos: ModeloLenguaje) -> None:
+    """`preferido` (índice) + `espera_extra_ms`: si gana otro, se espera ese margen por el
+    preferido (más exacto) antes de aceptar la respuesta del rápido."""
+
+    def __init__(
+        self, *modelos: ModeloLenguaje, preferido: int | None = None, espera_extra_ms: int = 0
+    ) -> None:
         if not modelos:
             raise ValueError("La carrera necesita al menos un modelo")
         self.modelos = list(modelos)
+        self.preferido = modelos[preferido] if preferido is not None else None
+        self.espera_extra_ms = espera_extra_ms
         self.nombre = "carrera(" + "|".join(m.nombre for m in modelos) + ")"
         self.ganadores: dict[str, int] = {m.nombre: 0 for m in modelos}
 
@@ -46,7 +53,24 @@ class ModeloCarrera:
                     except Exception as e:  # noqa: BLE001
                         errores.append(f"{tareas[t].nombre}: {e}")
                         continue
-                    self.ganadores[tareas[t].nombre] += 1
+                    ganador = tareas[t]
+                    tarea_pref = next(
+                        (
+                            tp
+                            for tp, m in tareas.items()
+                            if m is self.preferido and tp in pendientes
+                        ),
+                        None,
+                    )
+                    if tarea_pref is not None and self.espera_extra_ms > 0:
+                        try:
+                            resultado = await asyncio.wait_for(
+                                asyncio.shield(tarea_pref), self.espera_extra_ms / 1000
+                            )
+                            ganador = self.preferido  # type: ignore[assignment]
+                        except Exception:  # noqa: BLE001 - timeout o fallo: vale el rápido
+                            pass
+                    self.ganadores[ganador.nombre] += 1
                     return resultado
         finally:
             for t in pendientes:

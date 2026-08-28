@@ -14,8 +14,11 @@ class Settings(BaseSettings):
     repositorio: str = "memoria"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/building_call"
 
-    # LLM: "ollama" (local) | "workers_ai" (Cloudflare) | "carrera" (ambos, gana el primero)
-    llm: str = "ollama"
+    # LLM: "auto" (carrera si hay credenciales de Cloudflare, si no ollama) | "ollama" | "workers_ai" |
+    # "carrera" (Cloudflare preferido por exactitud; si el local acaba antes, espera este margen).
+    # Medido 2026-08-28: local 92%/p95 828 ms; Cloudflare 100%/p95 10 s; carrera+150 ms 96%/p95 831 ms.
+    llm: str = "auto"
+    carrera_espera_extra_ms: int = 150
 
     # Ollama local. qwen3.5:4b: 96% exactitud / ~600 ms por interpretación (evals/comparar_modelos.py)
     ollama_url: str = "http://localhost:11434"

@@ -86,7 +86,11 @@ def crear_llm() -> Any:
         num_predict=settings.ollama_num_predict,
         num_ctx=settings.ollama_num_ctx,
     )
-    if settings.llm == "ollama":
+    modo = settings.llm
+    hay_cloudflare = bool(settings.cloudflare_account_id and settings.cloudflare_api_token)
+    if modo == "auto":
+        modo = "carrera" if hay_cloudflare else "ollama"
+    if modo == "ollama":
         return local
     nube = ModeloWorkersAI(
         settings.cloudflare_account_id,
@@ -94,10 +98,12 @@ def crear_llm() -> Any:
         settings.cloudflare_modelo,
         timeout_s=settings.cloudflare_timeout_s,
     )
-    if settings.llm == "workers_ai":
+    if modo == "workers_ai":
         return nube
-    if settings.llm == "carrera":
-        return ModeloCarrera(nube, local)
+    if modo == "carrera":
+        return ModeloCarrera(
+            nube, local, preferido=0, espera_extra_ms=settings.carrera_espera_extra_ms
+        )
     raise ValueError(f"BC_LLM desconocido: {settings.llm}")
 
 

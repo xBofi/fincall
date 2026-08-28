@@ -133,3 +133,12 @@ async def test_carrera_falla_si_todos_fallan() -> None:
     carrera = ModeloCarrera(ModeloLento("a", 0.0, None), ModeloLento("b", 0.0, None))
     with pytest.raises(LLMError):
         await carrera.extraer("s", "u", {})
+
+
+async def test_carrera_espera_al_preferido_si_llega_a_tiempo() -> None:
+    preferido = ModeloLento("exacto", 0.05, {"a": "exacto"})
+    rapido = ModeloLento("rapido", 0.0, {"a": "rapido"})
+    con_margen = ModeloCarrera(preferido, rapido, preferido=0, espera_extra_ms=300)
+    assert (await con_margen.extraer("s", "u", {}))["a"] == "exacto"
+    sin_margen = ModeloCarrera(preferido, rapido, preferido=0, espera_extra_ms=10)
+    assert (await sin_margen.extraer("s", "u", {}))["a"] == "rapido"
