@@ -130,6 +130,56 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
+// ---------------------------------------------------------------- consola operativa (APIs protegidas)
+
+export interface EstadoAcceso {
+  modo: 'google' | 'desarrollo' | 'deshabilitado'
+  autenticado: boolean
+  usuario: { id: string; email: string; rol: 'owner' | 'administrador' | 'calidad' } | null
+}
+
+export interface ResumenOperaciones {
+  llamadas: number
+  resueltas: number
+  no_resueltas: number
+  activas: number
+  requieren_revision: number
+  respuesta_ms: Resumen
+  latencia_global: Resumen
+}
+
+export interface Expediente {
+  id: string
+  iniciada_en: string
+  telefono_llamante: string | null
+  finca_id: string | null
+  vivienda_id: string | null
+  nombre_declarado: string | null
+  resumen: string | null
+  resultado: string | null
+  motivo_revision: string | null
+  estado: 'activa' | 'finalizada'
+  finalizada_en: string | null
+  requiere_revision: boolean
+  respuesta_ms_p50: number | null
+}
+
+export interface DetalleExpediente {
+  llamada: Expediente & { transcripcion: Turno[] }
+  turnos: { turno: number; vecino: string | null; asistente: string[]; nodo_inicial: string; nodo_final: string; tiempos: TiemposServidor }[]
+  decisiones: { turno: number; nodo: string; accion: string; detalle: string }[]
+  metricas: Record<string, unknown>[]
+  pistas: { id: string; canal: string; duracion_ms: number | null; expira_en: string; disponible: boolean; url: string | null }[]
+}
+
+export const operaciones = {
+  acceso: () => pedir<EstadoAcceso>('/api/auth/estado'),
+  logout: () => pedir<unknown>('/api/auth/logout', { method: 'POST' }),
+  resumen: () => pedir<ResumenOperaciones>('/api/operaciones/resumen'),
+  llamadas: (estado?: string) => pedir<Expediente[]>(`/api/operaciones/llamadas${estado ? `?estado=${estado}` : ''}`),
+  detalle: (id: string) => pedir<DetalleExpediente>(`/api/operaciones/llamadas/${id}`),
+}
+
 export const api = {
   salud: () => pedir<Salud>('/api/salud'),
   fincas: () => pedir<Finca[]>('/api/fincas'),

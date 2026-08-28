@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Segmented, Slider, Switch, message } from 'antd'
 import { PhoneOutlined, ReloadOutlined, SoundOutlined } from '@ant-design/icons'
-import { api, type Salud, type VistaLlamada } from './api'
+import {
+  api,
+  operaciones,
+  type DetalleExpediente,
+  type EstadoAcceso,
+  type Expediente,
+  type ResumenOperaciones,
+  type Salud,
+  type VistaLlamada,
+} from './api'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
 import { type TurnoMedido } from './components/PanelLatencia'
 import { abrirStreaming, type SesionStreaming } from './streaming'
@@ -33,6 +42,36 @@ export default function App() {
   const [turnos, setTurnos] = useState<TurnoMedido[]>([])
   const [error, setError] = useState<string | null>(null)
   const [streamingInfo, setStreamingInfo] = useState<string | null>(null)
+  // Consola operativa: acceso, indicadores, cola de expedientes y dossier seleccionado
+  const [acceso, setAcceso] = useState<EstadoAcceso | null>(null)
+  const [resumenOps, setResumenOps] = useState<ResumenOperaciones | null>(null)
+  const [expedientes, setExpedientes] = useState<Expediente[]>([])
+  const [seleccionado, setSeleccionado] = useState<DetalleExpediente | null>(null)
+
+  const refrescarOperaciones = useCallback(async () => {
+    try {
+      const estado = await operaciones.acceso()
+      setAcceso(estado)
+      if (!estado.autenticado) {
+        setResumenOps(null)
+        setExpedientes([])
+        return
+      }
+      const [resumen, lista] = await Promise.all([operaciones.resumen(), operaciones.llamadas()])
+      setResumenOps(resumen)
+      setExpedientes(lista)
+    } catch {
+      // Sin acceso o backend caído: la consola sigue funcionando para la llamada en directo
+    }
+  }, [])
+
+  const abrirExpediente = useCallback(async (id: string) => {
+    try {
+      setSeleccionado(await operaciones.detalle(id))
+    } catch (e) {
+      message.error(String(e))
+    }
+  }, [])
 
   // Referencias para el bucle de voz (evitan closures obsoletas)
   const vistaRef = useRef<VistaLlamada | null>(null)
@@ -52,7 +91,8 @@ export default function App() {
         else if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
       })
       .catch((e) => setError(String(e)))
-  }, [])
+    void refrescarOperaciones()
+  }, [refrescarOperaciones])
 
   const registrarTurno = useCallback((t: TurnoMedido) => {
     setTurnos((prev) => [...prev.filter((x) => x.turno !== t.turno), t])
@@ -117,13 +157,15 @@ export default function App() {
         streamingRef.current?.cerrar()
         streamingRef.current = null
       }
+      // La cola y los indicadores reflejan el expediente persistido tras cada turno
+      void refrescarOperaciones()
       setEstadoVoz(streamingRef.current && !v.finalizada ? 'esperando_voz' : 'inactivo')
       if (!v.finalizada && opcionesRef.current.manosLibres && bucleActivoRef.current && modo !== 'streaming') {
         void escuchar()
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [registrarTurno],
+    [registrarTurno, refrescarOperaciones],
   )
 
   const enviarTexto = useCallback(
@@ -301,6 +343,18 @@ export default function App() {
           <div className="ops-system">
             <span className={`ops-signal ${salud?.modelo_disponible ? 'is-online' : ''}`} />
             <span>{salud?.modelo_disponible ? 'Sistema operativo' : 'Modelo no disponible'}</span>
+            {acceso?.autenticado ? (
+              <span title={`Rol: ${acceso.usuario?.rol}`}>
+                {acceso.usuario?.email}{acceso.modo === 'desarrollo' ? ' · modo desarrollo' : ''}{' '}
+                {acceso.modo === 'google' && (
+                  <Button size="small" onClick={() => void operaciones.logout().then(refrescarOperaciones)}>Salir</Button>
+                )}
+              </span>
+            ) : acceso?.modo === 'google' ? (
+              <Button size="small" href="/api/auth/login">Entrar con Google</Button>
+            ) : acceso ? (
+              <span title="Configure BC_GOOGLE_CLIENT_ID/SECRET, BC_SESION_SECRETO y BC_ACCESO_*">Acceso no configurado</span>
+            ) : null}
             <Button className="ops-primary" type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
               {vista ? 'Nueva llamada' : 'Iniciar llamada'}
             </Button>
@@ -308,37 +362,68 @@ export default function App() {
         </header>
 
         <section className="ops-metrics" aria-label="Indicadores operativos">
-          <article><p>Llamadas hoy</p><strong>{vista ? 1 : 0}</strong><span>en esta consola</span></article>
-          <article><p>Respuesta p50</p><strong>{p50 === null ? '—' : `${p50} ms`}</strong><span>{p50 !== null && p50 <= 1200 ? 'dentro del objetivo' : 'esperando medición'}</span></article>
-          <article><p>Turnos medidos</p><strong>{turnos.length}</strong><span>cliente → asistente</span></article>
-          <article><p>Resultado</p><strong className={resultado ? (resuelta ? 'is-good' : 'is-review') : ''}>{resultado ? (resuelta ? 'Resuelta' : 'A revisar') : 'En curso'}</strong><span>{resultado ?? 'aún sin cierre'}</span></article>
+          <article><p>Llamadas registradas</p><strong>{resumenOps?.llamadas ?? (vista ? 1 : 0)}</strong><span>{resumenOps ? `${resumenOps.activas} activas · ${resumenOps.requieren_revision} a revisar` : 'en esta consola'}</span></article>
+          <article><p>Respuesta p50</p><strong>{(resumenOps?.latencia_global.p50 ?? p50) == null ? '—' : `${resumenOps?.latencia_global.p50 ?? p50} ms`}</strong><span>{(resumenOps?.latencia_global.p50 ?? p50 ?? Infinity) <= 1200 ? 'dentro del objetivo' : 'por encima del objetivo (1200 ms)'}</span></article>
+          <article><p>Resueltas</p><strong>{resumenOps ? `${resumenOps.resueltas}/${resumenOps.llamadas}` : turnos.length}</strong><span>{resumenOps ? 'incidencia creada en la llamada' : 'turnos medidos'}</span></article>
+          <article><p>Llamada actual</p><strong className={resultado ? (resuelta ? 'is-good' : 'is-review') : ''}>{resultado ? (resuelta ? 'Resuelta' : 'A revisar') : vista ? 'En curso' : '—'}</strong><span>{resultado ?? (vista ? 'aún sin cierre' : 'sin llamada')}</span></article>
         </section>
 
         {error && <Alert className="ops-alert" type="error" message={error} showIcon />}
 
         <section className="ops-workbench">
           <aside className="ops-queue" aria-label="Cola de llamadas">
-            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Cola operativa</p><h2>Expedientes</h2></div><span>01</span></div>
-            <button className={`ops-call-row ${vista ? 'is-selected' : ''}`} type="button" onClick={() => vista ? undefined : void iniciar()}>
+            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Cola operativa</p><h2>Expedientes</h2></div><span>{String(expedientes.length).padStart(2, '0')}</span></div>
+            <button className={`ops-call-row ${vista && !seleccionado ? 'is-selected' : ''}`} type="button" onClick={() => { setSeleccionado(null); if (!vista) void iniciar() }}>
               <span className="ops-row-state" />
-              <span><b>{vista?.datos.nombre_declarado ?? 'Nueva llamada'}</b><small>{vista?.datos.finca_direccion ?? 'Sin identificar'}</small></span>
+              <span><b>{vista?.datos.nombre_declarado ?? (vista ? 'Llamada en directo' : 'Nueva llamada')}</b><small>{vista?.datos.finca_direccion ?? 'Sin identificar'}</small></span>
               <time>{vista ? 'ahora' : 'lista'}</time>
             </button>
-            <div className="ops-queue-note">Las conversaciones finalizadas y las que requieren revisión aparecen aquí con su trazabilidad completa.</div>
+            {expedientes.filter((e) => e.id !== vista?.llamada_id).map((e) => (
+              <button key={e.id} className={`ops-call-row ${seleccionado?.llamada.id === e.id ? 'is-selected' : ''}`} type="button" onClick={() => void abrirExpediente(e.id)}>
+                <span className="ops-row-state" style={{ background: e.requiere_revision ? 'var(--color-review)' : e.estado === 'activa' ? 'var(--color-accent)' : 'var(--color-good)' }} />
+                <span><b>{e.nombre_declarado ?? 'Sin nombre'}</b><small>{e.resumen ?? e.resultado ?? e.estado}{e.requiere_revision ? ' · revisar' : ''}</small></span>
+                <time>{new Date(e.iniciada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</time>
+              </button>
+            ))}
+            <div className="ops-queue-note">{acceso?.autenticado ? 'Expedientes persistidos por turno, con trazabilidad completa. Pulse uno para abrir su dossier.' : 'Inicie sesión para ver los expedientes y su trazabilidad.'}</div>
           </aside>
 
           <section className="ops-dossier" aria-label="Dossier operativo">
-            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada</p><h2>{vista?.datos.finca_direccion ?? 'Esperando una llamada'}</h2></div><span className="ops-mono">{vista?.llamada_id?.slice(-6) ?? '—'}</span></div>
-            <dl className="ops-facts">
-              <div><dt>Vecino</dt><dd>{vista?.datos.nombre_declarado ?? 'No identificado'}</dd></div>
-              <div><dt>Vivienda</dt><dd>{vista?.datos.vivienda_etiqueta ?? 'Pendiente'}</dd></div>
-              <div><dt>Categoría</dt><dd>{vista?.datos.categoria ?? 'Sin clasificar'}</dd></div>
-              <div><dt>Urgencia</dt><dd>{vista?.datos.urgencia ?? '—'}</dd></div>
-            </dl>
-            <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{vista?.datos.resumen ?? 'El expediente se irá completando mientras el vecino responde.'}</p></div>
-            <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Flujo de decisión</p><h2>Rastro verificable</h2></div></div>
-              {vista?.traza?.length ? <ol>{vista.traza.slice(-5).map((paso, index) => <li key={`${paso.nodo}-${index}`}><span>{index + 1}</span><div><b>{paso.nodo}</b><small>{paso.accion}{paso.detalle ? ` · ${paso.detalle}` : ''}</small></div></li>)}</ol> : <p className="ops-empty">Cada decisión del grafo aparecerá aquí, con el motivo que la activó.</p>}
-            </div>
+            {seleccionado ? (
+              <>
+                <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada · {seleccionado.llamada.estado}</p><h2>{seleccionado.llamada.nombre_declarado ?? 'Sin nombre'}</h2></div><span className="ops-mono">{seleccionado.llamada.id.slice(-6)}</span></div>
+                <dl className="ops-facts">
+                  <div><dt>Inicio</dt><dd>{new Date(seleccionado.llamada.iniciada_en).toLocaleString('es-ES')}</dd></div>
+                  <div><dt>Teléfono</dt><dd>{seleccionado.llamada.telefono_llamante ?? '—'}</dd></div>
+                  <div><dt>Vivienda</dt><dd>{seleccionado.llamada.vivienda_id ?? 'No identificada'}</dd></div>
+                  <div><dt>Resultado</dt><dd className={seleccionado.llamada.resultado === 'incidencia_creada' ? 'is-good' : 'is-review'}>{seleccionado.llamada.resultado ?? 'en curso'}{seleccionado.llamada.motivo_revision ? ` · ${seleccionado.llamada.motivo_revision}` : ''}</dd></div>
+                </dl>
+                <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{seleccionado.llamada.resumen ?? '—'}</p></div>
+                {seleccionado.pistas.length > 0 && (
+                  <div className="ops-summary" style={{ marginTop: 12 }}>
+                    <p className="ops-eyebrow">Grabación del vecino · URL firmada, expira en 5 min · retención 14 días</p>
+                    {seleccionado.pistas.map((p) => p.url ? <audio key={p.id} controls preload="none" src={p.url} style={{ width: '100%' }} /> : <small key={p.id}>Pista eliminada por retención</small>)}
+                  </div>
+                )}
+                <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Transcripción y decisiones</p><h2>Rastro verificable</h2></div></div>
+                  <ol>{seleccionado.turnos.map((t) => <li key={t.turno}><span>{t.turno}</span><div>{t.vecino && <b>Vecino: {t.vecino}</b>}<small>Asistente: {t.asistente.join(' ')}</small><small>{t.nodo_inicial} → {t.nodo_final}{t.tiempos?.servidor_ms != null ? ` · ${t.tiempos.servidor_ms} ms servidor` : ''}{t.tiempos?.origen_interpretacion ? ` · ${t.tiempos.origen_interpretacion}` : ''}</small>{seleccionado.decisiones.filter((d) => d.turno === t.turno).map((d, i) => <small key={i}>↳ {d.nodo}: {d.accion}{d.detalle ? ` · ${d.detalle}` : ''}</small>)}</div></li>)}</ol>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada</p><h2>{vista?.datos.finca_direccion ?? 'Esperando una llamada'}</h2></div><span className="ops-mono">{vista?.llamada_id?.slice(-6) ?? '—'}</span></div>
+                <dl className="ops-facts">
+                  <div><dt>Vecino</dt><dd>{vista?.datos.nombre_declarado ?? 'No identificado'}</dd></div>
+                  <div><dt>Vivienda</dt><dd>{vista?.datos.vivienda_etiqueta ?? 'Pendiente'}</dd></div>
+                  <div><dt>Categoría</dt><dd>{vista?.datos.categoria ?? 'Sin clasificar'}</dd></div>
+                  <div><dt>Urgencia</dt><dd>{vista?.datos.urgencia ?? '—'}</dd></div>
+                </dl>
+                <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{vista?.datos.resumen ?? 'El expediente se irá completando mientras el vecino responde.'}</p></div>
+                <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Flujo de decisión</p><h2>Rastro verificable</h2></div></div>
+                  {vista?.traza?.length ? <ol>{vista.traza.slice(-5).map((paso, index) => <li key={`${paso.nodo}-${index}`}><span>{index + 1}</span><div><b>{paso.nodo}</b><small>{paso.accion}{paso.detalle ? ` · ${paso.detalle}` : ''}</small></div></li>)}</ol> : <p className="ops-empty">Cada decisión del grafo aparecerá aquí, con el motivo que la activó.</p>}
+                </div>
+              </>
+            )}
           </section>
 
           <aside className="ops-live" aria-label="Llamada en directo">
