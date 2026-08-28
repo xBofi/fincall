@@ -158,3 +158,14 @@ async def test_direccion_irreconocible_no_deriva_a_humano(gestor: GestorLlamadas
     assert estado["nodo_actual"] == "identificar_finca"
     assert estado["intentos_finca"] == 1
     assert "repetirme la calle" in estado["mensajes_bot"][-1]
+
+
+async def test_vivienda_inexistente_explica_la_estructura_de_la_finca(
+    gestor: GestorLlamadas,
+) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "piso 1, puerta 2"])
+    assert estado["nodo_actual"] == "identificar_vivienda"
+    assert "pisos del 1 al 4" in estado["mensajes_bot"][-1]
+    assert "puertas A o B" in estado["mensajes_bot"][-1]
+    estado = await gestor.mensaje(estado["llamada_id"], "piso 1 puerta B")
+    assert estado["vivienda_id"] == "finca-mayor-12-u-1B"

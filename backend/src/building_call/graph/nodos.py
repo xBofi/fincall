@@ -591,7 +591,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     validaciones.append("vivienda_existe_en_finca")
                     estado = {**estado, **cambios}  # type: ignore[assignment]
                 else:
-                    return _reintento_vivienda(estado, pend, traza)
+                    return await _reintento_vivienda(estado, pend, traza)
             else:
                 return _avanzar(
                     estado, "identificar_vivienda", pendientes=pend, traza=traza, **cambios
@@ -691,7 +691,29 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             **(extra or {}),
         )
 
-    def _reintento_vivienda(
+    async def _describir_viviendas(finca_id: str) -> str:
+        """'pisos del 1 al 4 y puertas A o B' a partir de las viviendas reales de la finca."""
+        viviendas = await deps.repo.viviendas_de(finca_id)
+        if not viviendas:
+            return ""
+        pisos = sorted(
+            {_normalizar_piso(v.piso) or v.piso for v in viviendas},
+            key=lambda x: (not x.isdigit(), int(x) if x.isdigit() else 0, x),
+        )
+        puertas = sorted({v.puerta for v in viviendas})
+        portales = sorted({v.portal for v in viviendas if v.portal})
+        partes = []
+        if portales:
+            partes.append("portales " + " y ".join(portales))
+        partes.append(
+            f"pisos del {pisos[0]} al {pisos[-1]}" if len(pisos) > 1 else f"piso {pisos[0]}"
+        )
+        partes.append(
+            "puertas " + " o ".join(puertas) if len(puertas) > 1 else f"puerta {puertas[0]}"
+        )
+        return "En esa finca hay " + ", ".join(partes) + ". "
+
+    async def _reintento_vivienda(
         estado: EstadoLlamada,
         pend: dict[str, str],
         traza: list[Traza],
@@ -707,10 +729,11 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 traza=traza,
                 **(extra or {}),
             )
+        ayuda = await _describir_viviendas(estado["finca_id"]) if estado.get("finca_id") else ""
         return _preguntar(
             estado,
             "identificar_vivienda",
-            "No encuentro esa vivienda en la finca. ¿Puede repetirme el piso y la puerta, y el portal si lo hay?",
+            f"No encuentro esa vivienda. {ayuda}¿Cuál es su piso y su puerta?",
             intentos_vivienda=intentos,
             pendientes=pend,
             traza=traza,
@@ -888,7 +911,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             if portal:
                 pend.setdefault("portal", portal)
         if not (pend.get("piso") and pend.get("puerta")):
-            return _reintento_vivienda(
+            return await _reintento_vivienda(
                 {**estado, "historial": historial},
                 {k: v for k, v in pend.items() if k not in ("portal", "piso", "puerta")},
                 estado.get("traza", []),
