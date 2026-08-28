@@ -5,6 +5,7 @@ import { api, type Finca, type Salud, type VistaLlamada } from './api'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
 import { PanelEstado } from './components/PanelEstado'
 import { PanelLatencia, type TurnoMedido } from './components/PanelLatencia'
+import { abrirStreaming, type SesionStreaming } from './streaming'
 import {
   VAD_POR_DEFECTO,
   SinVozError,
@@ -17,7 +18,7 @@ import {
   ttsDisponible,
 } from './voz'
 
-type ModoStt = 'navegador' | 'servidor'
+type ModoStt = 'navegador' | 'servidor' | 'streaming'
 
 export default function App() {
   const [salud, setSalud] = useState<Salud | null>(null)
@@ -33,11 +34,13 @@ export default function App() {
   const [silencioMs, setSilencioMs] = useState(VAD_POR_DEFECTO.silencioMs)
   const [turnos, setTurnos] = useState<TurnoMedido[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [streamingInfo, setStreamingInfo] = useState<string | null>(null)
 
   // Referencias para el bucle de voz (evitan closures obsoletas)
   const vistaRef = useRef<VistaLlamada | null>(null)
   const cancelarEscuchaRef = useRef<() => void>(() => undefined)
   const cancelarHablaRef = useRef<() => void>(() => undefined)
+  const streamingRef = useRef<SesionStreaming | null>(null)
   const bucleActivoRef = useRef(false)
   const opcionesRef = useRef({ vozActiva, manosLibres, bargeIn, modoStt, silencioMs })
   opcionesRef.current = { vozActiva, manosLibres, bargeIn, modoStt, silencioMs }
@@ -47,7 +50,8 @@ export default function App() {
       .salud()
       .then((s) => {
         setSalud(s)
-        if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
+        if (s.stt_streaming) setModoStt('streaming')
+        else if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
       })
       .catch((e) => setError(String(e)))
     api.fincas().then(setFincas).catch(() => undefined)
@@ -57,7 +61,7 @@ export default function App() {
     setTurnos((prev) => [...prev.filter((x) => x.turno !== t.turno), t])
   }, [])
 
-  /** Reproduce la respuesta y, si procede, vuelve a escuchar. Devuelve el instante de inicio del audio. */
+  /** Reproduce la respuesta y, si procede, vuelve a escuchar. */
   const responder = useCallback(
     async (v: VistaLlamada, finVozAt: number | null, medicion: Partial<TurnoMedido>): Promise<void> => {
       vistaRef.current = v
@@ -66,18 +70,21 @@ export default function App() {
       let ttsInicioAt: number | null = null
       let interrumpida = false
       const recibidoAt = performance.now()
+      const modo = opcionesRef.current.modoStt
       if (opcionesRef.current.vozActiva && texto) {
         setEstadoVoz('respondiendo')
+        streamingRef.current?.pausar()
         const rep = hablar(texto, opcionesRef.current.bargeIn && !v.finalizada)
         cancelarHablaRef.current = rep.cancelar
         ttsInicioAt = await rep.inicio
         const fin = await rep.fin
         interrumpida = fin.interrumpida
+        streamingRef.current?.reanudar()
       }
       const t: TurnoMedido = {
         turno: v.turno,
         modo: finVozAt === null ? 'texto' : 'voz',
-        stt: finVozAt === null ? null : opcionesRef.current.modoStt,
+        stt: finVozAt === null ? null : modo === 'streaming' ? 'servidor' : modo,
         servidor_ms: v.tiempos.servidor_ms,
         interpretacion_ms: v.tiempos.interpretacion_ms,
         llm_llamadas: v.tiempos.llm_llamadas,
@@ -97,13 +104,17 @@ export default function App() {
             red_ms: t.red_ms,
             tts_inicio_ms: t.tts_inicio_ms,
             respuesta_ms: t.respuesta_ms,
-            stt_cliente: t.stt ?? undefined,
+            stt_cliente: modo,
             extra: { interrumpido: interrumpida, modo: t.modo },
           })
           .catch(() => undefined)
       }
-      setEstadoVoz('inactivo')
-      if (!v.finalizada && opcionesRef.current.manosLibres && bucleActivoRef.current) {
+      if (v.finalizada) {
+        streamingRef.current?.cerrar()
+        streamingRef.current = null
+      }
+      setEstadoVoz(streamingRef.current && !v.finalizada ? 'esperando_voz' : 'inactivo')
+      if (!v.finalizada && opcionesRef.current.manosLibres && bucleActivoRef.current && modo !== 'streaming') {
         void escuchar()
       }
     },
@@ -133,11 +144,45 @@ export default function App() {
     [responder],
   )
 
-  /** Un turno de escucha completo: captura -> STT -> grafo -> respuesta hablada. */
+  /** Modo streaming: una sesión por llamada; el proveedor detecta el fin de turno. */
+  const abrirStreamingLlamada = useCallback(
+    async (llamadaId: string) => {
+      streamingRef.current?.cerrar()
+      let finVozTurno = 0
+      streamingRef.current = await abrirStreaming(llamadaId, {
+        onListo: (ms) => {
+          setStreamingInfo(`STT streaming conectado (${ms ?? '?'} ms)`)
+          setEstadoVoz('esperando_voz')
+        },
+        onParcial: (t) => setParcial(t),
+        onFinal: (t, ultimaVozAt) => {
+          finVozTurno = ultimaVozAt
+          setParcial(t)
+          setEstadoVoz('procesando')
+        },
+        onRespuesta: (v, ultimaVozAt) => {
+          setParcial(null)
+          void responder(v, finVozTurno || ultimaVozAt || null, {
+            stt_ms: v.tiempos.stt_eou_a_respuesta_ms !== undefined ? undefined : undefined,
+          })
+        },
+        onError: (m) => message.error(m),
+        onVoz: (hablando) => setEstadoVoz(hablando ? 'hablando' : 'esperando_voz'),
+        onCerrado: () => setStreamingInfo(null),
+      })
+    },
+    [responder],
+  )
+
+  /** Un turno de escucha (modos navegador/servidor): captura -> STT -> grafo -> respuesta hablada. */
   const escuchar = useCallback(async () => {
     const v = vistaRef.current
     if (!v || v.finalizada) return
     const { modoStt: modo, silencioMs: silencio } = opcionesRef.current
+    if (modo === 'streaming') {
+      if (!streamingRef.current) await abrirStreamingLlamada(v.llamada_id)
+      return
+    }
     setParcial(null)
     try {
       let texto = ''
@@ -189,18 +234,24 @@ export default function App() {
       if (e instanceof Error && e.message === 'cancelado') return
       message.error(String(e))
     }
-  }, [responder])
+  }, [responder, abrirStreamingLlamada])
 
   const iniciar = async () => {
     setError(null)
     setOcupado(true)
     cancelarEscuchaRef.current()
     cancelarHablaRef.current()
+    streamingRef.current?.cerrar()
+    streamingRef.current = null
     silenciar()
     setTurnos([])
     bucleActivoRef.current = true
     try {
       const v = await api.iniciar()
+      if (opcionesRef.current.modoStt === 'streaming' && opcionesRef.current.manosLibres) {
+        // Abrimos el STT mientras suena el saludo para que la conexión no cueste latencia
+        void abrirStreamingLlamada(v.llamada_id).catch((e) => message.error(String(e)))
+      }
       await responder(v, null, {})
     } catch (e) {
       setError(String(e))
@@ -213,11 +264,14 @@ export default function App() {
     bucleActivoRef.current = false
     cancelarEscuchaRef.current()
     cancelarHablaRef.current()
+    streamingRef.current?.cerrar()
+    streamingRef.current = null
     silenciar()
     setEstadoVoz('inactivo')
   }
 
   const sttServidorOk = !!salud?.stt_disponible
+  const sttStreamingOk = !!salud?.stt_streaming
   const sttNavegadorOk = sttNavegadorDisponible()
 
   return (
@@ -229,7 +283,8 @@ export default function App() {
         {salud && (
           <Space>
             <Tag color={salud.modelo_disponible ? 'green' : 'red'}>{salud.modelo}</Tag>
-            <Tag color={salud.stt_disponible ? 'green' : 'default'}>STT servidor: {salud.stt_servidor}</Tag>
+            {salud.stt_streaming && <Tag color="green">STT streaming: {salud.stt_streaming}</Tag>}
+            <Tag color={salud.stt_disponible ? 'green' : 'default'}>STT lotes: {salud.stt_servidor}</Tag>
           </Space>
         )}
         <Button type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
@@ -240,7 +295,7 @@ export default function App() {
       <Layout.Content style={{ padding: 16, overflow: 'hidden' }}>
         {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} showIcon />}
         {salud && !salud.modelo_disponible && (
-          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={`El modelo ${salud.modelo} no está disponible en Ollama. Ejecute: ollama pull ${salud.modelo}`} />
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={`El modelo ${salud.modelo} no está disponible. Revise Ollama o las credenciales de Workers AI.`} />
         )}
         <Row gutter={16} style={{ height: '100%' }}>
           <Col span={12} style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -266,8 +321,9 @@ export default function App() {
                     value={modoStt}
                     onChange={(v) => setModoStt(v as ModoStt)}
                     options={[
+                      { label: 'Streaming (AssemblyAI EU)', value: 'streaming', disabled: !sttStreamingOk },
                       { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk },
-                      { label: 'Servidor (whisper)', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() },
+                      { label: 'Whisper', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() },
                     ]}
                   />
                 </Space>
@@ -277,6 +333,7 @@ export default function App() {
                     <Slider min={300} max={1200} step={50} value={silencioMs} onChange={setSilencioMs} style={{ width: 120 }} />
                   </Space>
                 )}
+                {streamingInfo && <Tag color="blue">{streamingInfo}</Tag>}
               </Space>
             </Card>
             <Card
@@ -299,7 +356,8 @@ export default function App() {
                 <div style={{ padding: 16 }}>
                   <Typography.Paragraph>
                     Pulse <b>Iniciar llamada</b>. El asistente saluda por voz y, en <b>manos libres</b>, escucha
-                    automáticamente tras cada respuesta. Puede interrumpirle hablando. También puede escribir.
+                    automáticamente. En modo <b>Streaming</b> el fin de turno lo detecta AssemblyAI (EU) en tiempo real.
+                    Puede interrumpirle hablando. También puede escribir.
                   </Typography.Paragraph>
                   <Typography.Text strong>Fincas de demostración</Typography.Text>
                   <ul>

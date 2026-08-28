@@ -1,50 +1,18 @@
 [
   {
-    "modelo": "gemma3:1b",
+    "modelo": "cf:@cf/qwen/qwen3.8-27b",
     "interpretacion": {
-      "exactitud": 0.43137254901960786,
-      "n": 51,
-      "p50_ms": 454,
-      "p95_ms": 629
+      "exactitud": 0.9215686274509803,
+      "n": 102,
+      "p50_ms": 638,
+      "p95_ms": 2845
     },
     "clasificacion": {
-      "categoria": 0.5625,
-      "urgencia": 0.625,
-      "n": 16,
-      "p50_ms": 607.9194999765605,
-      "p95_ms": 661.0093000344932
-    }
-  },
-  {
-    "modelo": "qwen3:1.7b",
-    "interpretacion": {
-      "exactitud": 0.7058823529411765,
-      "n": 51,
-      "p50_ms": 302,
-      "p95_ms": 453
-    },
-    "clasificacion": {
-      "categoria": 0.625,
-      "urgencia": 0.875,
-      "n": 16,
-      "p50_ms": 365.06010009907186,
-      "p95_ms": 416.2865998223424
-    }
-  },
-  {
-    "modelo": "qwen3.5:latest",
-    "interpretacion": {
-      "exactitud": 0.8823529411764706,
-      "n": 51,
-      "p50_ms": 624,
-      "p95_ms": 848
-    },
-    "clasificacion": {
-      "categoria": 0.9375,
+      "categoria": 1.0,
       "urgencia": 1.0,
-      "n": 16,
-      "p50_ms": 1062.0929000433534,
-      "p95_ms": 1104.7575999982655
+      "n": 32,
+      "p50_ms": 1293.8411000650376,
+      "p95_ms": 2221.606400096789
     }
   }
 ]

@@ -30,6 +30,7 @@ from building_call.graph.nodos import (  # noqa: E402
 from building_call.llm.interpretacion import interpretar  # noqa: E402
 from building_call.llm.ollama import ModeloOllama  # noqa: E402
 from building_call.llm.prompts import esquema_clasificacion, sistema_clasificacion  # noqa: E402
+from building_call.llm.workers_ai import ModeloWorkersAI  # noqa: E402
 
 AQUI = Path(__file__).resolve().parent
 
@@ -75,7 +76,7 @@ def _coincide(clave: str, esperado: Any, obtenido: Any) -> bool:
 
 
 async def evaluar_interpretacion(
-    llm: ModeloOllama, casos: list[dict[str, Any]], reps: int
+    llm: Any, casos: list[dict[str, Any]], reps: int
 ) -> dict[str, Any]:
     aciertos = total = 0
     tiempos: list[float] = []
@@ -107,9 +108,7 @@ async def evaluar_interpretacion(
     }
 
 
-async def evaluar_clasificacion(
-    llm: ModeloOllama, casos: list[dict[str, Any]], reps: int
-) -> dict[str, Any]:
+async def evaluar_clasificacion(llm: Any, casos: list[dict[str, Any]], reps: int) -> dict[str, Any]:
     cat_ok = urg_ok = total = 0
     tiempos: list[float] = []
     fallos: list[str] = []
@@ -151,6 +150,33 @@ async def evaluar_clasificacion(
     }
 
 
+def _leer_env() -> dict[str, str]:
+    """Lee backend/.env (solo para las credenciales de proveedores externos)."""
+    import re
+
+    env: dict[str, str] = {}
+    ruta = AQUI.parent / ".env"
+    if ruta.exists():
+        for linea in ruta.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"\s*([A-Z_]+)\s*=\s*(.*)", linea)
+            if m:
+                env[m.group(1)] = m.group(2).strip().strip('"')
+    return env
+
+
+def _crear_llm(nombre: str, url_ollama: str) -> Any:
+    """`cf:@cf/qwen/qwen3.8-27b` -> Workers AI; cualquier otro nombre -> Ollama local."""
+    if nombre.startswith("cf:"):
+        env = _leer_env()
+        return ModeloWorkersAI(
+            env.get("BC_CLOUDFLARE_ACCOUNT_ID", ""),
+            env.get("BC_CLOUDFLARE_API_TOKEN", ""),
+            nombre[3:],
+            timeout_s=60,
+        )
+    return ModeloOllama(url_ollama, nombre, timeout_s=60)
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--modelos", required=True)
@@ -165,7 +191,7 @@ async def main() -> None:
     )
     resumen = []
     for modelo in args.modelos.split(","):
-        llm = ModeloOllama(args.url, modelo.strip(), timeout_s=60)
+        llm = _crear_llm(modelo.strip(), args.url)
         # Calentamiento: carga el modelo en GPU
         try:
             await llm.extraer(
@@ -174,12 +200,12 @@ async def main() -> None:
                 {"type": "object", "properties": {"ok": {"type": "boolean"}}},
             )
         except Exception as e:  # noqa: BLE001
-            print(f"{modelo:<18} no disponible: {e}")
+            print(f"{modelo:<44} no disponible: {e}")
             continue
         ri = await evaluar_interpretacion(llm, casos_i, args.repeticiones)
         rc = await evaluar_clasificacion(llm, casos_c, args.repeticiones)
         print(
-            f"{modelo:<18} {ri['exactitud']:>11.0%} {ri['p50_ms']:>6.0f} {ri['p95_ms']:>6.0f} | {rc['categoria']:>7.0%} {rc['urgencia']:>8.0%} {rc['p50_ms']:>6.0f} {rc['p95_ms']:>6.0f}"
+            f"{modelo:<44} {ri['exactitud']:>11.0%} {ri['p50_ms']:>6.0f} {ri['p95_ms']:>6.0f} | {rc['categoria']:>7.0%} {rc['urgencia']:>8.0%} {rc['p50_ms']:>6.0f} {rc['p95_ms']:>6.0f}"
         )
         if args.verboso:
             for f in ri["fallos"] + rc["fallos"]:

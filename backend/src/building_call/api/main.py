@@ -1,23 +1,36 @@
-"""API HTTP consumida por la consola de validación (y, más adelante, por la telefonía)."""
+"""API HTTP/WebSocket consumida por la consola de validación (y, más adelante, por la telefonía)."""
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
+from time import perf_counter
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from building_call.graph.estado import EstadoLlamada
 from building_call.graph.nodos import Dependencias
 from building_call.graph.registro import REGISTRO
+from building_call.llm.carrera import ModeloCarrera
 from building_call.llm.ollama import ModeloOllama
+from building_call.llm.workers_ai import ModeloWorkersAI
 from building_call.metricas import UMBRALES_MS
 from building_call.repos.memoria import RepositorioMemoria
 from building_call.servicios import GestorLlamadas, LlamadaNoEncontrada
 from building_call.settings import settings
 from building_call.stt import ReconocedorNoDisponible, ReconocedorVoz, ReconocedorWhisper
+from building_call.stt_streaming import SesionStreamingAssemblyAI, validar_endpoint_eu
+
+logger = logging.getLogger(__name__)
+
+# Fábrica de sesiones de streaming: (sample_rate) -> sesión con abrir/enviar_audio/eventos/cerrar
+FabricaStreaming = Callable[[int], Any]
 
 
 class NuevaLlamada(BaseModel):
@@ -64,7 +77,50 @@ def _vista(estado: EstadoLlamada) -> dict[str, Any]:
     }
 
 
-def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = None) -> FastAPI:
+def crear_llm() -> Any:
+    """Selecciona el proveedor LLM según BC_LLM."""
+    local = ModeloOllama(
+        settings.ollama_url,
+        settings.ollama_modelo,
+        settings.ollama_timeout_s,
+        num_predict=settings.ollama_num_predict,
+        num_ctx=settings.ollama_num_ctx,
+    )
+    if settings.llm == "ollama":
+        return local
+    nube = ModeloWorkersAI(
+        settings.cloudflare_account_id,
+        settings.cloudflare_api_token,
+        settings.cloudflare_modelo,
+        timeout_s=settings.cloudflare_timeout_s,
+    )
+    if settings.llm == "workers_ai":
+        return nube
+    if settings.llm == "carrera":
+        return ModeloCarrera(nube, local)
+    raise ValueError(f"BC_LLM desconocido: {settings.llm}")
+
+
+def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
+    if not settings.assemblyai_api_key:
+        return None
+    validar_endpoint_eu(settings.assemblyai_api_base)
+    host = settings.assemblyai_streaming_host
+
+    def crear(sample_rate: int) -> SesionStreamingAssemblyAI:
+        return SesionStreamingAssemblyAI(settings.assemblyai_api_key, sample_rate, host)
+
+    return crear
+
+
+AUTO: Any = object()  # centinela: "según settings"
+
+
+def crear_app(
+    deps: Dependencias | None = None,
+    stt: ReconocedorVoz | None = None,
+    fabrica_streaming: FabricaStreaming | None | Any = AUTO,
+) -> FastAPI:
     if deps is None:
         if settings.repositorio == "postgres":
             from building_call.repos.postgres import RepositorioPostgres
@@ -72,14 +128,7 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
             repo: Any = RepositorioPostgres(settings.database_url)
         else:
             repo = RepositorioMemoria()
-        llm = ModeloOllama(
-            settings.ollama_url,
-            settings.ollama_modelo,
-            settings.ollama_timeout_s,
-            num_predict=settings.ollama_num_predict,
-            num_ctx=settings.ollama_num_ctx,
-        )
-        deps = Dependencias(repo=repo, llm=llm)
+        deps = Dependencias(repo=repo, llm=crear_llm())
     if stt is None:
         stt = (
             ReconocedorWhisper(
@@ -88,6 +137,8 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
             if settings.stt == "whisper"
             else ReconocedorNoDisponible()
         )
+    if fabrica_streaming is AUTO:
+        fabrica_streaming = _fabrica_streaming_por_defecto()
     reconocedor: ReconocedorVoz = stt
     gestor = GestorLlamadas(deps)
 
@@ -100,7 +151,7 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
             await reconocedor.calentar()
         yield
 
-    app = FastAPI(title="Building Call Assistant", version="0.2.0", lifespan=ciclo_vida)
+    app = FastAPI(title="Building Call Assistant", version="0.3.0", lifespan=ciclo_vida)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -118,6 +169,7 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
             "modelo_disponible": llm_ok,
             "stt_servidor": reconocedor.nombre,
             "stt_disponible": reconocedor.disponible(),
+            "stt_streaming": "assemblyai-eu" if fabrica_streaming else None,
             "grafos": sorted(REGISTRO),
             "umbrales_ms": {nombre: limite for limite, nombre in UMBRALES_MS},
         }
@@ -147,7 +199,7 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
         fichero: UploadFile = File(...),  # noqa: B008
         mime: str | None = Form(default=None),  # noqa: B008
     ) -> dict[str, Any]:
-        """Turno por voz: el servidor transcribe (faster-whisper) y ejecuta el grafo."""
+        """Turno por voz (lotes): el servidor transcribe (faster-whisper) y ejecuta el grafo."""
         if not reconocedor.disponible():
             raise HTTPException(
                 503, "STT en servidor no disponible; use el reconocimiento del navegador"
@@ -183,6 +235,111 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
             "stt": transcripcion.detalle,
         }
 
+    @app.websocket("/api/llamadas/{llamada_id}/voz")
+    async def voz(ws: WebSocket, llamada_id: str) -> None:
+        """Turnos por voz en streaming.
+
+        Cliente -> servidor: binario = PCM16 mono (sample_rate en query, 16000 por defecto);
+        texto JSON: {"type":"fin_turno"} fuerza el cierre del turno, {"type":"pausa"|"reanudar"}
+        silencia la entrada mientras habla el asistente (se sigue enviando silencio al proveedor).
+        Servidor -> cliente: {"type":"listo"}, {"type":"parcial","texto"}, {"type":"final","texto",
+        "eou_at"}, {"type":"respuesta", ...vista, "tiempos"}, {"type":"error","mensaje"}.
+        """
+        await ws.accept()
+        if fabrica_streaming is None:
+            await ws.send_json({"type": "error", "mensaje": "STT en streaming no configurado"})
+            await ws.close(code=1011)
+            return
+        try:
+            gestor.obtener(llamada_id)
+        except LlamadaNoEncontrada:
+            await ws.send_json({"type": "error", "mensaje": "Llamada no encontrada"})
+            await ws.close(code=1008)
+            return
+        sample_rate = int(ws.query_params.get("sample_rate", "16000"))
+        sesion = fabrica_streaming(sample_rate)
+        try:
+            await sesion.abrir()
+        except Exception as e:  # noqa: BLE001
+            await ws.send_json({"type": "error", "mensaje": f"No se pudo abrir el STT: {e}"})
+            await ws.close(code=1011)
+            return
+        await ws.send_json({"type": "listo", "conexion_ms": getattr(sesion, "conexion_ms", None)})
+        pausado = False
+        silencio = b"\x00" * (int(sample_rate * 0.1) * 2)
+
+        async def bombear_eventos() -> None:
+            async for ev in sesion.eventos():
+                if ev.tipo == "parcial":
+                    await ws.send_json({"type": "parcial", "texto": ev.texto})
+                elif ev.tipo == "error":
+                    await ws.send_json({"type": "error", "mensaje": ev.texto})
+                elif ev.tipo == "final":
+                    if not ev.texto:
+                        continue
+                    t_final = perf_counter()
+                    await ws.send_json({"type": "final", "texto": ev.texto})
+                    try:
+                        estado = await gestor.mensaje(llamada_id, ev.texto)
+                    except LlamadaNoEncontrada:
+                        await ws.send_json({"type": "error", "mensaje": "Llamada no encontrada"})
+                        return
+                    vista = _vista(estado)
+                    vista["tiempos"] = {
+                        **vista["tiempos"],
+                        "stt_eou_a_respuesta_ms": int((perf_counter() - t_final) * 1000),
+                    }
+                    await ws.send_json({"type": "respuesta", **vista})
+                    if estado.get("finalizada"):
+                        return
+
+        async def recibir_audio() -> None:
+            nonlocal pausado
+            while True:
+                paquete = await ws.receive()
+                if paquete.get("type") == "websocket.disconnect":
+                    return
+                if paquete.get("bytes") is not None:
+                    await sesion.enviar_audio(silencio if pausado else paquete["bytes"])
+                elif paquete.get("text"):
+                    orden = json.loads(paquete["text"])
+                    if orden.get("type") == "fin_turno":
+                        await sesion.forzar_fin_turno()
+                    elif orden.get("type") == "pausa":
+                        pausado = True
+                    elif orden.get("type") == "reanudar":
+                        pausado = False
+
+        tareas = {
+            asyncio.create_task(bombear_eventos(), name="eventos"),
+            asyncio.create_task(recibir_audio(), name="audio"),
+        }
+        try:
+            hechas, pendientes = await asyncio.wait(tareas, return_when=asyncio.FIRST_COMPLETED)
+            for t in hechas:
+                logger.warning(
+                    "WebSocket de voz: tarea %s terminó (cierre STT=%s)",
+                    t.get_name(),
+                    getattr(sesion, "cierre", None),
+                )
+                exc = t.exception()
+                if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                    logger.exception(
+                        "Fallo en la tarea %s del WebSocket de voz", t.get_name(), exc_info=exc
+                    )
+                    try:
+                        await ws.send_json({"type": "error", "mensaje": f"{t.get_name()}: {exc}"})
+                    except Exception:  # noqa: BLE001
+                        pass
+            for t in pendientes:
+                t.cancel()
+        finally:
+            await sesion.cerrar()
+            try:
+                await ws.close()
+            except Exception:  # noqa: BLE001
+                pass
+
     @app.post("/api/llamadas/{llamada_id}/metricas")
     async def metricas_cliente(llamada_id: str, cuerpo: MetricasCliente) -> dict[str, Any]:
         t = gestor.metricas.completar_cliente(llamada_id, cuerpo.turno, cuerpo.model_dump())
@@ -206,10 +363,13 @@ def crear_app(deps: Dependencias | None = None, stt: ReconocedorVoz | None = Non
 
     @app.get("/api/metricas")
     async def metricas() -> dict[str, Any]:
-        return {
+        salida: dict[str, Any] = {
             "agregados": gestor.metricas.agregados(),
             "ultimos_turnos": [t.como_dict() for t in gestor.metricas.turnos()[-50:]],
         }
+        if isinstance(deps.llm, ModeloCarrera):
+            salida["carrera_ganadores"] = deps.llm.ganadores
+        return salida
 
     @app.get("/api/incidencias")
     async def incidencias() -> list[dict[str, Any]]:

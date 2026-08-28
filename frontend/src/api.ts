@@ -43,6 +43,7 @@ export interface TiemposServidor {
   clasificacion_ms?: number
   llm_llamadas?: number
   origen_interpretacion?: string
+  stt_eou_a_respuesta_ms?: number
 }
 
 export interface VistaLlamada {
@@ -72,6 +73,7 @@ export interface Salud {
   modelo_disponible: boolean
   stt_servidor: string
   stt_disponible: boolean
+  stt_streaming: string | null
   grafos: string[]
   umbrales_ms: Record<string, number>
 }
