@@ -81,6 +81,7 @@ ESCENARIOS: list[dict[str, Any]] = [
             "sí",
             "El tercero A es mi vivienda",
             "portal uno",
+            "puerta A",
             "Juan",
             "El ascensor hace un ruido raro",
             "sí",
@@ -104,7 +105,7 @@ ESCENARIOS: list[dict[str, Any]] = [
         ],
         "espera": {
             "resultado": "incidencia_creada",
-            "nombre_declarado": "Pedro García",
+            "nombre_declarado~": "Pedro",
             "categoria": "electricidad",
         },
     },

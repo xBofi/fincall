@@ -4,18 +4,18 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      3022,
-      3484,
-      1088,
-      3238,
-      5582,
-      3334
+      1349,
+      1469,
+      947,
+      917,
+      3483,
+      1390
     ],
     "transcripciones": [
       "Calle Mayor 12.",
       "S.",
       "Tercero B.",
-      "Marta LP.",
+      "Marta L. Pérez.",
       "Hay una fuga de agua en el vaho.",
       "S."
     ]
@@ -25,35 +25,35 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      3309,
-      1041,
-      1068
+      3234,
+      2366,
+      1020
     ],
     "transcripciones": [
       "Hola, buenas, mire, llamo desde la Avenida de la Alameda 5, Portal 2, tercero A. Soy Carmen y tengo una fuga de agua en el baño que está inundando el suelo.",
-      "Sí, eso es.",
-      "Sí, correcto."
+      "Ese, eso es.",
+      "Ese, correcto."
     ]
   },
   {
     "nombre": "muletillas_y_saludo",
     "ok": false,
-    "motivo": "resultado: esperado 'incidencia_creada', obtenido 'vivienda_no_identificada'; vivienda_id: esperado 'finca-mayor-12-u-1A', obtenido None",
+    "motivo": "vivienda_id: esperado 'finca-mayor-12-u-1A', obtenido 'finca-mayor-12-u-1B'",
     "latencias_ms": [
-      1160,
-      3332,
-      3435,
-      105,
-      6236,
-      3045,
-      1096
+      943,
+      1594,
+      1535,
+      108,
+      3264,
+      3023,
+      1006
     ],
     "transcripciones": [
       "Hola, buenas.",
       "Sí, vivo en la calle Mayor número 12.",
-      "Sí.",
-      "Ah, vale, espéreme.",
-      "Pues ese, piso 1, puerta A, con Andreu Bofipla.",
+      "S.",
+      "Espéreme.",
+      "Pues ese, piso 1, puerta, con Andreu Boffipla.",
       "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
       "Ese es correcto."
     ]
@@ -61,21 +61,23 @@
   {
     "nombre": "portal_ambiguo",
     "ok": false,
-    "motivo": "resultado: esperado 'incidencia_creada', obtenido 'vivienda_no_identificada'; vivienda_id: esperado 'finca-alameda-5-1-3A', obtenido None; categoria: esperado 'ascensor', obtenido None",
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None; vivienda_id: esperado 'finca-alameda-5-1-3A', obtenido None; categoria: esperado 'ascensor', obtenido None",
     "latencias_ms": [
-      3712,
-      3659,
-      2614,
-      4986,
-      2529,
-      3134,
-      3677
+      1324,
+      1508,
+      2143,
+      2457,
+      2134,
+      2004,
+      3204,
+      1484
     ],
     "transcripciones": [
       "Avenida de la Alameda 5.",
       "S.",
       "El tercero es mi vivienda.",
       "Portal 1.",
+      "Puerta.",
       "Juan.",
       "El ascensor hace un ruido raro.",
       "S."
@@ -83,16 +85,16 @@
   },
   {
     "nombre": "correccion_nombre",
-    "ok": false,
-    "motivo": "nombre_declarado: esperado 'Pedro García', obtenido 'Pedro Garca'",
+    "ok": true,
+    "motivo": "",
     "latencias_ms": [
-      3896,
-      3759,
-      2419,
-      954,
-      2830,
-      5831,
-      3698
+      1464,
+      1489,
+      2133,
+      834,
+      2667,
+      3552,
+      1378
     ],
     "transcripciones": [
       "Calle Mayor 12.",
@@ -109,10 +111,10 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      2732,
-      3743,
-      3798,
-      1934
+      3091,
+      1317,
+      1386,
+      1270
     ],
     "transcripciones": [
       "Esta llamada se está grabando.",
@@ -126,13 +128,13 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      3914,
-      3918,
-      3669,
-      1020,
-      943,
-      3207,
-      3735
+      1485,
+      1495,
+      1281,
+      914,
+      732,
+      3031,
+      1394
     ],
     "transcripciones": [
       "Calle Mayor 12.",

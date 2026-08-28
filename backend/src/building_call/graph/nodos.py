@@ -172,8 +172,8 @@ def _normalizar_portal(valor: str | None) -> str | None:
         return None
     v = _numeros_a_cifras(_normalizar_basico(str(valor)))
     v = re.sub(r"\bportal\b", "", v).strip()
-    # Un portal es un número o una letra/sigla corta; "el", "la", "sin"... son ruido del modelo
-    if not v or not re.fullmatch(r"[a-z0-9]{1,3}", v) or v in {"el", "la", "sin", "no", "un"}:
+    # Un portal es un número (1-2 cifras) o una sola letra; "el", "ese", "sin"... son ruido
+    if not v or not re.fullmatch(r"\d{1,2}|[a-z]", v):
         return None
     return v
 
@@ -208,12 +208,14 @@ def _extraer_vivienda_regex(texto: str) -> tuple[str | None, str | None, str | N
     resto = re.sub(r"\bportal\s+\w+", " ", t)
     m_piso = re.search(rf"\b(\d{{1,2}}|{_ORDINALES}|bajo|atico)\b\s*(?:piso|planta)?", resto)
     piso = _normalizar_piso(m_piso.group(1)) if m_piso else None
-    m_puerta = re.search(
-        r"(?:\bpuerta\s+|\bletra\s+)?\b([a-h]|\d{1,2}|izquierda|derecha)\b\s*$", resto.strip()
-    )
     puerta = None
-    if m_puerta and (m_piso is None or m_puerta.start() > m_piso.start()):
-        puerta = _normalizar_puerta(m_puerta.group(1))
+    m_explicita = re.search(r"\b(?:puerta|letra)\s+([a-z]|\d{1,2}|izquierda|derecha)\b", resto)
+    if m_explicita:
+        puerta = _normalizar_puerta(m_explicita.group(1))
+    else:
+        m_puerta = re.search(r"\b([a-z]|\d{1,2}|izquierda|derecha)\b\s*$", resto.strip())
+        if m_puerta and (m_piso is None or m_puerta.start() > m_piso.start()):
+            puerta = _normalizar_puerta(m_puerta.group(1))
     return portal, piso, puerta
 
 
@@ -263,6 +265,28 @@ def _es_correccion_real(nuevo: str, anterior: str, entrada: str) -> bool:
     if not a:
         return False
     return len(a - b) / len(a) >= 0.4  # al menos un 40% de palabras nuevas
+
+
+_RELLENO = (
+    "espere",
+    "esperame",
+    "espereme",
+    "un momento",
+    "un segundo",
+    "ahora mismo",
+    "a ver",
+    "dejeme",
+    "voy a mirar",
+    "no cuelgue",
+)
+
+
+def _es_relleno(texto: str) -> bool:
+    """'Ah, vale, espéreme': el vecino pide tiempo. Ni dato ni fallo: se espera."""
+    t = _normalizar_basico(texto)
+    if any(ch.isdigit() for ch in t) or len(t.split()) > 6:
+        return False
+    return any(r in t for r in _RELLENO)
 
 
 _SALUDOS = (
@@ -583,6 +607,18 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         Devuelve (interp, historial, extra_estado, salida_global_o_None)."""
         entrada = estado["entrada_usuario"] or ""
         historial = _registrar_entrada(estado)
+        if _es_relleno(entrada):
+            salida_relleno = _preguntar(
+                estado,
+                nodo,
+                "Claro, sin prisa. Dígame cuando quiera.",
+                historial=historial,
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={"intencion": "relleno", "origen": "determinista", "llm_ms": 0},
+                traza=_con_traza(estado, nodo, "relleno", entrada),
+            )
+            salida_relleno["ultima_pregunta"] = estado.get("ultima_pregunta")
+            return Interpretacion(origen="determinista"), historial, {}, salida_relleno
         interp, tiempos = await _interpretar(estado, entrada, nodo, si_no=si_no)
         extra = {"tiempos_turno": tiempos, "interpretacion": _vista_interp(interp)}
         salida = _intencion_global(estado, nodo, interp, historial, extra)
@@ -672,6 +708,30 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     for k in ("portal", "piso", "puerta"):
                         pend.pop(k, None)
                     return await _reintento_vivienda(estado, pend, traza)
+            elif piso or puerta or pend.get("portal"):
+                # Dato parcial ("el tercero", "portal 1"): se conserva y se pide solo lo que falta.
+                # Si el vecino repite lo mismo sin avanzar, sí consume intento (evita bucles).
+                previo = estado.get("pendientes", {})
+                sin_avance = (
+                    all(previo.get(k) == pend.get(k) for k in ("portal", "piso", "puerta"))
+                    and estado.get("entrada_usuario") is not None
+                )
+                if sin_avance:
+                    return await _reintento_vivienda(estado, pend, traza)
+                falta = "la puerta" if piso else "el piso" if puerta else "el piso y la puerta"
+                tiene = ", ".join(
+                    f"{k} {v}"
+                    for k, v in (("portal", pend.get("portal")), ("piso", piso), ("puerta", puerta))
+                    if v
+                )
+                return _preguntar(
+                    estado,
+                    "identificar_vivienda",
+                    f"Tomo nota: {tiene}. ¿Y {falta}?",
+                    pendientes=pend,
+                    traza=[*traza, Traza(nodo=nodo, accion="vivienda_parcial", detalle=tiene)],
+                    **cambios,
+                )
             else:
                 return _avanzar(
                     estado, "identificar_vivienda", pendientes=pend, traza=traza, **cambios
@@ -968,6 +1028,22 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 nodo,
                 "Gracias. ¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta.",
             )
+        # Un "sí"/"no" suelto con datos parciales pendientes: no hay nada que extraer, se repite
+        # la pregunta pendiente (el STT transcribe "sí" como "S.")
+        pend_previo = estado.get("pendientes", {})
+        if (
+            _respuesta_si_no(entrada) is not None
+            and len(entrada.split()) <= 3
+            and (pend_previo.get("piso") or pend_previo.get("puerta") or pend_previo.get("portal"))
+        ):
+            return _preguntar(
+                estado,
+                nodo,
+                estado.get("ultima_pregunta") or "¿Cuál es su piso y su puerta?",
+                historial=_registrar_entrada(estado),
+                tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
+                interpretacion={"confirma": True, "origen": "determinista", "llm_ms": 0},
+            )
         # Formato corto y reconocible: sin LLM (bóveda: regex solo para formatos)
         portal, piso, puerta = _extraer_vivienda_regex(entrada)
         if piso and puerta and len(entrada.split()) <= 5:
@@ -1014,13 +1090,27 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     pend["portal"] = portal
                 else:
                     pend.pop("portal", None)
+            elif not del_llm:
+                # Lo del modelo no existe en la finca; nos quedamos con lo que el regex sí vio
+                for k, v in (("portal", portal), ("piso", piso), ("puerta", puerta)):
+                    if v:
+                        pend[k] = v
+                    else:
+                        pend.pop(k, None)
+        # El regex completa los campos de formato que el modelo no dio ("puerta A" tras "el tercero")
+        for k, v in (("portal", portal), ("piso", piso), ("puerta", puerta)):
+            if v and not pend.get(k):
+                pend[k] = v
         if not (pend.get("piso") and pend.get("puerta")):
-            return await _reintento_vivienda(
-                {**estado, "historial": historial},
-                {k: v for k, v in pend.items() if k not in ("portal", "piso", "puerta")},
-                estado.get("traza", []),
-                extra,
-            )
+            # Sin piso ni puerta ni portal: no ha dado ningún dato de vivienda -> reintento.
+            # Con algún dato parcial, `siguiente_paso` lo conserva y pide solo lo que falta.
+            if not (pend.get("piso") or pend.get("puerta") or pend.get("portal")):
+                return await _reintento_vivienda(
+                    {**estado, "historial": historial},
+                    pend,
+                    estado.get("traza", []),
+                    extra,
+                )
         return _avanzar(estado, "siguiente_paso", historial=historial, pendientes=pend, **extra)
 
     async def vivienda_no_identificada(estado: EstadoLlamada) -> dict[str, Any]:

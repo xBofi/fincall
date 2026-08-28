@@ -68,7 +68,9 @@ def test_turno_por_streaming(cliente_ws: TestClient) -> None:
         ws.send_bytes(b"\x00" * 3200)
         ws.send_json({"type": "fin_turno"})
         assert ws.receive_json() == {"type": "parcial", "texto": "calle ma"}
-        assert ws.receive_json() == {"type": "final", "texto": "Calle Mayor 12"}
+        final = ws.receive_json()
+        assert final["type"] == "final" and final["texto"] == "Calle Mayor 12"
+        assert "eou_ms" in final
         respuesta = ws.receive_json()
         assert respuesta["type"] == "respuesta"
         assert respuesta["nodo_actual"] == "identificar_finca"

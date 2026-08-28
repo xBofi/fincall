@@ -53,9 +53,9 @@ class SesionStreamingAssemblyAI:
         sample_rate: int = 16000,
         host: str = HOST_STREAMING_EU,
         min_chunk_ms: int = 100,
-        eot_confianza: float = 0.8,
-        eot_silencio_ms: int = 450,
-        max_silencio_ms: int = 2400,
+        eot_confianza: float = 0.7,
+        eot_silencio_ms: int = 300,
+        max_silencio_ms: int = 800,
     ) -> None:
         """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
         terminado supera `eot_confianza` y hay `eot_silencio_ms` de silencio; si no está

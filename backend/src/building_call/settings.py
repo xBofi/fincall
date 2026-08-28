@@ -45,10 +45,11 @@ class Settings(BaseSettings):
     assemblyai_api_key: str = ""
     assemblyai_api_base: str = "https://api.eu.assemblyai.com"
     assemblyai_streaming_host: str = "streaming.eu.assemblyai.com"
-    # Fin de turno (ver SesionStreamingAssemblyAI). Más silencio = menos cortes, más latencia.
-    assemblyai_eot_confianza: float = 0.8
-    assemblyai_eot_silencio_ms: int = 450
-    assemblyai_max_silencio_ms: int = 2400
+    # Fin de turno (ver SesionStreamingAssemblyAI). Medido 2026-08-28: con confianza 0.8 y máximo
+    # 2400 ms, las frases cortas ("Calle Mayor 12") esperaban el máximo: 3,7 s de latencia.
+    assemblyai_eot_confianza: float = 0.7
+    assemblyai_eot_silencio_ms: int = 300
+    assemblyai_max_silencio_ms: int = 800
 
     cors_origins: list[str] = ["http://localhost:5173"]
 

@@ -255,3 +255,28 @@ async def test_si_transcrito_como_letra_confirma(gestor: GestorLlamadas, llm: An
     estado = await _conversar(gestor, ["Calle Mayor 12", "S."])
     assert estado["finca_id"] == "finca-mayor-12"
     assert llm.llamadas == []
+
+
+async def test_muletilla_de_espera_no_gasta_intento(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "Ah, vale, espéreme."])
+    assert estado["nodo_actual"] == "identificar_vivienda"
+    assert estado["intentos_vivienda"] == 0
+    assert "sin prisa" in estado["mensajes_bot"][-1]
+    estado = await gestor.mensaje(estado["llamada_id"], "piso 1, puerta A")
+    assert estado["vivienda_id"] == "finca-mayor-12-u-1A"
+
+
+async def test_datos_parciales_de_vivienda_se_acumulan(gestor: GestorLlamadas, llm: Any) -> None:
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {
+        "piso": "3"
+    }  # el STT perdió la puerta  # type: ignore[method-assign]
+    estado = await _conversar(gestor, ["Alameda 5", "sí", "El tercero es mi vivienda"])
+    assert estado["intentos_vivienda"] == 0
+    assert "¿Y la puerta?" in estado["mensajes_bot"][-1]
+    llm._interpretar = lambda usuario, esquema: {"portal": "1"}  # type: ignore[method-assign]
+    estado = await gestor.mensaje(estado["llamada_id"], "Portal 1")
+    assert "¿Y la puerta?" in estado["mensajes_bot"][-1]
+    llm._interpretar = original  # type: ignore[method-assign]
+    estado = await gestor.mensaje(estado["llamada_id"], "puerta A")
+    assert estado["vivienda_id"] == "finca-alameda-5-1-3A"

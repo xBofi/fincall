@@ -29,6 +29,17 @@ from building_call.stt_streaming import SesionStreamingAssemblyAI, validar_endpo
 
 logger = logging.getLogger(__name__)
 
+
+def _hay_voz(pcm: bytes, umbral: int = 300) -> bool:
+    """RMS de PCM16 por encima del umbral: sirve para medir el fin de voz en el servidor."""
+    import audioop
+
+    try:
+        return audioop.rms(pcm, 2) > umbral
+    except audioop.error:
+        return False
+
+
 # Fábrica de sesiones de streaming: (sample_rate) -> sesión con abrir/enviar_audio/eventos/cerrar
 FabricaStreaming = Callable[[int], Any]
 
@@ -286,6 +297,7 @@ def crear_app(
         await ws.send_json({"type": "listo", "conexion_ms": getattr(sesion, "conexion_ms", None)})
         pausado = False
         silencio = b"\x00" * (int(sample_rate * 0.1) * 2)
+        ultima_voz_at: float | None = None  # último audio con energía recibido del navegador
 
         async def bombear_eventos() -> None:
             async for ev in sesion.eventos():
@@ -297,7 +309,8 @@ def crear_app(
                     if not ev.texto:
                         continue
                     t_final = perf_counter()
-                    await ws.send_json({"type": "final", "texto": ev.texto})
+                    eou_ms = int((t_final - ultima_voz_at) * 1000) if ultima_voz_at else None
+                    await ws.send_json({"type": "final", "texto": ev.texto, "eou_ms": eou_ms})
                     try:
                         estado = await gestor.mensaje(llamada_id, ev.texto)
                     except LlamadaNoEncontrada:
@@ -306,6 +319,7 @@ def crear_app(
                     vista = _vista(estado)
                     vista["tiempos"] = {
                         **vista["tiempos"],
+                        "stt_eou_ms": eou_ms,
                         "stt_eou_a_respuesta_ms": int((perf_counter() - t_final) * 1000),
                     }
                     await ws.send_json({"type": "respuesta", **vista})
@@ -313,12 +327,14 @@ def crear_app(
                         return
 
         async def recibir_audio() -> None:
-            nonlocal pausado
+            nonlocal pausado, ultima_voz_at
             while True:
                 paquete = await ws.receive()
                 if paquete.get("type") == "websocket.disconnect":
                     return
                 if paquete.get("bytes") is not None:
+                    if not pausado and _hay_voz(paquete["bytes"]):
+                        ultima_voz_at = perf_counter()
                     await sesion.enviar_audio(silencio if pausado else paquete["bytes"])
                 elif paquete.get("text"):
                     orden = json.loads(paquete["text"])
