@@ -13,7 +13,10 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
 
+from building_call.acceso import Acceso
+from building_call.audio_store import AlmacenAudio
 from building_call.graph.estado import EstadoLlamada
 from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
 from building_call.graph.registro import REGISTRO
@@ -22,6 +25,7 @@ from building_call.llm.interpretacion import interpretar
 from building_call.llm.ollama import ModeloOllama
 from building_call.llm.workers_ai import ModeloWorkersAI
 from building_call.metricas import UMBRALES_MS
+from building_call.operaciones_api import crear_router_operaciones
 from building_call.repos.memoria import RepositorioMemoria
 from building_call.servicios import GestorLlamadas, LlamadaNoEncontrada
 from building_call.settings import settings
@@ -219,15 +223,37 @@ def crear_app(
             await deps.llm.calentar()
         if hasattr(reconocedor, "calentar"):
             await reconocedor.calentar()
+        tarea_purga = asyncio.create_task(purga_periodica())
         yield
+        tarea_purga.cancel()
 
-    app = FastAPI(title="Building Call Assistant", version="0.3.0", lifespan=ciclo_vida)
+    app = FastAPI(title="Building Call Assistant", version="0.4.0", lifespan=ciclo_vida)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Consola operativa: acceso (Google OIDC + cookie de sesión), APIs protegidas y audio privado
+    secreto = settings.sesion_secreto or ("dev-" + type(deps.repo).__name__)
+    app.add_middleware(SessionMiddleware, secret_key=secreto, same_site="lax", https_only=False)
+    acceso = Acceso(deps.repo, settings)  # type: ignore[arg-type]
+    almacen_audio = AlmacenAudio(
+        settings.audio_dir, secreto, settings.audio_retencion_dias, settings.audio_url_segundos
+    )
+    app.include_router(acceso.router())
+    app.include_router(
+        crear_router_operaciones(deps.repo, acceso, gestor.metricas, almacen_audio)  # type: ignore[arg-type]
+    )
+
+    async def purga_periodica() -> None:
+        while True:
+            try:
+                await almacen_audio.purgar_vencidas(deps.repo)  # type: ignore[arg-type]
+            except Exception:  # noqa: BLE001
+                logger.exception("Fallo purgando audio vencido")
+            await asyncio.sleep(3600)
 
     @app.get("/api/salud")
     async def salud() -> dict[str, Any]:
@@ -240,6 +266,7 @@ def crear_app(
             "stt_servidor": reconocedor.nombre,
             "stt_disponible": reconocedor.disponible(),
             "stt_streaming": "assemblyai-eu" if fabrica_streaming else None,
+            "acceso": acceso.modo,
             "grafos": sorted(REGISTRO),
             "umbrales_ms": {nombre: limite for limite, nombre in UMBRALES_MS},
         }
@@ -338,6 +365,7 @@ def crear_app(
         pausado = False
         silencio = b"\x00" * (int(sample_rate * 0.1) * 2)
         ultima_voz_at: float | None = None  # último audio con energía recibido del navegador
+        grabacion = bytearray()  # canal del vecino, se guarda al cerrar (retención 14 días)
 
         def especular(parcial: str) -> None:
             """Lanza la interpretación LLM sobre el transcript parcial, antes del fin de turno.
@@ -403,6 +431,8 @@ def crear_app(
                 if paquete.get("bytes") is not None:
                     if not pausado and _hay_voz(paquete["bytes"]):
                         ultima_voz_at = perf_counter()
+                    if not pausado:
+                        grabacion.extend(paquete["bytes"])
                     await sesion.enviar_audio(silencio if pausado else paquete["bytes"])
                 elif paquete.get("text"):
                     orden = json.loads(paquete["text"])
@@ -446,6 +476,16 @@ def crear_app(
                 t.cancel()
         finally:
             await sesion.cerrar()
+            try:
+                await almacen_audio.guardar_pcm(
+                    deps.repo,
+                    llamada_id,
+                    "cliente",
+                    bytes(grabacion),
+                    sample_rate,  # type: ignore[arg-type]
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("No se pudo guardar el audio de la llamada %s", llamada_id)
             try:
                 await ws.close()
             except Exception:  # noqa: BLE001

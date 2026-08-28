@@ -138,11 +138,15 @@ class PistaAudioSQL(Base):
 class AuditoriaEventoSQL(Base):
     __tablename__ = "auditoria_eventos"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    usuario_id: Mapped[str | None] = mapped_column(ForeignKey("usuarios.id"), nullable=True, index=True)
+    usuario_id: Mapped[str | None] = mapped_column(
+        ForeignKey("usuarios.id"), nullable=True, index=True
+    )
     accion: Mapped[str] = mapped_column(String(128))
     recurso: Mapped[str] = mapped_column(String(128))
     detalle: Mapped[dict[str, Any]] = mapped_column(JsonDoc, default=dict)
-    ocurrido_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ocurrido_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class IncidenciaSQL(Base):

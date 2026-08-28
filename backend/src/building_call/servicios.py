@@ -162,7 +162,42 @@ class GestorLlamadas:
         nuevo["tiempos_turno"] = tiempos
         self._estados[nuevo["llamada_id"]] = nuevo
         await self._guardar_operacion(nuevo)
+        await self._guardar_trazabilidad(estado, nuevo, entrada, tiempos)
         return nuevo
+
+    async def _guardar_trazabilidad(
+        self,
+        anterior: EstadoLlamada,
+        nuevo: EstadoLlamada,
+        entrada: str | None,
+        tiempos: dict[str, Any],
+    ) -> None:
+        """Turno (qué dijo cada parte, cómo se interpretó, cuánto tardó) y decisiones del grafo
+        (las entradas de traza nuevas en este turno), para el dossier de la consola operativa."""
+        repo: Any = self.deps.repo
+        if not hasattr(repo, "guardar_turno"):
+            return
+        turno = nuevo.get("turno", 0)
+        await repo.guardar_turno(
+            nuevo["llamada_id"],
+            turno,
+            {
+                "vecino": entrada,
+                "asistente": nuevo.get("mensajes_bot", []),
+                "nodo_inicial": anterior.get("nodo_actual"),
+                "nodo_final": nuevo.get("nodo_actual"),
+                "interpretacion": nuevo.get("interpretacion"),
+                "tiempos": tiempos,
+            },
+        )
+        previas = len(anterior.get("traza", []))
+        for paso in nuevo.get("traza", [])[previas:]:
+            await repo.guardar_decision(
+                nuevo["llamada_id"],
+                turno,
+                paso["nodo"],
+                {"accion": paso["accion"], "detalle": paso["detalle"]},
+            )
 
     async def iniciar(self, telefono_llamante: str | None = None) -> EstadoLlamada:
         llamada_id = f"llam-{uuid4().hex[:12]}"

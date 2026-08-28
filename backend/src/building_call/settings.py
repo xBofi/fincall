@@ -52,6 +52,27 @@ class Settings(BaseSettings):
     assemblyai_max_silencio_ms: int = 800
 
     cors_origins: list[str] = ["http://localhost:5173"]
+    frontend_url: str = "http://localhost:5173"
+
+    # Acceso a la consola operativa (handoff Codex). "google": OIDC real; "desarrollo": owner
+    # local sin Google, SOLO para desarrollo. Sin secreto o sin allowlist el acceso queda
+    # deshabilitado.
+    auth_modo: str = "google"
+    auth_dev_email: str = "desarrollo@localhost"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_url: str = "http://localhost:8000/api/auth/callback"
+    acceso_owners: str = ""  # correos separados por comas
+    acceso_administradores: str = ""
+    acceso_calidad: str = ""
+    sesion_secreto: str = ""  # firma cookies de estado OAuth y URLs de audio
+    sesion_cookie: str = "bc_sesion"
+    sesion_horas: int = 12
+
+    # Audio de llamadas: directorio privado, URL firmada de corta duración, retención
+    audio_dir: str = ".audio"
+    audio_retencion_dias: int = 14
+    audio_url_segundos: int = 300
 
 
 settings = Settings()

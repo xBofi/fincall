@@ -5,6 +5,9 @@ Permite validar los agentes sin PostgreSQL. No es el modo de producción.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
 from building_call.domain.configuracion import (
     ConfiguracionEfectiva,
     ConfiguracionParcial,
@@ -19,6 +22,8 @@ from building_call.domain.entidades import (
     Llamada,
     Vivienda,
 )
+from building_call.domain.operaciones import Usuario
+from building_call.repos.operativo import SesionAcceso
 
 
 def _viviendas(
@@ -156,3 +161,104 @@ class RepositorioMemoria:
 
     async def listar_incidencias(self) -> list[Incidencia]:
         return list(self.incidencias.values())
+
+    # ------------------------------------------------------------- operativo (acceso y trazabilidad)
+
+    def _operativo(self) -> None:
+        if not hasattr(self, "usuarios"):
+            self.usuarios: dict[str, Usuario] = {}
+            self.sesiones: dict[str, SesionAcceso] = {}
+            self.turnos: dict[str, list[dict[str, Any]]] = {}
+            self.decisiones: dict[str, list[dict[str, Any]]] = {}
+            self.pistas: dict[str, dict[str, Any]] = {}
+            self.auditoria: list[dict[str, Any]] = []
+
+    async def guardar_usuario(self, usuario: Usuario) -> None:
+        self._operativo()
+        self.usuarios[usuario.id] = usuario
+
+    async def obtener_usuario(self, usuario_id: str) -> Usuario | None:
+        self._operativo()
+        return self.usuarios.get(usuario_id)
+
+    async def guardar_sesion(self, sesion: SesionAcceso) -> None:
+        self._operativo()
+        self.sesiones[sesion.token_hash] = sesion
+
+    async def obtener_sesion_por_hash(self, token_hash: str) -> SesionAcceso | None:
+        self._operativo()
+        return self.sesiones.get(token_hash)
+
+    async def revocar_sesion(self, token_hash: str, cuando: datetime) -> None:
+        self._operativo()
+        if token_hash in self.sesiones:
+            self.sesiones[token_hash].revocada_en = cuando
+
+    async def listar_llamadas(self, estado: str | None = None, limite: int = 100) -> list[Llamada]:
+        filas = [ll for ll in self.llamadas.values() if estado is None or ll.estado == estado]
+        filas.sort(key=lambda ll: ll.iniciada_en, reverse=True)
+        return filas[:limite]
+
+    async def obtener_llamada(self, llamada_id: str) -> Llamada | None:
+        return self.llamadas.get(llamada_id)
+
+    async def guardar_turno(self, llamada_id: str, turno: int, datos: dict[str, Any]) -> None:
+        self._operativo()
+        lista = self.turnos.setdefault(llamada_id, [])
+        lista[:] = [t for t in lista if t["turno"] != turno]
+        lista.append({"turno": turno, **datos})
+
+    async def listar_turnos(self, llamada_id: str) -> list[dict[str, Any]]:
+        self._operativo()
+        return sorted(self.turnos.get(llamada_id, []), key=lambda t: t["turno"])
+
+    async def guardar_decision(
+        self, llamada_id: str, turno: int, nodo: str, datos: dict[str, Any]
+    ) -> None:
+        self._operativo()
+        self.decisiones.setdefault(llamada_id, []).append({"turno": turno, "nodo": nodo, **datos})
+
+    async def listar_decisiones(self, llamada_id: str) -> list[dict[str, Any]]:
+        self._operativo()
+        return list(self.decisiones.get(llamada_id, []))
+
+    async def guardar_pista(self, pista: dict[str, Any]) -> None:
+        self._operativo()
+        self.pistas[pista["id"]] = dict(pista)
+
+    async def listar_pistas(self, llamada_id: str) -> list[dict[str, Any]]:
+        self._operativo()
+        return [p for p in self.pistas.values() if p["llamada_id"] == llamada_id]
+
+    async def obtener_pista(self, pista_id: str) -> dict[str, Any] | None:
+        self._operativo()
+        return self.pistas.get(pista_id)
+
+    async def pistas_vencidas(self, ahora: datetime) -> list[dict[str, Any]]:
+        self._operativo()
+        return [
+            p for p in self.pistas.values() if p["expira_en"] <= ahora and not p.get("eliminada_en")
+        ]
+
+    async def marcar_pista_eliminada(self, pista_id: str, cuando: datetime) -> None:
+        self._operativo()
+        if pista_id in self.pistas:
+            self.pistas[pista_id]["eliminada_en"] = cuando
+
+    async def registrar_auditoria(
+        self, usuario_id: str | None, accion: str, recurso: str, detalle: dict[str, Any]
+    ) -> None:
+        self._operativo()
+        self.auditoria.append(
+            {
+                "usuario_id": usuario_id,
+                "accion": accion,
+                "recurso": recurso,
+                "detalle": detalle,
+                "ocurrido_en": datetime.now(UTC).isoformat(),
+            }
+        )
+
+    async def listar_auditoria(self, limite: int = 200) -> list[dict[str, Any]]:
+        self._operativo()
+        return list(reversed(self.auditoria))[:limite]
