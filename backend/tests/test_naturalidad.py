@@ -280,3 +280,23 @@ async def test_datos_parciales_de_vivienda_se_acumulan(gestor: GestorLlamadas, l
     llm._interpretar = original  # type: ignore[method-assign]
     estado = await gestor.mensaje(estado["llamada_id"], "puerta A")
     assert estado["vivienda_id"] == "finca-alameda-5-1-3A"
+
+
+async def test_afirmacion_con_ruido_del_stt(gestor: GestorLlamadas, llm: Any) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "Ese, eso es."])
+    assert estado["finca_id"] == "finca-mayor-12"
+    assert llm.llamadas == []
+
+
+def test_marcadores_vacios_del_modelo_no_son_datos() -> None:
+    from building_call.llm.interpretacion import normalizar_interpretacion
+
+    i = normalizar_interpretacion({"nombre": "No especificado", "piso": "3", "puerta": "null"})
+    assert i.nombre is None and i.puerta is None and i.piso == "3"
+
+
+async def test_faq_sin_signos_de_interrogacion(gestor: GestorLlamadas, llm: Any) -> None:
+    estado = await _conversar(gestor, ["Esta llamada se está grabando."])
+    assert "se registra" in estado["mensajes_bot"][-1]
+    assert estado["intentos_finca"] == 0
+    assert llm.llamadas == []

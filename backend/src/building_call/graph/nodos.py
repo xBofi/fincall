@@ -151,9 +151,13 @@ def _respuesta_si_no(texto: str) -> bool | None:
     palabras = set(t.split())
     si = {_normalizar_basico(s) for s in _SI}
     no = {_normalizar_basico(s) for s in _NO}
-    if (palabras & si or t in si) and not (palabras & no):
+    # Frases de varias palabras ("eso es", "así es") se buscan como subcadena; el STT puede
+    # anteponer ruido ("Ese, eso es.")
+    hay_si = bool(palabras & si) or any(" " in s and s in t for s in si)
+    hay_no = bool(palabras & no) or any(" " in s and s in t for s in no)
+    if hay_si and not hay_no:
         return True
-    if palabras & no or t.startswith("no"):
+    if hay_no or t.startswith("no"):
         return False
     return None
 
@@ -482,7 +486,7 @@ _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
     (("nombre", "para que"), "Solo necesito su nombre para saber quién comunica la incidencia. "),
     (
-        ("quien", "maquina", "robot", "persona"),
+        ("quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"),
         "Soy el asistente automático del administrador de su comunidad. ",
     ),
     (("coste", "cuesta", "pagar", "precio"), "Esta llamada no tiene coste adicional para usted. "),
@@ -499,11 +503,9 @@ def _responder_pregunta(texto: str) -> str:
 
 def _es_pregunta_faq(texto: str) -> bool:
     """Pregunta al asistente reconocible sin LLM: interrogación + palabra clave y sin datos."""
-    t = texto.strip()
-    if not (t.startswith("¿") or t.endswith("?")):
-        return False
-    n = _normalizar_basico(t)
-    if any(ch.isdigit() for ch in n):
+    n = _normalizar_basico(texto)
+    # El STT no siempre pone signos de interrogación: basta la palabra clave y que no haya datos
+    if any(ch.isdigit() for ch in n) or len(n.split()) > 8:
         return False
     return any(c in n for claves, _ in _FAQ for c in claves)
 

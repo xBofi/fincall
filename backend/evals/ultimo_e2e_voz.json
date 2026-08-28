@@ -4,12 +4,12 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1471,
-      1504,
-      835,
-      807,
-      3537,
-      1473
+      1482,
+      1458,
+      839,
+      803,
+      3350,
+      1581
     ],
     "transcripciones": [
       "Calle Mayor 12.",
@@ -22,12 +22,12 @@
   },
   {
     "nombre": "natural_todo_junto",
-    "ok": false,
-    "motivo": "resultado: esperado 'incidencia_creada', obtenido None",
+    "ok": true,
+    "motivo": "",
     "latencias_ms": [
-      3290,
-      2541,
-      1039
+      3223,
+      1008,
+      837
     ],
     "transcripciones": [
       "Hola, buenas, mire, llamo desde la Avenida de la Alameda 5, portal 2, tercero A. Soy Carmen y tengo una fuga de agua en el piso A que está inundando el suelo.",
@@ -40,20 +40,20 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      953,
-      2885,
-      844,
+      944,
+      3062,
+      831,
       110,
-      3210,
-      3010,
-      822
+      2882,
+      2998,
+      911
     ],
     "transcripciones": [
       "Hola, buenas.",
       "Sí, vivo en la Calle Mayor en el número 12.",
       "Sí.",
-      "Ah, vale, espéreme.",
-      "Pues ese, piso 1, puerta A, con Andreu Boffipla.",
+      "Vale.",
+      "Pues ese, piso 1, puerta A, con Andreu Bofipla.",
       "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
       "Ese es correcto."
     ]
@@ -63,14 +63,14 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1358,
-      1428,
-      3006,
-      3349,
-      2554,
-      3042,
-      3189,
-      1553
+      1401,
+      1424,
+      2251,
+      2593,
+      832,
+      3140,
+      2591,
+      1303
     ],
     "transcripciones": [
       "Avenida de la Alameda 5.",
@@ -88,21 +88,21 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1492,
-      1386,
-      960,
-      917,
-      2930,
-      2985,
-      1387
+      1475,
+      1502,
+      1024,
+      1419,
+      3231,
+      3182,
+      1584
     ],
     "transcripciones": [
       "Calle Mayor 12.",
       "S.",
       "segundo B.",
-      "Pepe.",
+      "P.",
       "No funciona la luz de la escalera.",
-      "No, me llamo Pedro Garka.",
+      "No, me llamo Pedro Garca.",
       "S."
     ]
   },
@@ -111,10 +111,10 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      3278,
-      1405,
-      1535,
-      1714
+      1027,
+      1394,
+      1473,
+      1553
     ],
     "transcripciones": [
       "Esta llamada se está grabando.",
@@ -128,13 +128,13 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1428,
-      1455,
-      1319,
-      853,
-      765,
-      2998,
-      1285
+      1461,
+      1464,
+      1260,
+      902,
+      726,
+      2461,
+      1428
     ],
     "transcripciones": [
       "Calle Mayor 12.",

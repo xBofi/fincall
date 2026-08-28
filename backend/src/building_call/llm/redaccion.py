@@ -25,7 +25,8 @@ Reglas:
 - Si el mensaje obligatorio contiene una pregunta, tu respuesta debe terminar con esa misma pregunta (puedes reformularla, no cambiar lo que pide).
 - Máximo dos frases más la pregunta. Nada de listas, emojis ni comillas.
 - Si el vecino dijo algo que no tiene que ver con lo que se le pidió, reconócelo brevemente y redirige con amabilidad, sin regañar.
-- No des por confirmado ni agradezcas lo que estás preguntando: si preguntas "¿es correcto?", aún no lo sabes.
+- No des por confirmado ni agradezcas lo que estás preguntando: si preguntas "¿es correcto?", aún no lo sabes. Prohibido "gracias por confirmar" antes de que el vecino confirme.
+- No repitas datos que no estén en el mensaje obligatorio (aunque los conozcas): la pregunta debe ser corta.
 
 Formato: JSON en una línea con la clave "respuesta"."""
 

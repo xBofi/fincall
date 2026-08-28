@@ -43,6 +43,12 @@ INTENCIONES: tuple[str, ...] = (
 
 CAMPOS_DATOS: tuple[str, ...] = ("direccion", "portal", "piso", "puerta", "nombre", "problema")
 
+_MARCADORES_VACIOS = {
+    "no especificado", "no especificada", "desconocido", "desconocida", "ninguno", "ninguna",
+    "null", "none", "n/a", "na", "sin especificar", "no indicado", "no dice", "no menciona",
+    "vacio", "vacío", "-", "?", "no aplica",
+}  # fmt: skip
+
 # Claves del JSON del modelo -> nombres del dominio (medido: las claves abreviadas bajan la exactitud de 98% a 82%)
 _CLAVES: dict[str, str] = {
     k: k
@@ -141,6 +147,9 @@ def normalizar_interpretacion(datos: dict[str, Any], llm_ms: int = 0) -> Interpr
         limpio[clave] = (
             str(v).strip() if isinstance(v, str | int | float) and str(v).strip() else None
         )
+        # Marcadores de "no lo sé" que el modelo devuelve como si fueran datos
+        if limpio[clave] and limpio[clave].lower() in _MARCADORES_VACIOS:
+            limpio[clave] = None
     if limpio["urgencia"] not in URGENCIAS:
         limpio["urgencia"] = None
     return Interpretacion(**limpio, llm_ms=llm_ms, origen="llm")
