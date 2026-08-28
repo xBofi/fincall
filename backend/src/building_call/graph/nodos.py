@@ -618,7 +618,24 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return interp, _tiempos(estado, origen_interpretacion="determinista")
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
         # a que termine): solapa el LLM con la detección de fin de turno del STT.
-        futuro = deps.especulaciones.pop(clave_especulacion(entrada), None)
+        clave = clave_especulacion(entrada)
+        futuro = deps.especulaciones.pop(clave, None)
+        if futuro is None and deps.especulaciones:
+            # El parcial y el final suelen diferir en una palabra o en un número en letra:
+            # se acepta la especulación más parecida si supera el 90 % de similitud
+            mejor, puntuacion = max(
+                (
+                    (k, SequenceMatcher(None, _normalizar(k), _normalizar(clave)).ratio())
+                    for k in deps.especulaciones
+                ),
+                key=lambda p: p[1],
+            )
+            # Con menos parecido solo vale si los datos "duros" (números y letras sueltas:
+            # pisos, puertas, portales) son idénticos en el parcial y en el final
+            duros = re.compile(r"\b(?:\d+|[a-z])\b")
+            mismos_duros = duros.findall(_normalizar(mejor)) == duros.findall(_normalizar(clave))
+            if puntuacion >= 0.9 or (puntuacion >= 0.8 and mismos_duros):
+                futuro = deps.especulaciones.pop(mejor)
         for otro in list(deps.especulaciones.values()):
             otro.cancel()
         deps.especulaciones.clear()
