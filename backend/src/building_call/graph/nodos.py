@@ -572,7 +572,16 @@ _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
         ("tard", "cuando", "plazo", "vend"),
         "El plazo depende del especialista; el administrador le informará del seguimiento. ",
     ),
-    (("nombre", "para que"), "Solo necesito su nombre para saber quién comunica la incidencia. "),
+    (
+        (
+            "para que necesita",
+            "para que quiere",
+            "para que mi nombre",
+            "por que mi nombre",
+            "para que el nombre",
+        ),
+        "Solo necesito su nombre para saber quién comunica la incidencia. ",
+    ),
     (
         ("quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"),
         "Soy el asistente automático del administrador de su comunidad. ",

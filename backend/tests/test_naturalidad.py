@@ -341,3 +341,14 @@ async def test_repetir_devuelve_el_mensaje_completo_y_hola_tras_mensaje_no_oido(
     assert estado["nodo_actual"] == "confirmar_resumen"
     estado = await gestor.mensaje(estado["llamada_id"], "¿Me lo repites?")
     assert resumen in estado["mensajes_bot"][-1]
+
+
+async def test_mi_nombre_es_no_dispara_la_faq(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Mi nombre es Andreu Pofir."])
+    assert estado["nombre_declarado"] == "Andreu Pofir"
+    assert estado["nodo_actual"] == "recoger_solicitud"
+    estado2 = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "1 A", "¿Para qué necesita mi nombre?"]
+    )
+    assert "Solo necesito su nombre" in estado2["mensajes_bot"][-1]
+    assert estado2["nombre_declarado"] is None
