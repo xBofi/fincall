@@ -453,7 +453,36 @@ def _es_nombre_simple(texto: str) -> bool:
         and not any(ch.isdigit() for ch in t)
         and not (
             set(palabras)
-            & {"no", "si", "que", "hola", "es", "el", "la", "en", "un", "una", "por", "para"}
+            & {
+                "no",
+                "si",
+                "que",
+                "hola",
+                "es",
+                "el",
+                "la",
+                "en",
+                "un",
+                "una",
+                "por",
+                "para",
+                # palabras del dominio que el STT suelta sueltas ("Puerta.") y no son nombres
+                "puerta",
+                "piso",
+                "portal",
+                "finca",
+                "calle",
+                "avenida",
+                "vivienda",
+                "letra",
+                "bajo",
+                "atico",
+                "vale",
+                "gracias",
+                "perdon",
+                "perdone",
+                "espere",
+            }  # fmt: skip
         )
     )
 
