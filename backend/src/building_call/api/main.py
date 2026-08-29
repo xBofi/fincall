@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from time import perf_counter
@@ -197,6 +198,40 @@ def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
 AUTO: Any = object()  # centinela: "según settings"
 
 
+LARGO_MINIMO_SECRETO = 32
+"""`BC_SESION_SECRETO` firma las URLs de audio. 32 caracteres es el mínimo razonable para un
+HMAC-SHA256; el README manda generarlo con `secrets.token_urlsafe(48)`."""
+
+
+def secreto_de_firma() -> str:
+    """Secreto con el que se firman las URLs de audio de los expedientes.
+
+    Hasta 2026-08-29 aquí había un `settings.sesion_secreto or ("dev-" + tipo_de_repo)`. Ese
+    respaldo anulaba la comprobación de `AlmacenAudio`, que nunca llegaba a ver un secreto vacío:
+    sin `BC_SESION_SECRETO` las grabaciones quedaban firmadas con la constante
+    `"dev-RepositorioPostgres"`, deducible del código, y cualquiera podía forjar `?exp=&firma=` y
+    descargar conversaciones enteras de vecinos.
+
+    Ahora, en el modo real (`BC_REPOSITORIO=postgres`) se falla al arrancar: es preferible que la
+    API no levante a que sirva audio con una firma que no protege nada. En desarrollo se usa un
+    secreto aleatorio por proceso; las URLs ya emitidas dejan de valer al reiniciar, que es
+    justo lo que se espera de un secreto efímero.
+    """
+    if len(settings.sesion_secreto) >= LARGO_MINIMO_SECRETO:
+        return settings.sesion_secreto
+    if settings.repositorio == "postgres":
+        raise RuntimeError(
+            f"BC_SESION_SECRETO es obligatorio y necesita {LARGO_MINIMO_SECRETO} caracteres o "
+            "más: firma las URLs con las que se descargan las grabaciones de las llamadas. "
+            'Genera uno con: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    logger.warning(
+        "Sin BC_SESION_SECRETO utilizable: el audio se firma con un secreto aleatorio de este "
+        "proceso. Sirve para desarrollo; las URLs firmadas caducan al reiniciar la API."
+    )
+    return secrets.token_urlsafe(48)
+
+
 def crear_app(
     deps: Dependencias | None = None,
     stt: ReconocedorVoz | None = None,
@@ -253,7 +288,7 @@ def crear_app(
         allow_headers=["*"],
     )
     # Consola operativa: acceso (usuarios internos + cookie de sesión), APIs protegidas y audio
-    secreto = settings.sesion_secreto or ("dev-" + type(deps.repo).__name__)
+    secreto = secreto_de_firma()
     acceso = Acceso(deps.repo, settings)  # type: ignore[arg-type]
     almacen_audio = AlmacenAudio(
         settings.audio_dir, secreto, settings.audio_retencion_dias, settings.audio_url_segundos

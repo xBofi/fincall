@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import SECRETO_DE_PRUEBA
 from httpx import ASGITransport, AsyncClient
 
 from building_call.acceso import Acceso
@@ -20,7 +21,7 @@ CLAVE_ADMIN = "clave-nueva-segura"
 @pytest.fixture
 async def cliente(deps: Dependencias, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings_globales, "audio_dir", str(tmp_path / "audio"))
-    monkeypatch.setattr(settings_globales, "sesion_secreto", "secreto-de-prueba")
+    monkeypatch.setattr(settings_globales, "sesion_secreto", SECRETO_DE_PRUEBA)
     # El ciclo de vida (que crea el admin inicial) no corre bajo ASGITransport: lo hacemos aquí
     await Acceso(deps.repo, Settings(_env_file=None)).asegurar_admin_inicial()  # type: ignore[arg-type]
     app = crear_app(deps, fabrica_streaming=None)

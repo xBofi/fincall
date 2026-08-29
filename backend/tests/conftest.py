@@ -8,6 +8,23 @@ import pytest
 from building_call.graph.nodos import Dependencias
 from building_call.repos.memoria import RepositorioMemoria
 from building_call.servicios import GestorLlamadas
+from building_call.settings import settings
+
+# Con largo real: por debajo del mínimo que exige la API es como no tener secreto
+SECRETO_DE_PRUEBA = "secreto-de-prueba-con-largo-suficiente-0123456789"
+
+
+@pytest.fixture(autouse=True)
+def entorno_de_prueba(monkeypatch: pytest.MonkeyPatch) -> None:
+    """La suite no depende del `.env` del desarrollador.
+
+    Sin esto, un `BC_REPOSITORIO=postgres` en la máquina de quien programa cambia el
+    comportamiento de tests que nada tienen que ver con la base de datos, y la CI —que no tiene
+    `.env`— ejecuta algo distinto de lo que se probó en local. Un test que quiera el modo real lo
+    dice explícitamente.
+    """
+    monkeypatch.setattr(settings, "repositorio", "memoria")
+    monkeypatch.setattr(settings, "sesion_secreto", SECRETO_DE_PRUEBA)
 
 
 def _clasificar(u: str, catalogo: list[str]) -> tuple[str, str]:

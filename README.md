@@ -77,4 +77,6 @@ número apuntando a la API. Guía completa en `docs/TELEFONIA.md`.
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
 bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);
-todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESION_SECRETO` firma las URLs de audio.
+todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESION_SECRETO` firma las URLs con las que
+se descargan las grabaciones: es **obligatorio** (mínimo 32 caracteres) con `BC_REPOSITORIO=postgres` y la API
+se niega a arrancar sin él; genéralo con `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
