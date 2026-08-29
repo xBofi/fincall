@@ -1,0 +1,242 @@
+"""Síntesis de voz en servidor para la telefonía (en la consola web sigue hablando el navegador).
+
+Contrato: `sintetizar(texto)` devuelve PCM16 mono a `tasa` Hz. Implementaciones:
+- `SintetizadorPiper`: Piper local en proceso (`piper-tts`), modelo cargado una vez (~150 ms por
+  frase en CPU), voces españolas (`es_ES-davefx-medium`, `es_ES-sharvard-medium`), sin red. Preferido.
+- `SintetizadorWorkersAI`: Cloudflare Workers AI (MeloTTS, `lang=es`) → MP3 → PCM con ffmpeg.
+  Alternativa cuando no hay Piper; tarda más (~1 s) y depende de la red.
+Ambas cachean las frases repetidas (saludo, despedida, preguntas fijas del guion).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import json
+import logging
+import shutil
+from collections import OrderedDict
+from pathlib import Path
+from typing import Any, Protocol
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+class SintetizadorVoz(Protocol):
+    nombre: str
+    tasa: int
+
+    def disponible(self) -> bool: ...
+
+    async def sintetizar(self, texto: str) -> bytes: ...
+
+
+class _Cache:
+    def __init__(self, capacidad: int = 200) -> None:
+        self.capacidad = capacidad
+        self._datos: OrderedDict[str, bytes] = OrderedDict()
+
+    def get(self, clave: str) -> bytes | None:
+        pcm = self._datos.get(clave)
+        if pcm is not None:
+            self._datos.move_to_end(clave)
+        return pcm
+
+    def put(self, clave: str, pcm: bytes) -> None:
+        self._datos[clave] = pcm
+        self._datos.move_to_end(clave)
+        while len(self._datos) > self.capacidad:
+            self._datos.popitem(last=False)
+
+
+class SintetizadorNoDisponible:
+    nombre = "ninguno"
+    tasa = 16000
+
+    def disponible(self) -> bool:
+        return False
+
+    async def sintetizar(self, texto: str) -> bytes:
+        raise RuntimeError("No hay TTS de servidor configurado (BC_TTS / BC_PIPER_MODELO)")
+
+
+class SintetizadorPiper:
+    """Piper en el propio proceso (paquete `piper-tts`): el modelo se carga una vez y cada frase
+    tarda decenas de milisegundos. Medido 2026-08-29: por subproceso costaba ~2,5 s por frase
+    (carga del modelo en cada ejecución), inaceptable para una llamada; en proceso, ~150 ms.
+    Si el paquete no está instalado se recurre al binario `piper` por subproceso."""
+
+    def __init__(self, binario: str, modelo: str, timeout_s: float = 15.0) -> None:
+        self.binario = shutil.which(binario) or binario
+        self.modelo = modelo
+        self.timeout_s = timeout_s
+        self.nombre = f"piper/{Path(modelo).stem}" if modelo else "piper"
+        self.tasa = self._tasa_del_modelo(modelo)
+        self._cache = _Cache()
+        self._voz: Any = None
+        self._cerrojo = asyncio.Lock()
+
+    @staticmethod
+    def _tasa_del_modelo(modelo: str) -> int:
+        """Los modelos de Piper traen `<modelo>.onnx.json` con `audio.sample_rate`."""
+        try:
+            cfg = json.loads(Path(modelo + ".json").read_text(encoding="utf-8"))
+            return int(cfg["audio"]["sample_rate"])
+        except Exception:  # noqa: BLE001
+            return 22050
+
+    @staticmethod
+    def _paquete_disponible() -> bool:
+        try:
+            import piper  # noqa: F401
+        except ImportError:
+            return False
+        return True
+
+    def disponible(self) -> bool:
+        if not self.modelo or not Path(self.modelo).exists():
+            return False
+        return self._paquete_disponible() or shutil.which(self.binario) is not None
+
+    def _sintetizar_en_proceso(self, texto: str) -> bytes:
+        from piper import PiperVoice
+
+        if self._voz is None:
+            self._voz = PiperVoice.load(self.modelo)
+            self.tasa = int(self._voz.config.sample_rate)
+        return b"".join(trozo.audio_int16_bytes for trozo in self._voz.synthesize(texto))
+
+    async def _sintetizar_subproceso(self, texto: str) -> bytes:
+        proc = await asyncio.create_subprocess_exec(
+            self.binario,
+            "--model",
+            self.modelo,
+            "--output_raw",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            salida, err = await asyncio.wait_for(
+                proc.communicate(texto.encode("utf-8") + b"\n"), timeout=self.timeout_s
+            )
+        except TimeoutError:
+            proc.kill()
+            raise RuntimeError("Piper no respondió a tiempo") from None
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"Piper falló ({proc.returncode}): {err.decode(errors='ignore')[:200]}"
+            )
+        return salida
+
+    async def precalentar(self) -> None:
+        """Carga el modelo al arrancar para que la primera llamada no pague ~1 s."""
+        if self._paquete_disponible() and self.disponible():
+            async with self._cerrojo:
+                await asyncio.to_thread(self._sintetizar_en_proceso, "Hola.")
+
+    async def sintetizar(self, texto: str) -> bytes:
+        texto = " ".join(texto.split())
+        if not texto:
+            return b""
+        if (pcm := self._cache.get(texto)) is not None:
+            return pcm
+        async with self._cerrojo:  # onnxruntime no es reentrante por sesión
+            if self._paquete_disponible():
+                salida = await asyncio.wait_for(
+                    asyncio.to_thread(self._sintetizar_en_proceso, texto), timeout=self.timeout_s
+                )
+            else:
+                salida = await self._sintetizar_subproceso(texto)
+        self._cache.put(texto, salida)
+        return salida
+
+
+class SintetizadorWorkersAI:
+    tasa = 16000
+
+    def __init__(
+        self,
+        account_id: str,
+        api_token: str,
+        modelo: str = "@cf/myshell-ai/melotts",
+        timeout_s: float = 20.0,
+        ffmpeg: str = "ffmpeg",
+        cliente: httpx.AsyncClient | None = None,
+    ) -> None:
+        self.account_id = account_id
+        self.api_token = api_token
+        self.modelo = modelo
+        self.timeout_s = timeout_s
+        self.ffmpeg = shutil.which(ffmpeg) or ffmpeg
+        self.nombre = f"workers-ai/{modelo}"
+        self._cliente = cliente
+        self._cache = _Cache()
+
+    def disponible(self) -> bool:
+        return bool(self.account_id and self.api_token) and shutil.which(self.ffmpeg) is not None
+
+    async def _pedir_mp3(self, texto: str) -> bytes:
+        url = (
+            f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.modelo}"
+        )
+        cliente = self._cliente or httpx.AsyncClient(timeout=self.timeout_s)
+        try:
+            r = await cliente.post(
+                url,
+                headers={"Authorization": f"Bearer {self.api_token}"},
+                json={"prompt": texto, "lang": "es"},
+            )
+        finally:
+            if self._cliente is None:
+                await cliente.aclose()
+        r.raise_for_status()
+        cuerpo: Any = r.json()
+        audio_b64 = (cuerpo.get("result") or {}).get("audio") if isinstance(cuerpo, dict) else None
+        if not audio_b64:
+            raise RuntimeError(f"Workers AI no devolvió audio: {str(cuerpo)[:200]}")
+        return base64.b64decode(audio_b64)
+
+    async def _mp3_a_pcm(self, mp3: bytes) -> bytes:
+        proc = await asyncio.create_subprocess_exec(
+            self.ffmpeg, "-loglevel", "error", "-i", "pipe:0",
+            "-f", "s16le", "-ac", "1", "-ar", str(self.tasa), "pipe:1",
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )  # fmt: skip
+        pcm, err = await asyncio.wait_for(proc.communicate(mp3), timeout=self.timeout_s)
+        if proc.returncode != 0:
+            raise RuntimeError(f"ffmpeg falló: {err.decode(errors='ignore')[:200]}")
+        return pcm
+
+    async def sintetizar(self, texto: str) -> bytes:
+        texto = " ".join(texto.split())
+        if not texto:
+            return b""
+        if (pcm := self._cache.get(texto)) is not None:
+            return pcm
+        pcm = await self._mp3_a_pcm(await self._pedir_mp3(texto))
+        self._cache.put(texto, pcm)
+        return pcm
+
+
+def crear_tts(settings: Any) -> SintetizadorVoz:
+    """`BC_TTS`: auto (Piper si está, si no Workers AI) | piper | workers_ai | ninguno."""
+    modo = settings.tts
+    piper = SintetizadorPiper(settings.piper_bin, settings.piper_modelo)
+    workers = SintetizadorWorkersAI(
+        settings.cloudflare_account_id,
+        settings.cloudflare_api_token,
+        settings.cloudflare_tts_modelo,
+    )
+    if modo == "piper":
+        return piper
+    if modo == "workers_ai":
+        return workers
+    if modo == "auto":
+        if piper.disponible():
+            return piper
+        if workers.disponible():
+            return workers
+    return SintetizadorNoDisponible()

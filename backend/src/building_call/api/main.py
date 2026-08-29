@@ -39,6 +39,10 @@ from building_call.servicios import GestorLlamadas, LlamadaNoEncontrada
 from building_call.settings import settings
 from building_call.stt import ReconocedorNoDisponible, ReconocedorVoz, ReconocedorWhisper
 from building_call.stt_streaming import SesionStreamingAssemblyAI, validar_endpoint_eu
+from building_call.telefonia.configurar import motivo_no_listo
+from building_call.telefonia.puente import PuenteLlamada
+from building_call.telefonia.tts import crear_tts
+from building_call.telefonia.twilio import CanalTwilio, crear_router_twilio
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +236,8 @@ def crear_app(
         if hasattr(reconocedor, "calentar"):
             await reconocedor.calentar()
         await acceso.asegurar_admin_inicial()
+        if hasattr(tts, "precalentar"):
+            await tts.precalentar()
         tarea_purga = asyncio.create_task(purga_periodica())
         yield
         tarea_purga.cancel()
@@ -254,8 +260,44 @@ def crear_app(
     app.include_router(acceso.router())
     app.include_router(acceso.router_usuarios())
 
-    # Las APIs de la llamada de la consola (iniciar, mensajes, voz, métricas) exigen sesión
+    # Telefonía: puente proveedor-agnóstico + adaptador Twilio. Sin configurar, solo expone /salud
+    tts = crear_tts(settings)
+
+    def telefonia_lista() -> str | None:
+        return motivo_no_listo(settings, tts.disponible(), fabrica_streaming is not None)
+
+    async def fabrica_puente(canal: CanalTwilio, telefono: str | None) -> PuenteLlamada:
+        assert fabrica_streaming is not None
+        return PuenteLlamada(
+            gestor,
+            fabrica_streaming,
+            tts,
+            canal,
+            vocabulario=await vocabulario_stt(deps.repo),
+            telefono=telefono,
+            repo=deps.repo,
+            almacen_audio=almacen_audio,
+            palabras_bargein=settings.telefonia_palabras_bargein,
+        )
+
+    app.include_router(crear_router_twilio(settings, fabrica_puente, telefonia_lista))
+    # Las APIs de la llamada de la consola (iniciar, mensajes, voz, métricas) exigen sesión: la
+    # telefonía entra por su propio adaptador firmado, así que ya no hay motivo para dejarlas abiertas
     protegido = [Depends(acceso.requiere())]
+
+    @app.get("/api/telefonia/estado")
+    async def telefonia_estado(_: Any = Depends(acceso.requiere())) -> dict[str, Any]:  # noqa: B008
+        motivo = telefonia_lista()
+        return {
+            "proveedor": settings.telefonia,
+            "lista": motivo is None,
+            "motivo": motivo,
+            "numero": settings.twilio_numero or None,
+            "url_publica": settings.url_publica or None,
+            "tts": tts.nombre,
+            "tts_disponible": tts.disponible(),
+            "stt_streaming": fabrica_streaming is not None,
+        }
 
     app.include_router(
         crear_router_operaciones(deps.repo, acceso, gestor.metricas, almacen_audio)  # type: ignore[arg-type]
@@ -281,6 +323,8 @@ def crear_app(
             "stt_disponible": reconocedor.disponible(),
             "stt_streaming": "assemblyai-eu" if fabrica_streaming else None,
             "acceso": acceso.modo,
+            "telefonia": settings.telefonia if telefonia_lista() is None else None,
+            "tts_servidor": tts.nombre if tts.disponible() else None,
             "grafos": sorted(REGISTRO),
             "umbrales_ms": {nombre: limite for limite, nombre in UMBRALES_MS},
         }

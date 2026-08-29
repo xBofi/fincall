@@ -13,3 +13,4 @@ dist/
 frontend/dist/
 backend/evals/audio_sintetico/
 backend/.audio/
+backend/.voces/

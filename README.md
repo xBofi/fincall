@@ -68,6 +68,12 @@ La consola es privada: usuarios internos con contraseña, sin proveedor externo 
    genera una contraseña temporal que se muestra una única vez y que el usuario debe cambiar al entrar.
    Desde ahí también cambias roles (`owner`, `administrador`, `calidad`), desactivas o eliminas usuarios.
 
+### Telefonía
+
+El asistente puede atender un número real (Twilio Media Streams; proveedor Provisional). Con las
+credenciales y una URL https pública, `uv run python -m building_call.telefonia.configurar` deja el
+número apuntando a la API. Guía completa en `docs/TELEFONIA.md`.
+
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
 bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);

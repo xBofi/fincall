@@ -65,6 +65,21 @@ class Settings(BaseSettings):
     sesion_cookie: str = "bc_sesion"
     sesion_horas: int = 12
 
+    # Telefonía real (proveedor Pendiente en la bóveda; Twilio es la primera implementación).
+    # Cuando haya número: BC_TELEFONIA=twilio, BC_URL_PUBLICA=https://... (túnel o dominio),
+    # credenciales de Twilio y `python -m building_call.telefonia.configurar`.
+    telefonia: str = "ninguna"  # ninguna | twilio
+    url_publica: str = ""
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_numero: str = ""  # E.164, p. ej. +34912345678
+    telefonia_palabras_bargein: int = 2
+    # TTS de servidor (solo telefonía; la consola web habla con el navegador)
+    tts: str = "auto"  # auto | piper | workers_ai | ninguno
+    piper_bin: str = "piper"
+    piper_modelo: str = ""  # ruta al .onnx (junto a su .onnx.json), p. ej. es_ES-davefx-medium
+    cloudflare_tts_modelo: str = "@cf/myshell-ai/melotts"
+
     # Audio de llamadas: directorio privado, URL firmada de corta duración, retención
     audio_dir: str = ".audio"
     audio_retencion_dias: int = 14
