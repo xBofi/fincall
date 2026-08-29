@@ -420,7 +420,9 @@ def crear_app(
             sample_rate = int(ws.query_params.get("sample_rate", "16000"))
         except ValueError:
             sample_rate = 0
-        if not 8000 <= sample_rate <= 48000:
+        # El navegador pide 16 kHz, pero AudioContext puede caer al ritmo del equipo (44,1/48/96).
+        # El tope solo evita que un cliente reserve memoria arbitraria con el búfer de silencio.
+        if not 8000 <= sample_rate <= 192000:
             await ws.send_json({"type": "error", "mensaje": "sample_rate fuera de rango"})
             await ws.close(code=1008)
             return
