@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from conftest import sesion_de_prueba
 from httpx import ASGITransport, AsyncClient
 
 from building_call.api.main import crear_app
@@ -27,6 +28,7 @@ class STTFalso:
 async def cliente(deps: Dependencias):
     app = crear_app(deps, stt=STTFalso())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
         yield c
 
 

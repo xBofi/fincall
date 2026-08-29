@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from building_call.domain.configuracion import (
@@ -117,6 +117,33 @@ class RepositorioPostgres:
         async with self.sesiones() as s:
             u = await s.get(UsuarioSQL, usuario_id)
             return Usuario.model_validate(u, from_attributes=True) if u else None
+
+    async def obtener_usuario_por_nombre(self, nombre_usuario: str) -> Usuario | None:
+        async with self.sesiones() as s:
+            u = (
+                await s.execute(
+                    select(UsuarioSQL).where(UsuarioSQL.nombre_usuario == nombre_usuario)
+                )
+            ).scalar_one_or_none()
+            return Usuario.model_validate(u, from_attributes=True) if u else None
+
+    async def listar_usuarios(self) -> list[Usuario]:
+        async with self.sesiones() as s:
+            filas = (await s.execute(select(UsuarioSQL))).scalars()
+            return [Usuario.model_validate(u, from_attributes=True) for u in filas]
+
+    async def eliminar_usuario(self, usuario_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(delete(SesionSQL).where(SesionSQL.usuario_id == usuario_id))
+            await s.execute(delete(UsuarioSQL).where(UsuarioSQL.id == usuario_id))
+
+    async def revocar_sesiones_de(self, usuario_id: str, cuando: datetime) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(
+                update(SesionSQL)
+                .where(SesionSQL.usuario_id == usuario_id, SesionSQL.revocada_en.is_(None))
+                .values(revocada_en=cuando)
+            )
 
     async def guardar_sesion(self, sesion: SesionAcceso) -> None:
         async with self.sesiones() as s, s.begin():

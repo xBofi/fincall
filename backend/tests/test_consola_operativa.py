@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from conftest import sesion_de_prueba
 from httpx import ASGITransport, AsyncClient
 
 from building_call.acceso import Acceso
@@ -22,13 +23,15 @@ from building_call.settings import settings as settings_globales
 async def cliente(deps: Dependencias, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings_globales, "audio_dir", str(tmp_path / "audio"))
     monkeypatch.setattr(settings_globales, "sesion_secreto", "secreto-de-prueba")
-    monkeypatch.setattr(settings_globales, "auth_modo", "google")
     app = crear_app(deps, fabrica_streaming=None)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
 
 async def _conversar(cliente: AsyncClient, turnos: list[str]) -> str:
+    # Iniciar y conversar exige sesión (como en la consola): un owner de prueba la abre
+    repo = cliente._transport.app.state.repo  # type: ignore[attr-defined]
+    cliente.cookies.set("bc_sesion", sesion_de_prueba(repo))
     lid = (await cliente.post("/api/llamadas", json={"telefono_llamante": "+34600"})).json()[
         "llamada_id"
     ]
@@ -38,11 +41,12 @@ async def _conversar(cliente: AsyncClient, turnos: list[str]) -> str:
 
 
 async def _sesion(cliente: AsyncClient, repo: RepositorioMemoria, rol: Rol) -> None:
-    """Abre una sesión como haría el callback de Google, sin pasar por Google."""
-    acceso = Acceso(repo, Settings(sesion_secreto="s", sesion_horas=1))
+    """Abre una sesión como haría el login, sin pasar por la contraseña."""
+    acceso = Acceso(repo, Settings(_env_file=None, sesion_secreto="s", sesion_horas=1))
     usuario = Usuario(
-        id=f"usr-{rol}", google_sub=f"sub-{rol}", email=f"{rol}@x.es", rol=rol, activo=True
+        id=f"usr-{rol}", nombre_usuario=str(rol), rol=rol, activo=True, hash_contrasena="x"
     )
+    await repo.guardar_usuario(usuario)
     from fastapi import Request, Response
 
     resp = Response()
@@ -64,8 +68,8 @@ async def test_sin_sesion_las_apis_operativas_responden_401(cliente: AsyncClient
     assert (await cliente.get("/api/operaciones/resumen")).status_code == 401
     assert (await cliente.get("/api/operaciones/llamadas")).status_code == 401
     estado = (await cliente.get("/api/auth/estado")).json()
-    assert estado["autenticado"] is False and estado["modo"] == "deshabilitado"
-    assert (await cliente.get("/api/auth/login")).status_code == 503  # sin Google ni allowlist
+    assert estado["autenticado"] is False and estado["modo"] == "local"
+    assert (await cliente.get("/api/auth/me")).status_code == 401
 
 
 async def test_revisor_ve_expedientes_transcripcion_y_decisiones(
@@ -146,15 +150,3 @@ async def test_audio_por_api_exige_sesion_y_firma(
     assert (
         await cliente.get(f"/api/operaciones/audio/{pista['id']}?exp=1&firma=x")
     ).status_code == 403
-
-
-async def test_modo_desarrollo_da_owner_local(
-    deps: Dependencias, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(settings_globales, "auth_modo", "desarrollo")
-    app = crear_app(deps, fabrica_streaming=None)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        salud = (await c.get("/api/salud")).json()
-        assert salud["acceso"] == "desarrollo"
-        assert (await c.get("/api/operaciones/resumen")).status_code == 200
-        assert (await c.get("/api/auth/me")).json()["rol"] == "owner"

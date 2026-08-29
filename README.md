@@ -56,25 +56,19 @@ cd ../frontend; corepack pnpm run dev         # consola en :5173
 Pila completa en contenedores: `docker compose up -d` (web en `http://localhost:8080`, Ollama sigue en el host).
 Con `backend/.env` en `BC_REPOSITORIO=postgres` y `BC_DATABASE_URL=postgresql+asyncpg://building_call:<contraseña>@127.0.0.1:5433/building_call`.
 
-### Acceso a la consola operativa con Google
+### Acceso a la consola operativa
 
-1. En [Google Cloud Console](https://console.cloud.google.com/) crea (o elige) un proyecto.
-2. **APIs y servicios → Pantalla de consentimiento OAuth**: tipo *Externo*, rellena nombre y correo de contacto; en *Usuarios de prueba* añade los correos que entrarán (mientras la app esté en modo prueba solo entran ellos).
-3. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo *Aplicación web*.
-   - Orígenes autorizados: `http://localhost:5173` y `http://localhost:8000`.
-   - URI de redirección autorizada: `http://localhost:8000/api/auth/callback`.
-4. Google muestra el *ID de cliente* y el *secreto de cliente*. Cópialos solo en `backend/.env` (nunca en chat, notas ni commits):
+La consola es privada: usuarios internos con contraseña, sin proveedor externo de identidad.
 
-```dotenv
-BC_AUTH_MODO=google
-BC_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
-BC_GOOGLE_CLIENT_SECRET=...
-BC_GOOGLE_REDIRECT_URL=http://localhost:8000/api/auth/callback
-BC_ACCESO_OWNERS=tu-correo@dominio.es          # allowlist por rol, separados por comas
-BC_ACCESO_ADMINISTRADORES=
-BC_ACCESO_CALIDAD=
-BC_SESION_SECRETO=<cadena aleatoria larga>       # p. ej. python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+1. Al arrancar la API por primera vez (sin usuarios en la base de datos) se crea el owner inicial
+   `admin` / `admin` (o lo que indiquen `BC_ADMIN_INICIAL_USUARIO` / `BC_ADMIN_INICIAL_CONTRASENA` en `backend/.env`).
+2. Entra en la consola con ese usuario: **te obligará a elegir una contraseña nueva** (mínimo 10 caracteres)
+   antes de poder ver nada. Hasta entonces la API responde `403` en todo lo que no sea `/api/auth/*`.
+3. En la pestaña **Usuarios** (solo rol `owner`) das de alta a más personas: cada alta o restablecimiento
+   genera una contraseña temporal que se muestra una única vez y que el usuario debe cambiar al entrar.
+   Desde ahí también cambias roles (`owner`, `administrador`, `calidad`), desactivas o eliminas usuarios.
 
-5. Reinicia la API y entra desde la consola con **Entrar con Google**. `GET /api/salud` indica `acceso: google`.
-   Sin secreto o sin allowlist el acceso queda deshabilitado; `BC_AUTH_MODO=desarrollo` solo sirve en local.
+Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
+localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
+bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);
+todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESION_SECRETO` firma las URLs de audio.

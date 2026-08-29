@@ -181,6 +181,25 @@ class RepositorioMemoria:
         self._operativo()
         return self.usuarios.get(usuario_id)
 
+    async def obtener_usuario_por_nombre(self, nombre_usuario: str) -> Usuario | None:
+        self._operativo()
+        return next((u for u in self.usuarios.values() if u.nombre_usuario == nombre_usuario), None)
+
+    async def listar_usuarios(self) -> list[Usuario]:
+        self._operativo()
+        return list(self.usuarios.values())
+
+    async def eliminar_usuario(self, usuario_id: str) -> None:
+        self._operativo()
+        self.usuarios.pop(usuario_id, None)
+        self.sesiones = {h: s for h, s in self.sesiones.items() if s.usuario_id != usuario_id}
+
+    async def revocar_sesiones_de(self, usuario_id: str, cuando: datetime) -> None:
+        self._operativo()
+        for s in self.sesiones.values():
+            if s.usuario_id == usuario_id and s.revocada_en is None:
+                s.revocada_en = cuando
+
     async def guardar_sesion(self, sesion: SesionAcceso) -> None:
         self._operativo()
         self.sesiones[sesion.token_hash] = sesion

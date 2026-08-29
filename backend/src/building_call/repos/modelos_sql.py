@@ -86,16 +86,23 @@ class LlamadaSQL(Base):
 class UsuarioSQL(Base):
     __tablename__ = "usuarios"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    google_sub: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    nombre_usuario: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    nombre: Mapped[str | None] = mapped_column(String(200), nullable=True)
     rol: Mapped[str] = mapped_column(String(32))
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    hash_contrasena: Mapped[str] = mapped_column(String(255))
+    debe_cambiar_contrasena: Mapped[bool] = mapped_column(Boolean, default=False)
+    creado_en: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, server_default=func.now()
+    )
 
 
 class SesionSQL(Base):
     __tablename__ = "sesiones"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    usuario_id: Mapped[str] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    usuario_id: Mapped[str] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="CASCADE"), index=True
+    )
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
     creada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expira_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
@@ -139,7 +146,7 @@ class AuditoriaEventoSQL(Base):
     __tablename__ = "auditoria_eventos"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     usuario_id: Mapped[str | None] = mapped_column(
-        ForeignKey("usuarios.id"), nullable=True, index=True
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
     )
     accion: Mapped[str] = mapped_column(String(128))
     recurso: Mapped[str] = mapped_column(String(128))

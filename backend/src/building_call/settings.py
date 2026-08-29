@@ -54,18 +54,14 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     frontend_url: str = "http://localhost:5173"
 
-    # Acceso a la consola operativa (handoff Codex). "google": OIDC real; "desarrollo": owner
-    # local sin Google, SOLO para desarrollo. Sin secreto o sin allowlist el acceso queda
-    # deshabilitado.
-    auth_modo: str = "google"
-    auth_dev_email: str = "desarrollo@localhost"
-    google_client_id: str = ""
-    google_client_secret: str = ""
-    google_redirect_url: str = "http://localhost:8000/api/auth/callback"
-    acceso_owners: str = ""  # correos separados por comas
-    acceso_administradores: str = ""
-    acceso_calidad: str = ""
-    sesion_secreto: str = ""  # firma cookies de estado OAuth y URLs de audio
+    # Acceso a la consola operativa: usuarios internos con contraseña (sin proveedor externo).
+    # Si no existe ningún usuario al arrancar se crea este owner con cambio de contraseña
+    # obligatorio en el primer acceso.
+    admin_inicial_usuario: str = "admin"
+    admin_inicial_contrasena: str = "admin"
+    login_max_intentos: int = 5  # fallos por usuario o por IP antes del bloqueo temporal
+    login_bloqueo_s: int = 900
+    sesion_secreto: str = ""  # firma las URLs de audio
     sesion_cookie: str = "bc_sesion"
     sesion_horas: int = 12
 

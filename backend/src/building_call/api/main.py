@@ -10,10 +10,18 @@ from contextlib import asynccontextmanager
 from time import perf_counter
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.middleware.sessions import SessionMiddleware
 
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
@@ -223,11 +231,13 @@ def crear_app(
             await deps.llm.calentar()
         if hasattr(reconocedor, "calentar"):
             await reconocedor.calentar()
+        await acceso.asegurar_admin_inicial()
         tarea_purga = asyncio.create_task(purga_periodica())
         yield
         tarea_purga.cancel()
 
     app = FastAPI(title="Building Call Assistant", version="0.4.0", lifespan=ciclo_vida)
+    app.state.repo = deps.repo
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -235,14 +245,18 @@ def crear_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    # Consola operativa: acceso (Google OIDC + cookie de sesión), APIs protegidas y audio privado
+    # Consola operativa: acceso (usuarios internos + cookie de sesión), APIs protegidas y audio
     secreto = settings.sesion_secreto or ("dev-" + type(deps.repo).__name__)
-    app.add_middleware(SessionMiddleware, secret_key=secreto, same_site="lax", https_only=False)
     acceso = Acceso(deps.repo, settings)  # type: ignore[arg-type]
     almacen_audio = AlmacenAudio(
         settings.audio_dir, secreto, settings.audio_retencion_dias, settings.audio_url_segundos
     )
     app.include_router(acceso.router())
+    app.include_router(acceso.router_usuarios())
+
+    # Las APIs de la llamada de la consola (iniciar, mensajes, voz, métricas) exigen sesión
+    protegido = [Depends(acceso.requiere())]
+
     app.include_router(
         crear_router_operaciones(deps.repo, acceso, gestor.metricas, almacen_audio)  # type: ignore[arg-type]
     )
@@ -271,7 +285,7 @@ def crear_app(
             "umbrales_ms": {nombre: limite for limite, nombre in UMBRALES_MS},
         }
 
-    @app.get("/api/fincas")
+    @app.get("/api/fincas", dependencies=protegido)
     async def fincas() -> list[dict[str, Any]]:
         salida = []
         for f in await deps.repo.listar_fincas():
@@ -279,18 +293,18 @@ def crear_app(
             salida.append({**f.model_dump(), "viviendas": [v.etiqueta() for v in viviendas]})
         return salida
 
-    @app.post("/api/llamadas", status_code=201)
+    @app.post("/api/llamadas", status_code=201, dependencies=protegido)
     async def iniciar(cuerpo: NuevaLlamada) -> dict[str, Any]:
         return _vista(await gestor.iniciar(cuerpo.telefono_llamante))
 
-    @app.post("/api/llamadas/{llamada_id}/mensajes")
+    @app.post("/api/llamadas/{llamada_id}/mensajes", dependencies=protegido)
     async def mensaje(llamada_id: str, cuerpo: Mensaje) -> dict[str, Any]:
         try:
             return _vista(await gestor.mensaje(llamada_id, cuerpo.texto))
         except LlamadaNoEncontrada as e:
             raise HTTPException(404, "Llamada no encontrada") from e
 
-    @app.post("/api/llamadas/{llamada_id}/audio")
+    @app.post("/api/llamadas/{llamada_id}/audio", dependencies=protegido)
     async def audio(
         llamada_id: str,
         fichero: UploadFile = File(...),  # noqa: B008
@@ -343,6 +357,10 @@ def crear_app(
         "eou_at"}, {"type":"respuesta", ...vista, "tiempos"}, {"type":"error","mensaje"}.
         """
         await ws.accept()
+        if await acceso.usuario_de_peticion(ws) is None:  # type: ignore[arg-type]
+            await ws.send_json({"type": "error", "mensaje": "Sesión no válida o expirada"})
+            await ws.close(code=1008)
+            return
         if fabrica_streaming is None:
             await ws.send_json({"type": "error", "mensaje": "STT en streaming no configurado"})
             await ws.close(code=1011)
@@ -491,7 +509,7 @@ def crear_app(
             except Exception:  # noqa: BLE001
                 pass
 
-    @app.post("/api/llamadas/{llamada_id}/entrega")
+    @app.post("/api/llamadas/{llamada_id}/entrega", dependencies=protegido)
     async def entrega(llamada_id: str, cuerpo: Entrega) -> dict[str, Any]:
         try:
             estado = gestor.registrar_entrega(
@@ -501,28 +519,28 @@ def crear_app(
             raise HTTPException(404, "Llamada no encontrada") from e
         return {"entrega_ultima": estado.get("entrega_ultima")}
 
-    @app.post("/api/llamadas/{llamada_id}/metricas")
+    @app.post("/api/llamadas/{llamada_id}/metricas", dependencies=protegido)
     async def metricas_cliente(llamada_id: str, cuerpo: MetricasCliente) -> dict[str, Any]:
         t = gestor.metricas.completar_cliente(llamada_id, cuerpo.turno, cuerpo.model_dump())
         if t is None:
             raise HTTPException(404, "Turno no encontrado")
         return t.como_dict()
 
-    @app.get("/api/llamadas/{llamada_id}")
+    @app.get("/api/llamadas/{llamada_id}", dependencies=protegido)
     async def obtener(llamada_id: str) -> dict[str, Any]:
         try:
             return _vista(gestor.obtener(llamada_id))
         except LlamadaNoEncontrada as e:
             raise HTTPException(404, "Llamada no encontrada") from e
 
-    @app.get("/api/llamadas/{llamada_id}/metricas")
+    @app.get("/api/llamadas/{llamada_id}/metricas", dependencies=protegido)
     async def metricas_llamada(llamada_id: str) -> dict[str, Any]:
         return {
             "agregados": gestor.metricas.agregados(llamada_id),
             "turnos": [t.como_dict() for t in gestor.metricas.turnos(llamada_id)],
         }
 
-    @app.get("/api/metricas")
+    @app.get("/api/metricas", dependencies=protegido)
     async def metricas() -> dict[str, Any]:
         salida: dict[str, Any] = {
             "agregados": gestor.metricas.agregados(),
@@ -532,7 +550,7 @@ def crear_app(
             salida["carrera_ganadores"] = deps.llm.ganadores
         return salida
 
-    @app.get("/api/incidencias")
+    @app.get("/api/incidencias", dependencies=protegido)
     async def incidencias() -> list[dict[str, Any]]:
         return [i.model_dump(mode="json") for i in await deps.repo.listar_incidencias()]
 

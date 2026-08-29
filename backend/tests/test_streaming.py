@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from conftest import sesion_de_prueba
 from fastapi.testclient import TestClient
 
 from building_call.api.main import crear_app
@@ -59,7 +60,9 @@ class SesionFalsa:
 
 @pytest.fixture
 def cliente_ws(deps: Dependencias) -> TestClient:
-    return TestClient(crear_app(deps, fabrica_streaming=SesionFalsa))
+    c = TestClient(crear_app(deps, fabrica_streaming=SesionFalsa))
+    c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
+    return c
 
 
 def test_turno_por_streaming(cliente_ws: TestClient) -> None:
@@ -87,6 +90,7 @@ def test_turno_por_streaming(cliente_ws: TestClient) -> None:
 
 def test_streaming_sin_configurar_devuelve_error(deps: Dependencias) -> None:
     cliente = TestClient(crear_app(deps, fabrica_streaming=None))
+    cliente.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
     llamada_id = cliente.post("/api/llamadas", json={}).json()["llamada_id"]
     with cliente.websocket_connect(f"/api/llamadas/{llamada_id}/voz") as ws:
         assert ws.receive_json()["type"] == "error"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, model_validator
 
@@ -16,11 +16,20 @@ class Rol(StrEnum):
 
 
 class Usuario(BaseModel):
+    """Usuario interno de la consola. La contraseña solo existe como hash (scrypt)."""
+
     id: str
-    google_sub: str
-    email: str
+    nombre_usuario: str
+    nombre: str | None = None
     rol: Rol
-    activo: bool
+    activo: bool = True
+    hash_contrasena: str
+    debe_cambiar_contrasena: bool = False
+    creado_en: datetime | None = None
+
+    def publico(self) -> dict[str, Any]:
+        """Representación segura para la API: nunca incluye el hash."""
+        return self.model_dump(mode="json", exclude={"hash_contrasena"})
 
 
 class PistaAudio(BaseModel):

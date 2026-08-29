@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Segmented, Slider, Switch, message } from 'antd'
-import { PhoneOutlined, ReloadOutlined, SoundOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Segmented, Slider, Spin, Switch, message } from 'antd'
+import { KeyOutlined, LogoutOutlined, PhoneOutlined, ReloadOutlined, SoundOutlined, UserOutlined } from '@ant-design/icons'
 import {
   api,
+  auth,
   operaciones,
+  telefonia,
   type DetalleExpediente,
+  type EstadoTelefonia,
   type EstadoAcceso,
+  type UsuarioConsola,
   type Expediente,
   type ResumenOperaciones,
   type Salud,
   type VistaLlamada,
 } from './api'
+import { CambioContrasena } from './components/CambioContrasena'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
-import { type TurnoMedido } from './components/PanelLatencia'
+import { GestionUsuarios } from './components/GestionUsuarios'
+import { Login } from './components/Login'
+import { PanelEstado } from './components/PanelEstado'
+import { PanelLatencia, type TurnoMedido } from './components/PanelLatencia'
 import { abrirStreaming, type SesionStreaming } from './streaming'
 import {
   VAD_POR_DEFECTO,
@@ -27,6 +35,7 @@ import {
 } from './voz'
 
 type ModoStt = 'navegador' | 'servidor' | 'streaming'
+type Pantalla = 'operaciones' | 'latencia' | 'usuarios'
 
 export default function App() {
   const [salud, setSalud] = useState<Salud | null>(null)
@@ -47,12 +56,15 @@ export default function App() {
   const [resumenOps, setResumenOps] = useState<ResumenOperaciones | null>(null)
   const [expedientes, setExpedientes] = useState<Expediente[]>([])
   const [seleccionado, setSeleccionado] = useState<DetalleExpediente | null>(null)
+  const [pantalla, setPantalla] = useState<Pantalla>('operaciones')
+  const [tel, setTel] = useState<EstadoTelefonia | null>(null)
+  const [cambioAbierto, setCambioAbierto] = useState(false)
 
   const refrescarOperaciones = useCallback(async () => {
     try {
-      const estado = await operaciones.acceso()
+      const estado = await auth.estado()
       setAcceso(estado)
-      if (!estado.autenticado) {
+      if (!estado.autenticado || estado.usuario?.debe_cambiar_contrasena) {
         setResumenOps(null)
         setExpedientes([])
         return
@@ -60,9 +72,27 @@ export default function App() {
       const [resumen, lista] = await Promise.all([operaciones.resumen(), operaciones.llamadas()])
       setResumenOps(resumen)
       setExpedientes(lista)
+      telefonia.estado().then(setTel).catch(() => undefined)
     } catch {
-      // Sin acceso o backend caído: la consola sigue funcionando para la llamada en directo
+      // Backend caído: se mantiene el último estado conocido
     }
+  }, [])
+
+  const sesionAbierta = useCallback(
+    (usuario: UsuarioConsola) => {
+      setAcceso({ modo: 'local', autenticado: true, usuario })
+      setPantalla('operaciones')
+      void refrescarOperaciones()
+    },
+    [refrescarOperaciones],
+  )
+
+  const salir = useCallback(async () => {
+    await auth.logout().catch(() => undefined)
+    setAcceso({ modo: 'local', autenticado: false, usuario: null })
+    setResumenOps(null)
+    setExpedientes([])
+    setSeleccionado(null)
   }, [])
 
   const abrirExpediente = useCallback(async (id: string) => {
@@ -330,8 +360,31 @@ export default function App() {
   const resultado = vista?.datos.resultado as string | undefined
   const resuelta = resultado === 'incidencia_creada'
 
+  if (acceso === null) {
+    return (
+      <main className="ops-login" aria-busy="true">
+        <Spin size="large" tip="Conectando con la consola…"><div style={{ minHeight: 120 }} /></Spin>
+      </main>
+    )
+  }
+  if (!acceso.autenticado || !acceso.usuario) return <Login onEntrar={sesionAbierta} />
+
+  const yo = acceso.usuario
+  const esOwner = yo.rol === 'owner'
+  const opcionesPantalla: { label: string; value: Pantalla }[] = [
+    { label: 'Operaciones', value: 'operaciones' },
+    { label: 'Latencia', value: 'latencia' },
+    ...(esOwner ? [{ label: 'Usuarios', value: 'usuarios' as Pantalla }] : []),
+  ]
+
   return (
       <main className="ops-shell">
+        <CambioContrasena
+          abierto={cambioAbierto || yo.debe_cambiar_contrasena}
+          obligatorio={yo.debe_cambiar_contrasena}
+          onCerrar={() => setCambioAbierto(false)}
+          onCambiada={(u) => { setCambioAbierto(false); sesionAbierta(u); message.success('Contraseña actualizada') }}
+        />
         <header className="ops-topbar">
           <div className="ops-brand">
             <span className="ops-brand-mark" aria-hidden="true">B</span>
@@ -340,35 +393,61 @@ export default function App() {
               <h1>Centro operativo</h1>
             </div>
           </div>
+          <Segmented<Pantalla> value={pantalla} onChange={setPantalla} options={opcionesPantalla} />
           <div className="ops-system">
             <span className={`ops-signal ${salud?.modelo_disponible ? 'is-online' : ''}`} />
             <span>{salud?.modelo_disponible ? 'Sistema operativo' : 'Modelo no disponible'}</span>
-            {acceso?.autenticado ? (
-              <span title={`Rol: ${acceso.usuario?.rol}`}>
-                {acceso.usuario?.email}{acceso.modo === 'desarrollo' ? ' · modo desarrollo' : ''}{' '}
-                {acceso.modo === 'google' && (
-                  <Button size="small" onClick={() => void operaciones.logout().then(refrescarOperaciones)}>Salir</Button>
-                )}
+            {tel && (
+              <span className="ops-tel" title={tel.lista ? `Teléfono ${tel.numero ?? ''} · TTS ${tel.tts}` : tel.motivo ?? ''}>
+                <span className={`ops-signal ${tel.lista ? 'is-online' : ''}`} />
+                {tel.lista ? `Teléfono ${tel.numero ?? 'activo'}` : 'Teléfono sin configurar'}
               </span>
-            ) : acceso?.modo === 'google' ? (
-              <Button size="small" href="/api/auth/login">Entrar con Google</Button>
-            ) : acceso ? (
-              <span title="Configure BC_GOOGLE_CLIENT_ID/SECRET, BC_SESION_SECRETO y BC_ACCESO_*">Acceso no configurado</span>
-            ) : null}
+            )}
+            <Dropdown
+              menu={{
+                items: [
+                  { key: 'rol', label: `Rol: ${yo.rol}`, disabled: true },
+                  { type: 'divider' },
+                  { key: 'contrasena', icon: <KeyOutlined />, label: 'Cambiar contraseña', onClick: () => setCambioAbierto(true) },
+                  { key: 'salir', icon: <LogoutOutlined />, label: 'Salir', onClick: () => void salir() },
+                ],
+              }}
+            >
+              <Button size="small" icon={<UserOutlined />}>{yo.nombre ?? yo.nombre_usuario}</Button>
+            </Dropdown>
             <Button className="ops-primary" type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
               {vista ? 'Nueva llamada' : 'Iniciar llamada'}
             </Button>
           </div>
         </header>
 
+        {error && <Alert className="ops-alert" type="error" message={error} showIcon />}
+
+        {pantalla === 'usuarios' && esOwner && (
+          <section className="ops-single"><GestionUsuarios yo={yo} /></section>
+        )}
+
+        {pantalla === 'latencia' && (
+          <section className="ops-single ops-latency">
+            <div>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Pipeline de voz · esta sesión</p><h2>Latencia por turno</h2></div><span className="ops-mono">{turnos.length} turnos</span></div>
+              <p className="ops-queue-note" style={{ marginTop: 4 }}>respuesta_ms = fin de voz del vecino → inicio de voz del bot. ≤700 excelente · ≤1200 objetivo · ≤1500 tolerable · ≥2000 muy mal.</p>
+              <PanelLatencia turnos={turnos} />
+            </div>
+            <div>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>Estado del grafo</h2></div></div>
+              <PanelEstado vista={vista} />
+            </div>
+          </section>
+        )}
+
+        {pantalla === 'operaciones' && (<>
         <section className="ops-metrics" aria-label="Indicadores operativos">
           <article><p>Llamadas registradas</p><strong>{resumenOps?.llamadas ?? (vista ? 1 : 0)}</strong><span>{resumenOps ? `${resumenOps.activas} activas · ${resumenOps.requieren_revision} a revisar` : 'en esta consola'}</span></article>
           <article><p>Respuesta p50</p><strong>{(resumenOps?.latencia_global.p50 ?? p50) == null ? '—' : `${resumenOps?.latencia_global.p50 ?? p50} ms`}</strong><span>{(resumenOps?.latencia_global.p50 ?? p50 ?? Infinity) <= 1200 ? 'dentro del objetivo' : 'por encima del objetivo (1200 ms)'}</span></article>
           <article><p>Resueltas</p><strong>{resumenOps ? `${resumenOps.resueltas}/${resumenOps.llamadas}` : turnos.length}</strong><span>{resumenOps ? 'incidencia creada en la llamada' : 'turnos medidos'}</span></article>
           <article><p>Llamada actual</p><strong className={resultado ? (resuelta ? 'is-good' : 'is-review') : ''}>{resultado ? (resuelta ? 'Resuelta' : 'A revisar') : vista ? 'En curso' : '—'}</strong><span>{resultado ?? (vista ? 'aún sin cierre' : 'sin llamada')}</span></article>
         </section>
-
-        {error && <Alert className="ops-alert" type="error" message={error} showIcon />}
 
         <section className="ops-workbench">
           <aside className="ops-queue" aria-label="Cola de llamadas">
@@ -385,7 +464,7 @@ export default function App() {
                 <time>{new Date(e.iniciada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</time>
               </button>
             ))}
-            <div className="ops-queue-note">{acceso?.autenticado ? 'Expedientes persistidos por turno, con trazabilidad completa. Pulse uno para abrir su dossier.' : 'Inicie sesión para ver los expedientes y su trazabilidad.'}</div>
+            <div className="ops-queue-note">Expedientes persistidos por turno, con trazabilidad completa. Pulse uno para abrir su dossier.</div>
           </aside>
 
           <section className="ops-dossier" aria-label="Dossier operativo">
@@ -441,127 +520,7 @@ export default function App() {
             <footer className="ops-retention">Grabaciones: acceso restringido a owner, administradores y calidad · retención de 14 días.</footer>
           </aside>
         </section>
+        </>)}
       </main>
     )
-
-  /* Legacy validation-console layout retained temporarily while its minor controls are migrated.
-  return (
-    <Layout style={{ height: '100vh' }}>
-      <Layout.Header style={{ display: 'flex', alignItems: 'center', gap: 16, color: 'var(--color-accent-ink)' }}>
-        <Typography.Title level={4} style={{ color: 'var(--color-accent-ink)', margin: 0, flex: 1 }}>
-          Building Call Assistant · Consola de validación
-        </Typography.Title>
-        {salud && (
-          <Space>
-            <Tag color={salud.modelo_disponible ? 'green' : 'red'}>{salud.modelo}</Tag>
-            {salud.stt_streaming && <Tag color="green">STT streaming: {salud.stt_streaming}</Tag>}
-            <Tag color={salud.stt_disponible ? 'green' : 'default'}>STT lotes: {salud.stt_servidor}</Tag>
-          </Space>
-        )}
-        <Button type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
-          {vista ? 'Nueva llamada' : 'Iniciar llamada'}
-        </Button>
-        {vista && !vista.finalizada && <Button danger onClick={colgar}>Colgar</Button>}
-      </Layout.Header>
-      <Layout.Content style={{ padding: 16, overflow: 'hidden' }}>
-        {error && <Alert type="error" message={error} style={{ marginBottom: 12 }} showIcon />}
-        {salud && !salud.modelo_disponible && (
-          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={`El modelo ${salud.modelo} no está disponible. Revise Ollama o las credenciales de Workers AI.`} />
-        )}
-        <Row gutter={16} style={{ height: '100%' }}>
-          <Col span={12} style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Card size="small" title="Pipeline de voz" styles={{ body: { padding: '8px 12px' } }}>
-              <Space wrap size="middle">
-                <Space>
-                  <SoundOutlined />
-                  <Switch checked={vozActiva} onChange={setVozActiva} disabled={!ttsDisponible()} size="small" />
-                  <Typography.Text>Voz del asistente</Typography.Text>
-                </Space>
-                <Space>
-                  <Switch checked={manosLibres} onChange={setManosLibres} size="small" />
-                  <Typography.Text>Manos libres</Typography.Text>
-                </Space>
-                <Space>
-                  <Switch checked={bargeIn} onChange={setBargeIn} size="small" />
-                  <Typography.Text>Interrumpible</Typography.Text>
-                </Space>
-                <Space>
-                  <Typography.Text>STT</Typography.Text>
-                  <Segmented
-                    size="small"
-                    value={modoStt}
-                    onChange={(v) => setModoStt(v as ModoStt)}
-                    options={[
-                      { label: 'Streaming (AssemblyAI EU)', value: 'streaming', disabled: !sttStreamingOk },
-                      { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk },
-                      { label: 'Whisper', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() },
-                    ]}
-                  />
-                </Space>
-                {modoStt === 'servidor' && (
-                  <Space style={{ minWidth: 220 }}>
-                    <Typography.Text>Silencio VAD {silencioMs} ms</Typography.Text>
-                    <Slider min={300} max={1200} step={50} value={silencioMs} onChange={setSilencioMs} style={{ width: 120 }} />
-                  </Space>
-                )}
-                {streamingInfo && <Tag color="blue">{streamingInfo}</Tag>}
-              </Space>
-              <div style={{ marginTop: 6 }}>
-                <Typography.Text type="secondary">Fincas de demostración (diga una de estas): </Typography.Text>
-                {fincas.map((f) => (
-                  <Tag key={f.id}>{f.direccion}</Tag>
-                ))}
-              </div>
-            </Card>
-            <Card
-              title="Llamada simulada"
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-              styles={{ body: { flex: 1, padding: 0, overflow: 'hidden' } }}
-            >
-              {vista ? (
-                <Conversacion
-                  historial={vista.historial}
-                  parcial={parcial}
-                  estadoVoz={estadoVoz}
-                  ocupado={ocupado}
-                  finalizada={vista.finalizada}
-                  manosLibres={manosLibres}
-                  onEnviar={enviarTexto}
-                  onEscuchar={() => void escuchar()}
-                />
-              ) : (
-                <div style={{ padding: 16 }}>
-                  <Typography.Paragraph>
-                    Pulse <b>Iniciar llamada</b>. El asistente saluda por voz y, en <b>manos libres</b>, escucha
-                    automáticamente. En modo <b>Streaming</b> el fin de turno lo detecta AssemblyAI (EU) en tiempo real.
-                    Puede interrumpirle hablando. También puede escribir.
-                  </Typography.Paragraph>
-                  <Typography.Text strong>Fincas de demostración</Typography.Text>
-                  <ul>
-                    {fincas.map((f) => (
-                      <li key={f.id}>
-                        {f.direccion}{' '}
-                        <Typography.Text type="secondary">
-                          ({f.viviendas.length} viviendas: {f.viviendas.slice(0, 4).join(', ')}…)
-                        </Typography.Text>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </Card>
-          </Col>
-          <Col span={12} style={{ height: '100%', overflowY: 'auto' }}>
-            <Tabs
-              items={[
-                { key: 'latencia', label: 'Latencia', children: <Card><PanelLatencia turnos={turnos} /></Card> },
-                { key: 'estado', label: 'Estado del grafo', children: <Card><PanelEstado vista={vista} /></Card> },
-              ]}
-            />
-          </Col>
-        </Row>
-      </Layout.Content>
-    </Layout>
-  )
-  */
 }

@@ -147,6 +147,32 @@ def deps(repo: RepositorioMemoria, llm: LLMFalso) -> Dependencias:
     return Dependencias(repo=repo, llm=llm)
 
 
+def sesion_de_prueba(repo: RepositorioMemoria, rol: str = "owner") -> str:
+    """Inserta un usuario y una sesión vigente en el repositorio en memoria; devuelve el token
+    para la cookie `bc_sesion`. Síncrono a propósito: sirve también con `TestClient`."""
+    from datetime import UTC, datetime, timedelta
+
+    from building_call.auth import hash_token_sesion
+    from building_call.domain.operaciones import Usuario
+    from building_call.repos.operativo import SesionAcceso
+
+    repo._operativo()
+    usuario = Usuario(
+        id=f"usr-{rol}",
+        nombre_usuario=str(rol),
+        rol=rol,
+        activo=True,
+        hash_contrasena="x",  # type: ignore[arg-type]
+    )
+    repo.usuarios[usuario.id] = usuario
+    token = f"token-de-prueba-{rol}"
+    ahora = datetime.now(UTC)
+    repo.sesiones[hash_token_sesion(token)] = SesionAcceso(
+        f"ses-{rol}", usuario.id, hash_token_sesion(token), ahora, ahora + timedelta(hours=1)
+    )
+    return token
+
+
 @pytest.fixture
 def gestor(deps: Dependencias) -> GestorLlamadas:
     return GestorLlamadas(deps)

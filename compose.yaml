@@ -38,6 +38,9 @@ services:
       BC_OLLAMA_URL: http://host.docker.internal:11434
       BC_AUDIO_DIR: /datos/audio
       BC_CORS_ORIGINS: '["http://localhost:5173","http://localhost:8080"]'
+      # Owner inicial de la consola (solo se crea si no hay usuarios; cambio obligatorio al entrar)
+      BC_ADMIN_INICIAL_USUARIO: ${BC_ADMIN_INICIAL_USUARIO:-admin}
+      BC_ADMIN_INICIAL_CONTRASENA: ${BC_ADMIN_INICIAL_CONTRASENA:-admin}
     volumes:
       - audio_privado:/datos/audio
     ports:

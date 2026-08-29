@@ -23,13 +23,9 @@ def test_audio_expiry_must_follow_creation() -> None:
         )
 
 
-def test_user_keeps_google_identity_and_role() -> None:
+def test_user_never_exposes_password_hash() -> None:
     user = Usuario(
-        id="user-1",
-        google_sub="google-subject",
-        email="calidad@example.com",
-        rol=Rol.calidad,
-        activo=True,
+        id="user-1", nombre_usuario="calidad", rol=Rol.calidad, activo=True, hash_contrasena="h"
     )
-    assert user.google_sub == "google-subject"
     assert user.rol is Rol.calidad
+    assert "hash_contrasena" not in user.publico()
