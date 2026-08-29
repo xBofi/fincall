@@ -170,7 +170,7 @@ async def test_puente_saluda_responde_y_cuelga(gestor: GestorLlamadas) -> None:
     assert stt.cerrado
 
 
-async def test_puente_guarda_las_dos_pistas(gestor: GestorLlamadas, tmp_path) -> None:  # type: ignore[no-untyped-def]
+async def test_puente_guarda_las_dos_voces_y_la_mezcla(gestor: GestorLlamadas, tmp_path) -> None:  # type: ignore[no-untyped-def]
     from building_call.audio_store import AlmacenAudio
 
     repo = gestor.deps.repo
@@ -183,8 +183,12 @@ async def test_puente_guarda_las_dos_pistas(gestor: GestorLlamadas, tmp_path) ->
     lid = await puente.iniciar()
     await puente.recibir_ulaw(audio.pcm16_a_ulaw(_tono(8000, 200)))
     await puente.cerrar()
-    pistas = await repo.listar_pistas(lid)
-    assert sorted(p["canal"] for p in pistas) == ["asistente", "cliente"]
+    pistas = {p["canal"]: p for p in await repo.listar_pistas(lid)}
+    assert sorted(pistas) == ["asistente", "cliente", "mezcla"]
+    # La mezcla es lo que se escucha para seguir la llamada: cubre a las dos voces
+    assert pistas["mezcla"]["duracion_ms"] >= max(
+        pistas["cliente"]["duracion_ms"], pistas["asistente"]["duracion_ms"]
+    )
 
 
 # ---------------------------------------------------------------- twilio

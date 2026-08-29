@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
+from building_call.grabacion import GrabadorConversacion
 from building_call.graph.estado import EstadoLlamada
 from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
 from building_call.graph.registro import REGISTRO
@@ -410,12 +411,19 @@ def crear_app(
             await ws.close(code=1011)
             return
         try:
-            gestor.obtener(llamada_id)
+            estado_inicial = gestor.obtener(llamada_id)
         except LlamadaNoEncontrada:
             await ws.send_json({"type": "error", "mensaje": "Llamada no encontrada"})
             await ws.close(code=1008)
             return
-        sample_rate = int(ws.query_params.get("sample_rate", "16000"))
+        try:
+            sample_rate = int(ws.query_params.get("sample_rate", "16000"))
+        except ValueError:
+            sample_rate = 0
+        if not 8000 <= sample_rate <= 48000:
+            await ws.send_json({"type": "error", "mensaje": "sample_rate fuera de rango"})
+            await ws.close(code=1008)
+            return
         sesion = fabrica_streaming(sample_rate, await vocabulario_stt(deps.repo))
         try:
             await sesion.abrir()
@@ -427,7 +435,29 @@ def crear_app(
         pausado = False
         silencio = b"\x00" * (int(sample_rate * 0.1) * 2)
         ultima_voz_at: float | None = None  # último audio con energía recibido del navegador
-        grabacion = bytearray()  # canal del vecino, se guarda al cerrar (retención 14 días)
+        # Grabación alineada de las dos voces (retención 14 días). Aquí el bot habla por el
+        # navegador y el servidor nunca ve ese audio: su pista se reconstruye al cerrar
+        # sintetizando lo que el navegador informa como entregado, anclado a la marca de tiempo
+        # en que empezó a sonar. Ver `building_call.grabacion`.
+        grabador = GrabadorConversacion()
+        turnos_bot: list[tuple[int, str]] = []  # (marca en bytes, texto que sonó)
+        marca_bot: int | None = None  # puesta en `pausa`, consumida en `entrega`
+        texto_bot = ""  # último mensaje enviado al navegador, por si no llega `entrega`
+        if not int(estado_inicial.get("turno", 0)):
+            # El saludo suena mientras se abre el micrófono: se ancla al inicio de la grabación.
+            saludo = " ".join(estado_inicial.get("mensajes_bot") or []).strip()
+            if saludo:
+                turnos_bot.append((0, saludo))
+
+        async def reconstruir_voz_bot() -> None:
+            """Sintetiza los turnos del bot y los coloca donde sonaron. Secuencial y en orden a
+            propósito: cada turno se ancla a su marca y nunca pisa al anterior, así que escribirlos
+            desordenados los desplazaría. Va al cerrar, fuera del camino crítico de la llamada."""
+            if not turnos_bot or not tts.disponible():
+                return
+            for marca, texto in sorted(turnos_bot):
+                pcm = await tts.sintetizar(texto)
+                grabador.escribir_asistente(pcm, int(tts.tasa), desde=marca)
 
         def especular(parcial: str) -> None:
             """Lanza la interpretación LLM sobre el transcript parcial, antes del fin de turno.
@@ -457,6 +487,7 @@ def crear_app(
             )
 
         async def bombear_eventos() -> None:
+            nonlocal texto_bot
             async for ev in sesion.eventos():
                 if ev.tipo == "parcial":
                     await ws.send_json({"type": "parcial", "texto": ev.texto})
@@ -480,12 +511,13 @@ def crear_app(
                         "stt_eou_ms": eou_ms,
                         "stt_eou_a_respuesta_ms": int((perf_counter() - t_final) * 1000),
                     }
+                    texto_bot = " ".join(vista.get("mensajes_bot") or []).strip()
                     await ws.send_json({"type": "respuesta", **vista})
                     if estado.get("finalizada"):
                         return
 
         async def recibir_audio() -> None:
-            nonlocal pausado, ultima_voz_at
+            nonlocal pausado, ultima_voz_at, marca_bot
             while True:
                 paquete = await ws.receive()
                 if paquete.get("type") == "websocket.disconnect":
@@ -493,14 +525,19 @@ def crear_app(
                 if paquete.get("bytes") is not None:
                     if not pausado and _hay_voz(paquete["bytes"]):
                         ultima_voz_at = perf_counter()
-                    if not pausado:
-                        grabacion.extend(paquete["bytes"])
+                    grabador.escribir_cliente(paquete["bytes"], sample_rate)
                     await sesion.enviar_audio(silencio if pausado else paquete["bytes"])
                 elif paquete.get("text"):
                     orden = json.loads(paquete["text"])
                     if orden.get("type") == "fin_turno":
                         await sesion.forzar_fin_turno()
                     elif orden.get("type") == "entrega":
+                        if marca_bot is not None:
+                            # `texto_entregado` ya descuenta lo que cortó un barge-in
+                            turnos_bot.append(
+                                (marca_bot, str(orden.get("texto_entregado") or texto_bot))
+                            )
+                            marca_bot = None
                         gestor.registrar_entrega(
                             llamada_id,
                             int(orden.get("turno", 0)),
@@ -509,6 +546,9 @@ def crear_app(
                             orden.get("texto_entregado"),
                         )
                     elif orden.get("type") == "pausa":
+                        if marca_bot is not None and texto_bot:
+                            turnos_bot.append((marca_bot, texto_bot))  # sin `entrega` previa
+                        marca_bot = grabador.marcar()
                         pausado = True
                     elif orden.get("type") == "reanudar":
                         pausado = False
@@ -538,14 +578,15 @@ def crear_app(
                 t.cancel()
         finally:
             await sesion.cerrar()
+            if marca_bot is not None and texto_bot:
+                turnos_bot.append((marca_bot, texto_bot))
             try:
-                await almacen_audio.guardar_pcm(
-                    deps.repo,
-                    llamada_id,
-                    "cliente",
-                    bytes(grabacion),
-                    sample_rate,  # type: ignore[arg-type]
-                )
+                await reconstruir_voz_bot()
+            except Exception:  # noqa: BLE001
+                # Sin voz del bot la llamada se guarda igual: mejor una pista que ninguna
+                logger.exception("No se pudo reconstruir la voz del bot en %s", llamada_id)
+            try:
+                await almacen_audio.guardar_conversacion(deps.repo, llamada_id, grabador)
             except Exception:  # noqa: BLE001
                 logger.exception("No se pudo guardar el audio de la llamada %s", llamada_id)
             try:

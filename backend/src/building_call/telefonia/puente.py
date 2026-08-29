@@ -9,7 +9,8 @@ El adaptador del proveedor (Twilio u otro) implementa `CanalTelefono` y llama a:
 El puente se encarga de STT en streaming (misma sesión AssemblyAI que la consola web), del grafo
 (`GestorLlamadas`), del TTS de servidor, del *barge-in* (si el vecino habla ≥2 palabras mientras
 suena el bot, se corta la reproducción), del ledger de entrega, de las métricas de latencia
-(`respuesta_ms` = fin de voz del vecino → primer audio del bot) y de guardar la grabación.
+(`respuesta_ms` = fin de voz del vecino → primer audio del bot) y de la grabación alineada de las
+dos voces (`grabacion.GrabadorConversacion`).
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from collections.abc import Callable
 from time import perf_counter
 from typing import Any, Protocol
 
+from building_call.grabacion import GrabadorConversacion
 from building_call.telefonia.audio import EntradaTelefono, SalidaTelefono, energia
 
 logger = logging.getLogger(__name__)
@@ -69,8 +71,7 @@ class PuenteLlamada:
         self._sesion: Any = None
         self._tarea_eventos: asyncio.Task[None] | None = None
         self._entrada = EntradaTelefono()
-        self._grabacion = bytearray()  # vecino, PCM16 16 kHz
-        self._grabacion_bot = bytearray()  # asistente, PCM16 a la tasa del TTS
+        self._grabador = GrabadorConversacion()  # las dos voces sobre el mismo reloj
         self._ultima_voz_at: float | None = None
         self._cerrado = False
 
@@ -98,17 +99,9 @@ class PuenteLlamada:
                 logger.exception("Error cerrando el STT de la llamada %s", self.llamada_id)
         if self.almacen_audio is not None and self.repo is not None and self.llamada_id:
             try:
-                await self.almacen_audio.guardar_pcm(
-                    self.repo, self.llamada_id, "cliente", bytes(self._grabacion), 16000
+                await self.almacen_audio.guardar_conversacion(
+                    self.repo, self.llamada_id, self._grabador
                 )
-                if self._grabacion_bot:
-                    await self.almacen_audio.guardar_pcm(
-                        self.repo,
-                        self.llamada_id,
-                        "asistente",
-                        bytes(self._grabacion_bot),
-                        int(self.tts.tasa),
-                    )
             except Exception:  # noqa: BLE001
                 logger.exception("No se pudo guardar el audio de la llamada %s", self.llamada_id)
 
@@ -120,7 +113,7 @@ class PuenteLlamada:
         pcm = self._entrada.convertir(ulaw)
         if energia(pcm) > UMBRAL_VOZ:
             self._ultima_voz_at = perf_counter()
-        self._grabacion.extend(pcm)
+        self._grabador.escribir_cliente(pcm)
         await self._sesion.enviar_audio(pcm)
 
     async def marca_reproducida(self, nombre: str) -> None:
@@ -159,7 +152,7 @@ class PuenteLlamada:
             logger.exception("TTS falló en la llamada %s; se corta la llamada", self.llamada_id)
             await self.canal.colgar()
             return
-        self._grabacion_bot.extend(pcm)
+        self._grabador.escribir_asistente(pcm, int(self.tts.tasa))
         salida = SalidaTelefono(self.tts.tasa)
         primero_at: float | None = None
         for trozo in salida.convertir(pcm, final=True):

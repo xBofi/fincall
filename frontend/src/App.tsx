@@ -37,6 +37,13 @@ import {
 type ModoStt = 'navegador' | 'servidor' | 'streaming'
 type Pantalla = 'operaciones' | 'latencia' | 'usuarios'
 
+/** En la consola web el bot habla por el navegador: su pista la reconstruye el TTS del servidor. */
+const NOMBRE_PISTA: Record<string, string> = {
+  mezcla: 'Conversación completa',
+  cliente: 'Solo el vecino',
+  asistente: 'Solo el asistente',
+}
+
 export default function App() {
   const [salud, setSalud] = useState<Salud | null>(null)
   const [vista, setVista] = useState<VistaLlamada | null>(null)
@@ -480,8 +487,13 @@ export default function App() {
                 <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{seleccionado.llamada.resumen ?? '—'}</p></div>
                 {seleccionado.pistas.length > 0 && (
                   <div className="ops-summary" style={{ marginTop: 12 }}>
-                    <p className="ops-eyebrow">Grabación del vecino · URL firmada, expira en 5 min · retención 14 días</p>
-                    {seleccionado.pistas.map((p) => p.url ? <audio key={p.id} controls preload="none" src={p.url} style={{ width: '100%' }} /> : <small key={p.id}>Pista eliminada por retención</small>)}
+                    <p className="ops-eyebrow">Grabación · URL firmada, expira en 5 min · retención 14 días</p>
+                    {seleccionado.pistas.map((p) => (
+                      <div key={p.id} style={{ marginBottom: 8 }}>
+                        <small>{NOMBRE_PISTA[p.canal] ?? p.canal}</small>
+                        {p.url ? <audio controls preload="none" src={p.url} style={{ width: '100%' }} /> : <small> · eliminada por retención</small>}
+                      </div>
+                    ))}
                   </div>
                 )}
                 <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Transcripción y decisiones</p><h2>Rastro verificable</h2></div></div>

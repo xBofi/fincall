@@ -53,7 +53,9 @@ idempotente: se puede repetir cada vez que cambie la URL del túnel. Después, *
 5. **Barge-in**: si AssemblyAI devuelve un parcial de ≥2 palabras mientras suena el bot, se manda
    `clear` a Twilio y la entrega queda como *interrumpida*.
 6. Al terminar la conversación se reproduce la despedida y se cierra el WebSocket: la llamada
-   termina. El audio del vecino se guarda como en la web (privado, URL firmada, 14 días) y el
+   termina. La llamada se guarda en tres pistas alineadas —`mezcla`, `cliente` y `asistente`—
+   (privadas, URL firmada, 14 días); aquí la voz del bot es captura real de lo que salió a la
+   línea, no una reconstrucción como en la consola web. El
    expediente aparece en la consola con su transcripción, decisiones y latencias
    (`stt_cliente = telefono`).
 

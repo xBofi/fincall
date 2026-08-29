@@ -2,7 +2,8 @@
 name = "building-call"
 version = "0.1.0"
 description = "Building Call Assistant: voicebot de incidencias para comunidades de propietarios"
-requires-python = ">=3.12"
+# audioop (grabación y telefonía) se eliminó en 3.13; sin este tope la API no arranca
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.19.1",
     "asyncpg>=0.31.0",

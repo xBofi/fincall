@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from building_call.grabacion import GrabadorConversacion
 from building_call.repos.operativo import RepositorioOperativo
 
 
@@ -76,6 +77,17 @@ class AlmacenAudio:
         }
         await repo.guardar_pista(pista)
         return pista
+
+    async def guardar_conversacion(
+        self, repo: RepositorioOperativo, llamada_id: str, grabador: GrabadorConversacion
+    ) -> list[dict[str, Any]]:
+        """Guarda las pistas alineadas de la llamada (`mezcla`, `cliente`, `asistente`)."""
+        guardadas = []
+        for canal, pcm in grabador.pistas().items():
+            pista = await self.guardar_pcm(repo, llamada_id, canal, pcm, grabador.tasa)
+            if pista is not None:
+                guardadas.append(pista)
+        return guardadas
 
     # ----------------------------------------------------------------- lectura firmada
 

@@ -71,7 +71,11 @@ def crear_router_operaciones(
         if ll is None:
             raise HTTPException(404, "Expediente no encontrado")
         await auditar(usuario, "ver_expediente", f"llamada:{llamada_id}")
-        pistas = await repo.listar_pistas(llamada_id)
+        # La mezcla primero: es la que se escucha para seguir la conversación
+        orden = {"mezcla": 0, "cliente": 1, "asistente": 2}
+        pistas = sorted(
+            await repo.listar_pistas(llamada_id), key=lambda p: orden.get(p["canal"], 9)
+        )
         return {
             "llamada": ll.model_dump(mode="json"),
             "turnos": await repo.listar_turnos(llamada_id),

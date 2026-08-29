@@ -34,7 +34,7 @@ class Usuario(BaseModel):
 
 class PistaAudio(BaseModel):
     llamada_id: str
-    canal: Literal["cliente", "asistente"]
+    canal: Literal["cliente", "asistente", "mezcla"]
     creada_en: datetime
     expira_en: datetime
 
