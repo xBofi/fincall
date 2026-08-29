@@ -52,7 +52,6 @@ class Settings(BaseSettings):
     assemblyai_max_silencio_ms: int = 800
 
     cors_origins: list[str] = ["http://localhost:5173"]
-    frontend_url: str = "http://localhost:5173"
 
     # Acceso a la consola operativa: usuarios internos con contraseña (sin proveedor externo).
     # Si no existe ningún usuario al arrancar se crea este owner con cambio de contraseña

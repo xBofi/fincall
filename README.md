@@ -68,6 +68,27 @@ La consola es privada: usuarios internos con contraseña, sin proveedor externo 
    genera una contraseña temporal que se muestra una única vez y que el usuario debe cambiar al entrar.
    Desde ahí también cambias roles (`owner`, `administrador`, `calidad`), desactivas o eliminas usuarios.
 
+### Usar la consola fuera de casa (túnel ngrok)
+
+La consola no se despliega en ningún sitio todavía: para usarla desde fuera se publica el servidor
+de desarrollo por un túnel https. Se expone **el 5173**, no la API: Vite ya hace de proxy de `/api`
+y del WebSocket de voz, así que todo viaja por un único origen y no hacen falta ni CORS ni cambios
+en la cookie. El micrófono, además, solo funciona en contexto seguro, y el túnel da https.
+
+```powershell
+cd frontend; $env:BC_TUNEL=1; corepack pnpm run dev    # atiende en 127.0.0.1:5173
+ngrok http 127.0.0.1:5173                              # en otra terminal
+```
+
+`BC_TUNEL=1` hace dos cosas: atender también en IPv4 (por defecto Vite solo escucha en `::1` y el
+túnel no llegaría) y apuntar el cliente de HMR al 443 público. El Host del túnel ya está en
+`allowedHosts`; sin eso Vite responde *Blocked request*.
+
+La URL que imprime ngrok es **pública**: la protege solo el usuario y la contraseña de la consola,
+y al otro lado hay grabaciones y datos de vecinos. Úsala mientras la necesites y corta el túnel
+después; con el plan gratuito la URL cambia en cada arranque. La primera visita muestra el aviso
+de ngrok: hay que pulsar *Visit Site* una vez para que las peticiones de la aplicación pasen.
+
 ### Telefonía
 
 El asistente puede atender un número real (Twilio Media Streams; proveedor Provisional). Con las
