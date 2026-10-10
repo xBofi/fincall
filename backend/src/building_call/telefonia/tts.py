@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import logging
+import re
 import shutil
 from collections import OrderedDict
 from collections.abc import AsyncIterator
@@ -44,6 +45,18 @@ async def fragmentos(tts: SintetizadorVoz, texto: str) -> AsyncIterator[bytes]:
             yield trozo
     else:
         yield await tts.sintetizar(texto)
+
+
+_ORDINALES = (
+    "", "primer", "segund", "tercer", "cuart", "quint", "sext", "séptim", "octav", "noven", "décim",
+)  # fmt: skip
+_ORDINAL = re.compile(r"\b(10|[1-9])\s?([ºª])")
+
+
+def texto_para_voz(texto: str) -> str:
+    """Lo que la voz leería mal: "1º A" sonaba "un hilo A" con ElevenLabs (llamada 2026-10-11)."""
+    texto = _ORDINAL.sub(lambda m: _ORDINALES[int(m[1])] + ("o" if m[2] == "º" else "a"), texto)
+    return " ".join(texto.split())
 
 
 class _Cache:
@@ -151,7 +164,7 @@ class SintetizadorPiper:
                 await asyncio.to_thread(self._sintetizar_en_proceso, "Hola.")
 
     async def sintetizar(self, texto: str) -> bytes:
-        texto = " ".join(texto.split())
+        texto = texto_para_voz(texto)
         if not texto:
             return b""
         if (pcm := self._cache.get(texto)) is not None:
@@ -227,7 +240,7 @@ class SintetizadorWorkersAI:
         return pcm
 
     async def sintetizar(self, texto: str) -> bytes:
-        texto = " ".join(texto.split())
+        texto = texto_para_voz(texto)
         if not texto:
             return b""
         if (pcm := self._cache.get(texto)) is not None:
@@ -244,7 +257,7 @@ class SintetizadorElevenLabs:
         self,
         api_key: str,
         voz: str,
-        modelo: str = "eleven_flash_v2_5",
+        modelo: str = "eleven_v4_turbo",
         url: str = "https://api.elevenlabs.io",
         timeout_s: float = 10.0,
         cliente: httpx.AsyncClient | None = None,
@@ -269,7 +282,7 @@ class SintetizadorElevenLabs:
             logger.warning("ElevenLabs no responde al precalentar: %s", type(e).__name__)
 
     async def fragmentos(self, texto: str) -> AsyncIterator[bytes]:
-        texto = " ".join(texto.split())
+        texto = texto_para_voz(texto)
         if not texto:
             return
         if (pcm := self._cache.get(texto)) is not None:

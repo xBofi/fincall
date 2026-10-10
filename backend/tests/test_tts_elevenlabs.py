@@ -109,3 +109,13 @@ async def test_voz_caida_es_un_502_para_volver_al_navegador(
     async with await _cliente_con_voz(deps, _VozFalsa(falla=True), monkeypatch) as c:
         r = await c.post("/api/voz-bot", json={"texto": "Hola"})
     assert r.status_code == 502
+
+
+def test_ordinales_se_leen_en_palabras() -> None:
+    from building_call.telefonia.tts import texto_para_voz
+
+    assert (
+        texto_para_voz("En el 1º las puertas son A o B.") == "En el primero las puertas son A o B."
+    )
+    assert texto_para_voz("El 3º  B y la 2ª planta") == "El tercero B y la segunda planta"
+    assert texto_para_voz("Calle Mayor 12") == "Calle Mayor 12"

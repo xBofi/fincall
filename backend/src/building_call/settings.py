@@ -88,7 +88,8 @@ class Settings(BaseSettings):
     # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).
     elevenlabs_api_key: str = ""
     elevenlabs_voz: str = ""  # voice ID, no el nombre
-    elevenlabs_modelo: str = "eleven_flash_v2_5"
+    # Medido 2026-10-11: v4 Turbo primer audio ~158 ms (como Flash v2.5) con mejor voz
+    elevenlabs_modelo: str = "eleven_v4_turbo"
     elevenlabs_url: str = "https://api.elevenlabs.io"
     piper_bin: str = "piper"
     piper_modelo: str = ""  # ruta al .onnx (junto a su .onnx.json), p. ej. es_ES-davefx-medium
