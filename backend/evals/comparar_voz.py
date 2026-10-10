@@ -11,7 +11,8 @@ tasa de error por palabra (WER) contra el texto original.
 
 Proveedores (se omiten los que no tienen credenciales en backend/.env):
 - TTS: piper (local), melotts y aura-2-es (Cloudflare Workers AI), elevenlabs
-  (BC_ELEVENLABS_API_KEY + BC_ELEVENLABS_VOZ; BC_ELEVENLABS_URL para el endpoint de residencia UE).
+  (BC_ELEVENLABS_API_KEY + BC_ELEVENLABS_VOZ, uno o varios voice ID separados por comas;
+  BC_ELEVENLABS_URL para el endpoint de residencia UE).
 - STT: assemblyai (endpoint UE), nova-3 y flux (Workers AI a través de AI Gateway,
   BC_CLOUDFLARE_GATEWAY, por defecto "default").
 
@@ -28,6 +29,7 @@ import asyncio
 import audioop
 import base64
 import json
+import os
 import random
 import sys
 import wave
@@ -168,19 +170,23 @@ def proveedores_tts(
 
             disponibles[f"aura-2-es/{voz}"] = con_aura
 
-    if env.get("BC_ELEVENLABS_API_KEY") and env.get("BC_ELEVENLABS_VOZ"):
+    # Varias voces separadas por comas; la variable de entorno manda sobre .env para probar sin editarlo.
+    voces_eleven = os.environ.get("BC_ELEVENLABS_VOZ") or env.get("BC_ELEVENLABS_VOZ") or ""
+    if env.get("BC_ELEVENLABS_API_KEY") and voces_eleven:
         base = (env.get("BC_ELEVENLABS_URL") or "https://api.elevenlabs.io").rstrip("/")
 
-        async def con_elevenlabs(texto: str) -> tuple[float, float, bytes]:
-            url = f"{base}/v1/text-to-speech/{env['BC_ELEVENLABS_VOZ']}/stream?output_format=pcm_16000"
-            return await _http_en_streaming(
-                cliente,
-                url,
-                headers={"xi-api-key": str(env["BC_ELEVENLABS_API_KEY"])},
-                json={"text": texto, "model_id": "eleven_flash_v2_5", "language_code": "es"},
-            )
+        for voz_id in [v.strip() for v in voces_eleven.split(",") if v.strip()]:
 
-        disponibles["elevenlabs-flash"] = con_elevenlabs
+            async def con_elevenlabs(texto: str, voz_id: str = voz_id) -> tuple[float, float, bytes]:
+                url = f"{base}/v1/text-to-speech/{voz_id}/stream?output_format=pcm_16000"
+                return await _http_en_streaming(
+                    cliente,
+                    url,
+                    headers={"xi-api-key": str(env["BC_ELEVENLABS_API_KEY"])},
+                    json={"text": texto, "model_id": "eleven_flash_v2_5", "language_code": "es"},
+                )
+
+            disponibles[f"elevenlabs-flash/{voz_id[:6]}"] = con_elevenlabs
     return disponibles
 
 
@@ -191,7 +197,7 @@ async def comparar_tts(args: argparse.Namespace, salida: Path) -> dict[str, Any]
         elegidos = {
             k: v
             for k, v in todos.items()
-            if not args.proveedores or k.split("/")[0] in args.proveedores
+            if not args.proveedores or k in args.proveedores or k.split("/")[0] in args.proveedores
         }
         letras = random.sample("ABCDEFGHJK", len(elegidos))
         clave = dict(zip(letras, elegidos, strict=True))
