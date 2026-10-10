@@ -257,7 +257,7 @@ class SintetizadorElevenLabs:
         self,
         api_key: str,
         voz: str,
-        modelo: str = "eleven_v4_turbo",
+        modelo: str = "eleven_v4",
         url: str = "https://api.elevenlabs.io",
         timeout_s: float = 10.0,
         cliente: httpx.AsyncClient | None = None,
