@@ -142,10 +142,13 @@ ESCENARIOS: list[dict[str, Any]] = [
 
 def sintetizar(texto: str) -> Path:
     AUDIO.mkdir(exist_ok=True)
-    ruta = AUDIO / (hashlib.md5(texto.encode("utf-8")).hexdigest()[:12] + ".wav")
+    # "-utf8" en el nombre: los WAV anteriores se generaron sin UTF-8 en la entrada de PowerShell
+    # y la voz decía "S" por "sí" y "BAO" por "baño"
+    ruta = AUDIO / (hashlib.md5(texto.encode("utf-8")).hexdigest()[:12] + "-utf8.wav")
     if ruta.exists():
         return ruta
     guion = (
+        "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; "
         "Add-Type -AssemblyName System.Speech; "
         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
         "$v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es*' } | Select-Object -First 1; "
