@@ -23,6 +23,7 @@ from typing import Any, Protocol
 
 from building_call.grabacion import GrabadorConversacion
 from building_call.telefonia.audio import EntradaTelefono, SalidaTelefono, energia
+from building_call.telefonia.tts import fragmentos
 
 logger = logging.getLogger(__name__)
 
@@ -159,19 +160,26 @@ class PuenteLlamada:
                 await self.canal.colgar()
             return
         t0 = perf_counter()
+        salida = SalidaTelefono(self.tts.tasa)
+        primero_at: float | None = None
+        pcm = bytearray()
         try:
-            pcm = await self.tts.sintetizar(texto)
+            # Se envía cada trozo según llega del TTS: el vecino oye el inicio sin esperar la frase
+            async for parte in fragmentos(self.tts, texto):
+                pcm += parte
+                for trozo in salida.convertir(parte):
+                    if primero_at is None:
+                        primero_at = perf_counter()
+                    await self.canal.enviar_audio(trozo)
         except Exception:  # noqa: BLE001
             logger.exception("TTS falló en la llamada %s; se corta la llamada", self.llamada_id)
             await self.canal.colgar()
             return
-        self._grabador.escribir_asistente(pcm, int(self.tts.tasa))
-        salida = SalidaTelefono(self.tts.tasa)
-        primero_at: float | None = None
-        for trozo in salida.convertir(pcm, final=True):
+        for trozo in salida.convertir(b"", final=True):
             if primero_at is None:
                 primero_at = perf_counter()
             await self.canal.enviar_audio(trozo)
+        self._grabador.escribir_asistente(bytes(pcm), int(self.tts.tasa))
         self.turno_sonando = turno
         await self.canal.marcar(f"turno-{turno}")
         if primero_at is not None and turno > 0 and self.llamada_id:
