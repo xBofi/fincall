@@ -507,13 +507,29 @@ def _llamada_desde(estado: EstadoLlamada, resultado: str, motivo: str | None = N
 # --------------------------------------------------------------------------- interpretación
 
 
+def _sin_coletilla_repeticion(texto: str) -> str:
+    """'Claro, le repito. X' -> 'X', para que repetir dos veces no encadene la coletilla."""
+    coletillas = tuple(render(c, mensaje="") for c in ("global.repetir", "global.no_oido"))
+    while texto.startswith(coletillas):
+        texto = next(texto[len(c) :] for c in coletillas if texto.startswith(c))
+    return texto
+
+
+# Mientras se piden finca o vivienda, un "problema" que el modelo no sabe clasificar suele ser la
+# respuesta mal transcrita ("Primero abre la"), no una avería: guardarlo saltaba "¿qué ocurre?".
+_NODOS_IDENTIFICACION = frozenset({"identificar_finca", "identificar_vivienda"})
+
+
 def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[str, str]:
     pend = dict(estado.get("pendientes", {}))
+    problema_dudoso = (
+        interp.categoria == "no_clasificable" and estado.get("nodo_actual") in _NODOS_IDENTIFICACION
+    )
     for campo in ("direccion", "portal", "piso", "puerta", "nombre", "problema"):
         valor = getattr(interp, campo)
-        if valor:
+        if valor and not (campo == "problema" and problema_dudoso):
             pend[campo] = valor
-    if interp.problema:
+    if interp.problema and not problema_dudoso:
         pend["problema_corto"] = interp.problema
         for campo in ("categoria", "urgencia"):
             valor = getattr(interp, campo)
@@ -690,7 +706,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         aporta_datos = bool(interp.campos_presentes()) or interp.confirma is not None
         if interp.intencion == "repetir":
             # Se repite el mensaje completo (resumen incluido), no solo la pregunta final
-            completo = estado.get("ultimo_mensaje_bot") or ultima
+            completo = _sin_coletilla_repeticion(estado.get("ultimo_mensaje_bot") or ultima)
             return _preguntar(
                 estado,
                 nodo,
@@ -748,7 +764,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         entrada = estado["entrada_usuario"] or ""
         historial = _registrar_entrada(estado)
         if _no_lo_oyo(entrada, estado):
-            completo = estado.get("ultimo_mensaje_bot") or estado.get("ultima_pregunta") or ""
+            completo = _sin_coletilla_repeticion(
+                estado.get("ultimo_mensaje_bot") or estado.get("ultima_pregunta") or ""
+            )
             salida_rep = _preguntar(
                 estado,
                 nodo,
@@ -867,8 +885,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                         **cambios,
                     )
                 else:
-                    for k in ("portal", "piso", "puerta"):
-                        pend.pop(k, None)
+                    pend.pop("puerta", None)
+                    if not any(_normalizar_piso(v.piso) == np_ for v in viviendas):
+                        pend.pop("piso", None)
+                        pend.pop("portal", None)
                     return await _reintento_vivienda(estado, pend, traza)
             elif piso or puerta or pend.get("portal"):
                 # Dato parcial ("el tercero", "portal 1"): se conserva y se pide solo lo que falta.
@@ -1013,6 +1033,29 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         )
         return "En esa finca hay " + ", ".join(partes) + ". "
 
+    async def _pregunta_puerta_del_piso(estado: EstadoLlamada, pend: dict[str, str]) -> str | None:
+        """Con un piso que existe pero sin puerta válida: '¿la A o la B?' en vez de empezar de cero."""
+        piso = _normalizar_piso(pend.get("piso"))
+        if not (piso and estado.get("finca_id")) or pend.get("puerta"):
+            return None
+        viviendas = await deps.repo.viviendas_de(estado["finca_id"])  # type: ignore[arg-type]
+        portal = _normalizar_portal(pend.get("portal"))
+        puertas = sorted(
+            {
+                v.puerta
+                for v in viviendas
+                if _normalizar_piso(v.piso) == piso
+                and (not portal or _normalizar_portal(v.portal) == portal)
+            }
+        )
+        if not puertas:
+            return None
+        return render(
+            "identificar_vivienda.puerta_del_piso",
+            piso=f"{piso}º" if piso.isdigit() else piso,
+            puertas=" o ".join(puertas),
+        )
+
     async def _reintento_vivienda(
         estado: EstadoLlamada,
         pend: dict[str, str],
@@ -1029,11 +1072,14 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 traza=traza,
                 **(extra or {}),
             )
-        ayuda = await _describir_viviendas(estado["finca_id"]) if estado.get("finca_id") else ""
+        texto = await _pregunta_puerta_del_piso(estado, pend)
+        if texto is None:
+            ayuda = await _describir_viviendas(estado["finca_id"]) if estado.get("finca_id") else ""
+            texto = render("identificar_vivienda.reintento", ayuda=ayuda)
         return _preguntar(
             estado,
             "identificar_vivienda",
-            render("identificar_vivienda.reintento", ayuda=ayuda),
+            texto,
             intentos_vivienda=intentos,
             pendientes=pend,
             traza=traza,

@@ -203,6 +203,13 @@ CATALOGO: dict[str, Plantilla] = dict(
             pregunta=True,
         ),
         _p(
+            "identificar_vivienda.puerta_del_piso",
+            "identificar_vivienda",
+            "El piso existe pero la puerta no: se conserva el piso y se ofrecen sus puertas.",
+            "En el {piso} las puertas son {puertas}. ¿Cuál es la suya?",
+            pregunta=True,
+        ),
+        _p(
             "identificar_vivienda.repregunta",
             "identificar_vivienda",
             "Respaldo cuando no hay una pregunta anterior que repetir.",

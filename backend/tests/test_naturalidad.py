@@ -157,12 +157,16 @@ async def test_direccion_irreconocible_no_deriva_a_humano(gestor: GestorLlamadas
 async def test_vivienda_inexistente_explica_la_estructura_de_la_finca(
     gestor: GestorLlamadas,
 ) -> None:
+    # El piso existe: solo se ofrecen sus puertas
     estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "piso 1, puerta 2"])
     assert estado["nodo_actual"] == "identificar_vivienda"
-    assert "pisos del 1 al 4" in estado["mensajes_bot"][-1]
-    assert "puertas A o B" in estado["mensajes_bot"][-1]
+    assert "En el 1º las puertas son A o B" in estado["mensajes_bot"][-1]
     estado = await gestor.mensaje(estado["llamada_id"], "piso 1 puerta B")
     assert estado["vivienda_id"] == "finca-mayor-12-u-1B"
+    # Tampoco existe el piso: se describe la finca entera
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "piso 9, puerta 2"])
+    assert "pisos del 1 al 4" in estado["mensajes_bot"][-1]
+    assert "puertas A o B" in estado["mensajes_bot"][-1]
 
 
 async def test_saludo_no_cuenta_como_intento_de_finca(gestor: GestorLlamadas) -> None:
@@ -351,3 +355,44 @@ async def test_nombre_dicho_por_su_cuenta_se_guarda(gestor: GestorLlamadas) -> N
     estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A, soy Ana"])
     assert estado["nombre_declarado"] == "Ana"
     assert estado["mensajes_bot"][-1].startswith("Gracias, Ana: 1º A.")
+
+
+async def test_frase_cortada_al_dar_vivienda_no_se_toma_por_averia(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    # Llamada real 2026-10-11: el STT oyó "Primero abre la" y el modelo lo devolvió como problema
+    # no clasificable; el bot se saltó "¿qué ocurre?" y pidió detalles de una avería inexistente.
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {  # type: ignore[method-assign]
+        "problema": "Primero abre la",
+        "categoria": "no_clasificable",
+    }
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "Primero abre la"])
+    llm._interpretar = original  # type: ignore[method-assign]
+    estado = await gestor.mensaje(estado["llamada_id"], "Piso 1, puerta A.")
+    assert estado["vivienda_id"] == "finca-mayor-12-u-1A"
+    assert estado["nodo_actual"] == "recoger_solicitud"
+    assert not estado.get("solicitud")
+
+
+async def test_puerta_inexistente_con_piso_valido_pregunta_solo_la_puerta(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {"piso": "1", "puerta": "1"}  # type: ignore[method-assign]
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "La puerta primero."])
+    llm._interpretar = original  # type: ignore[method-assign]
+    ultimo = estado["mensajes_bot"][-1]
+    assert "No encuentro esa vivienda" not in ultimo
+    assert "A o B" in ultimo
+    assert estado["pendientes"].get("piso") == "1"
+    estado = await gestor.mensaje(estado["llamada_id"], "puerta A")
+    assert estado["vivienda_id"] == "finca-mayor-12-u-1A"
+
+
+async def test_repetir_dos_veces_no_acumula_la_coletilla(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor, ["Calle Mayor 12", "sí", "¿Cómo? No le he oído bien", "¿Cómo? No le he oído bien"]
+    )
+    assert estado["mensajes_bot"][-1].count("le repito") == 1
+    assert "vivienda" in estado["mensajes_bot"][-1]

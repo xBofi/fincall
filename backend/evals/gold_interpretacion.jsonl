@@ -24,3 +24,4 @@
 {"nodo": "confirmar_resumen", "pregunta": "He entendido lo siguiente: fuga de agua en el baño. Lo he clasificado como fontaneria, con urgencia alta. ¿Es correcto?", "entrada": "No, no es en el baño, es en la cocina, debajo del fregadero", "esperado": {"confirma": false, "problema": "*"}}
 {"nodo": "confirmar_resumen", "pregunta": "He entendido lo siguiente: fuga de agua en el baño. Lo he clasificado como fontaneria, con urgencia alta. ¿Es correcto?", "entrada": "Eso es, pero que vengan hoy por favor", "esperado": {"confirma": true}}
 {"nodo": "confirmar_resumen", "pregunta": "He entendido lo siguiente: fuga de agua en el baño. Lo he clasificado como fontaneria, con urgencia alta. ¿Es correcto?", "entrada": "¿Y cuánto van a tardar en venir?", "esperado": {"intencion": "pregunta"}}
+{"nodo": "identificar_vivienda", "pregunta": "¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta.", "entrada": "Primero abre la", "esperado": {"problema": null}}
