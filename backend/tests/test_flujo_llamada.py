@@ -92,8 +92,8 @@ async def test_vivienda_con_portal(gestor: GestorLlamadas) -> None:
     estado = await _conversar(gestor, ["Alameda 5", "sí", "portal 2, segundo C"])
     assert estado["vivienda_id"] == "finca-alameda-5-2-2C"
     assert estado["nodo_actual"] == "recoger_solicitud"
-    # Sin preguntar el nombre: se confirma la vivienda y se pasa directamente al problema
-    assert estado["mensajes_bot"][-1] == "Perfecto, portal 2 2º C. Cuénteme, ¿qué ocurre?"
+    # Sin preguntar el nombre ni repetir la vivienda (ya registrada): directo al problema
+    assert estado["mensajes_bot"][-1] == "Perfecto. Cuénteme, ¿qué ocurre?"
 
 
 async def test_rechazar_resumen_vuelve_a_recoger_solicitud(gestor: GestorLlamadas) -> None:

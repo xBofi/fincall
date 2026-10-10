@@ -190,7 +190,8 @@ async def test_resumen_incluye_nombre_y_permite_corregirlo(gestor: GestorLlamada
     estado = await _conversar(
         gestor, ["Calle Mayor 12", "sí", "3 B", "Soy Reubofibra y no hay luz en la escalera"]
     )
-    assert "Reubofibra, 3º B" in estado["mensajes_bot"][-1]
+    assert "Le resumo: Reubofibra, " in estado["mensajes_bot"][-1]
+    assert "3º B" not in estado["mensajes_bot"][-1]
     estado = await gestor.mensaje(estado["llamada_id"], "No, me llamo Andreu Bofi")
     assert estado["nombre_declarado"] == "Andreu Bofi"
     assert estado["nodo_actual"] == "confirmar_resumen"
@@ -354,7 +355,7 @@ async def test_el_nombre_no_se_pregunta(gestor: GestorLlamadas) -> None:
 async def test_nombre_dicho_por_su_cuenta_se_guarda(gestor: GestorLlamadas) -> None:
     estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A, soy Ana"])
     assert estado["nombre_declarado"] == "Ana"
-    assert estado["mensajes_bot"][-1].startswith("Gracias, Ana: 1º A.")
+    assert estado["mensajes_bot"][-1].startswith("Gracias, Ana. Cuénteme")
 
 
 async def test_frase_cortada_al_dar_vivienda_no_se_toma_por_averia(

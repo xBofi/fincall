@@ -237,28 +237,29 @@ CATALOGO: dict[str, Plantilla] = dict(
         _p(
             "recoger_solicitud.preguntar",
             "recoger_solicitud",
-            "Se pregunta qué ocurre. {saludo} confirma la vivienda (y el nombre, si lo ha dicho).",
+            "Se pregunta qué ocurre. {saludo} lleva el nombre, si el vecino lo ha dicho.",
             "{saludo}Cuénteme, ¿qué ocurre?",
             pregunta=True,
         ),
         _p(
             "recoger_solicitud.saludo",
             "recoger_solicitud",
-            "Prefijo que confirma la vivienda identificada antes de preguntar qué ocurre.",
-            "Perfecto, {vivienda}. ",
+            "Prefijo antes de preguntar qué ocurre. La vivienda ya está registrada: no se repite.",
+            "Perfecto. ",
         ),
         _p(
             "recoger_solicitud.saludo_con_nombre",
             "recoger_solicitud",
             "Prefijo cuando el vecino ha dicho su nombre sin que se le pidiera.",
-            "Gracias, {nombre}: {vivienda}. ",
+            "Gracias, {nombre}. ",
         ),
         # ---------------------------------------------------------------- confirmar resumen
         _p(
             "confirmar_resumen.resumen",
             "confirmar_resumen",
-            "Se le lee al vecino lo entendido y se espera un sí o un no.",
-            "Le resumo: {quien}. {resumen}. {categoria}, con urgencia {urgencia}. ¿Es correcto?",
+            "Se le lee al vecino lo entendido y se espera un sí o un no. {quien} es el nombre "
+            "seguido de coma si lo ha dicho; la vivienda ya está registrada y no se lee.",
+            "Le resumo: {quien}{resumen}. {categoria}, con urgencia {urgencia}. ¿Es correcto?",
             pregunta=True,
         ),
         _p(
@@ -318,8 +319,9 @@ CATALOGO: dict[str, Plantilla] = dict(
         _p(
             "avisar_canal.cierre",
             "avisar_canal",
-            "Cierre con la referencia de la incidencia y qué va a pasar a continuación.",
-            "He registrado su incidencia con referencia {referencia}. {aviso} Si en veinticuatro "
+            "Cierre con qué va a pasar a continuación. Sin la referencia: el administrador la "
+            "tiene y al vecino no le sirve de nada oír un código.",
+            "He registrado su incidencia. {aviso} Si en veinticuatro "
             "horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, "
             "hasta luego.",
         ),

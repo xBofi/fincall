@@ -1364,16 +1364,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         nodo = "recoger_solicitud"
         entrada = estado.get("entrada_usuario")
         if entrada is None:
-            # Se confirma de paso la vivienda, para que el vecino corrija lo que el STT oyó mal
-            vivienda = estado.get("vivienda_etiqueta")
             saludo = (
-                render(
-                    "recoger_solicitud.saludo_con_nombre",
-                    nombre=estado.get("nombre_declarado"),
-                    vivienda=vivienda,
-                )
+                render("recoger_solicitud.saludo_con_nombre", nombre=estado.get("nombre_declarado"))
                 if estado.get("nombre_declarado")
-                else render("recoger_solicitud.saludo", vivienda=vivienda)
+                else render("recoger_solicitud.saludo")
             )
             return _preguntar(estado, nodo, render("recoger_solicitud.preguntar", saludo=saludo))
         interp, historial, extra, salida = await _turno(estado, nodo)
@@ -1502,12 +1496,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     "confirmar_resumen.categoria", categoria=categoria_hablada(categoria or "")
                 )
             )
-            # Se repiten nombre y vivienda para que el vecino pueda corregir lo que el STT oyó mal
-            quien = (
-                f"{estado.get('nombre_declarado')}, {estado.get('vivienda_etiqueta')}"
-                if estado.get("nombre_declarado")
-                else estado.get("vivienda_etiqueta")
-            )
+            # El nombre se repite para que el vecino pueda corregir lo que el STT oyó mal
+            quien = f"{nombre}, " if (nombre := estado.get("nombre_declarado")) else ""
             return _preguntar(
                 estado,
                 nodo,
@@ -1802,9 +1792,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             aviso = render(
                 "avisar_canal.aviso_especialista", especialista=especialista, contacto=contacto
             )
-        mensaje = render(
-            "avisar_canal.cierre", referencia=estado.get("incidencia_id"), aviso=aviso
-        )
+        mensaje = render("avisar_canal.cierre", aviso=aviso)
         return _avanzar(
             estado,
             "fin",
