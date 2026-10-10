@@ -3,7 +3,7 @@ clasificación. Mide exactitud y latencia (p50/p95) para decidir el modelo de pr
 
 Uso:
     uv run python evals/comparar_modelos.py --modelos qwen3.5:4b,qwen2.5:1.5b --repeticiones 1
-    uv run python evals/comparar_modelos.py --modelos vertex:gemini-2.5-flash-lite,cf:@cf/qwen/qwen3.8-27b
+    uv run python evals/comparar_modelos.py --modelos vertex:gemini-3.5-flash-lite,cf:@cf/qwen/qwen3.8-27b
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ def _leer_env() -> dict[str, str]:
 
 
 def _crear_llm(nombre: str, url_ollama: str) -> Any:
-    """`cf:@cf/qwen/qwen3.8-27b` -> Workers AI; `vertex:gemini-2.5-flash-lite` -> Vertex AI (UE);
+    """`cf:@cf/qwen/qwen3.8-27b` -> Workers AI; `vertex:gemini-3.5-flash-lite` -> Vertex AI (UE);
     cualquier otro nombre -> Ollama local."""
     if nombre.startswith("vertex:"):
         env = _leer_env()
