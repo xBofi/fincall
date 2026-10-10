@@ -29,21 +29,19 @@ def crear_router_operaciones(
     async def auditar(usuario: Usuario, accion: str, recurso: str, **detalle: Any) -> None:
         await repo.registrar_auditoria(usuario.id, accion, recurso, detalle)
 
-    def _latencia_p50(llamada_id: str) -> int | None:
-        valores = [
-            t.respuesta_ms for t in metricas.turnos(llamada_id) if t.respuesta_ms is not None
-        ]
-        if not valores:
-            return None
-        valores.sort()
-        return valores[len(valores) // 2]
+    def _latencias_p50() -> dict[str, int]:
+        """Mediana de `respuesta_ms` por llamada, en una sola pasada por el registro."""
+        por_llamada: dict[str, list[int]] = {}
+        for t in metricas.turnos():
+            if t.respuesta_ms is not None:
+                por_llamada.setdefault(t.llamada_id, []).append(t.respuesta_ms)
+        return {k: sorted(v)[len(v) // 2] for k, v in por_llamada.items()}
 
     @r.get("/resumen")
     async def resumen(usuario: Usuario = Depends(revisor)) -> dict[str, Any]:  # noqa: B008
         llamadas = await repo.listar_llamadas(limite=1000)
-        filas = [
-            {"resultado": ll.resultado, "respuesta_ms": _latencia_p50(ll.id)} for ll in llamadas
-        ]
+        p50 = _latencias_p50()
+        filas = [{"resultado": ll.resultado, "respuesta_ms": p50.get(ll.id)} for ll in llamadas]
         agregados = resumir_operaciones(filas)
         agregados["activas"] = sum(1 for ll in llamadas if ll.estado == "activa")
         agregados["requieren_revision"] = sum(1 for ll in llamadas if ll.requiere_revision)
@@ -57,10 +55,11 @@ def crear_router_operaciones(
         usuario: Usuario = Depends(revisor),  # noqa: B008
     ) -> list[dict[str, Any]]:
         filas = await repo.listar_llamadas(estado=estado, limite=limite)
+        p50 = _latencias_p50()
         return [
             {
                 **ll.model_dump(mode="json", exclude={"transcripcion"}),
-                "respuesta_ms_p50": _latencia_p50(ll.id),
+                "respuesta_ms_p50": p50.get(ll.id),
             }
             for ll in filas
         ]
@@ -108,12 +107,6 @@ def crear_router_operaciones(
             raise HTTPException(404, "Expediente no encontrado")
         await auditar(usuario, "ver_transcripcion", f"llamada:{llamada_id}")
         return ll.transcripcion
-
-    @r.get("/llamadas/{llamada_id}/decisiones")
-    async def decisiones(
-        llamada_id: str, usuario: Usuario = Depends(revisor)
-    ) -> list[dict[str, Any]]:  # noqa: B008
-        return await repo.listar_decisiones(llamada_id)
 
     @r.get("/auditoria")
     async def auditoria(

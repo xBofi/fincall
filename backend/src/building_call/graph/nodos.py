@@ -263,13 +263,6 @@ def _candidatas_vivienda(
     return candidatas
 
 
-def _buscar_vivienda(
-    viviendas: list[Vivienda], portal: str | None, piso: str | None, puerta: str | None
-) -> Vivienda | None:
-    candidatas = _candidatas_vivienda(viviendas, portal, piso, puerta)
-    return candidatas[0] if len(candidatas) == 1 else None
-
-
 _META_BOT = (
     "clasific",
     "urgencia",

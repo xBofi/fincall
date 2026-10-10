@@ -455,7 +455,3 @@ def cargar(sobrescrituras: dict[str, tuple[str, int]]) -> None:
             _EFECTIVO[id_] = texto
             _VERSION[id_] = version
 
-
-def hechos_declarados(id_: str) -> tuple[str, ...]:
-    """Las variables que el nodo inyecta, para enseñarlas en el editor."""
-    return CATALOGO[id_].variables

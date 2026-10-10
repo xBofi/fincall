@@ -45,7 +45,11 @@ from building_call.repos.operativo import SesionAcceso
 
 class RepositorioPostgres:
     def __init__(self, database_url: str) -> None:
-        self.engine = create_async_engine(database_url)
+        # pre_ping: tras un reinicio de PostgreSQL las conexiones muertas se descartan en vez de
+        # fallar en mitad de una llamada. Pool explícito: llamadas en curso + consola.
+        self.engine = create_async_engine(
+            database_url, pool_pre_ping=True, pool_size=10, max_overflow=20
+        )
         self.sesiones = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def _ultima_configuracion(
