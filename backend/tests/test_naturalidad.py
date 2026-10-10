@@ -404,3 +404,12 @@ async def test_si_suelto_ante_la_direccion_no_llama_al_llm(gestor: GestorLlamada
     assert llm.llamadas == []
     assert estado["nodo_actual"] == "identificar_finca"
     assert "calle y el número" in estado["mensajes_bot"][-1]
+
+
+async def test_saludo_avisa_de_la_ia_y_de_la_grabacion(gestor: GestorLlamadas) -> None:
+    estado = await gestor.iniciar()
+    saludo = estado["mensajes_bot"][0].lower()
+    assert "inteligencia artificial" in saludo
+    assert "grabada" in saludo
+    # Repetir la pregunta no vuelve a leer el aviso entero
+    assert estado["ultima_pregunta"].startswith("¿En qué finca")

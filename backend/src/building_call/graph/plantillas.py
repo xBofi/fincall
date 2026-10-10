@@ -106,9 +106,11 @@ CATALOGO: dict[str, Plantilla] = dict(
         _p(
             "identificar_finca.saludo",
             "identificar_finca",
-            "Primer mensaje de la llamada.",
-            "Hola, soy el asistente de incidencias de su comunidad. ¿En qué finca se encuentra? "
-            "Dígame la calle y el número.",
+            "Primer mensaje de la llamada. Avisa de que atiende una IA y de la grabación "
+            "(RGPD y AI Act: el vecino debe saberlo desde el inicio; texto pendiente de legal).",
+            "Hola, le atiende un asistente de inteligencia artificial de su comunidad. "
+            "Esta llamada puede ser grabada para mejorar la calidad del servicio. "
+            "¿En qué finca se encuentra? Dígame la calle y el número.",
             pregunta=True,
         ),
         _p(

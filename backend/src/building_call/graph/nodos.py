@@ -435,9 +435,9 @@ def _preguntar(estado: EstadoLlamada, nodo: str, texto: str, **extra: Any) -> di
         **extra,
         "mensajes_bot": [*estado.get("mensajes_bot", []), texto],
         "historial": [*base, {"rol": "bot", "texto": texto}],
-        # Para repetir/retomar se guarda solo la pregunta, sin saludos ni preámbulos
-        "ultima_pregunta": texto.split(". ", 1)[1]
-        if texto.startswith("Hola") and ". " in texto
+        # Para repetir/retomar se guarda solo la pregunta, sin saludos ni avisos
+        "ultima_pregunta": texto[texto.index("¿") :]
+        if texto.startswith("Hola") and "¿" in texto
         else texto,
     }
 
