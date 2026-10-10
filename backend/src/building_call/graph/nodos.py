@@ -1164,6 +1164,18 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 interpretacion={"intencion": "saludo", "origen": "determinista", "llm_ms": 0},
                 traza=_con_traza(estado, nodo, "saludo", entrada),
             )
+        if _respuesta_si_no(entrada) is not None and len(entrada.split()) <= 3:
+            # "Sí."/"No." no es una dirección: mismo reintento que daría el modelo, sin esperarlo
+            return _reintento_finca(
+                {**estado, "historial": historial},
+                render("identificar_finca.motivo_no_entendida"),
+                dict(estado.get("pendientes", {})),
+                estado.get("traza", []),
+                {
+                    "tiempos_turno": _tiempos(estado, origen_interpretacion="determinista"),
+                    "interpretacion": {"origen": "determinista", "llm_ms": 0},
+                },
+            )
         fincas = await deps.repo.listar_fincas()
         puntuadas = sorted(
             ((_similitud_direccion(entrada, f.direccion), f) for f in fincas),

@@ -396,3 +396,11 @@ async def test_repetir_dos_veces_no_acumula_la_coletilla(gestor: GestorLlamadas)
     )
     assert estado["mensajes_bot"][-1].count("le repito") == 1
     assert "vivienda" in estado["mensajes_bot"][-1]
+
+
+async def test_si_suelto_ante_la_direccion_no_llama_al_llm(gestor: GestorLlamadas, llm: Any) -> None:
+    # Con Gemini, "Sí." ante "¿en qué finca?" tardaba 1,4 s en decir que no era una dirección
+    estado = await _conversar(gestor, ["Sí."])
+    assert llm.llamadas == []
+    assert estado["nodo_actual"] == "identificar_finca"
+    assert "calle y el número" in estado["mensajes_bot"][-1]
