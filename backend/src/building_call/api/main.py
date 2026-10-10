@@ -186,6 +186,19 @@ def crear_llm() -> Any:
     raise ValueError(f"BC_LLM desconocido: {settings.llm}")
 
 
+def crear_redactor() -> ModeloOllama | None:
+    """Redacción con el modelo local y salida corta (la carrera con el 27B tardaba 1,5 s).
+
+    Solo cuando Ollama ya forma parte del despliegue: con un proveedor por API (Vertex, Workers
+    AI) no hay Ollama y cada turno esperaba en balde el límite de la redacción (750 ms, medido
+    2026-10-11); una segunda llamada a la API tras la interpretación tampoco cabe en 1,2 s."""
+    if settings.redaccion != "llm" or settings.llm in ("vertex", "workers_ai"):
+        return None
+    return ModeloOllama(
+        settings.ollama_url, settings.ollama_modelo, settings.ollama_timeout_s, num_predict=60
+    )
+
+
 def _fabrica_streaming_por_defecto() -> FabricaStreaming | None:
     if not settings.assemblyai_api_key:
         return None
@@ -267,13 +280,7 @@ def crear_app(
     if fabrica_streaming is AUTO:
         fabrica_streaming = _fabrica_streaming_por_defecto()
     reconocedor: ReconocedorVoz = stt
-    redactor = None
-    if settings.redaccion == "llm":
-        # Redacción con el modelo local y salida corta: la carrera con el 27B tardaba 1,5 s aquí
-        redactor = ModeloOllama(
-            settings.ollama_url, settings.ollama_modelo, settings.ollama_timeout_s, num_predict=60
-        )
-    gestor = GestorLlamadas(deps, redactor=redactor)
+    gestor = GestorLlamadas(deps, redactor=crear_redactor())
 
     @asynccontextmanager
     async def ciclo_vida(_: FastAPI):  # type: ignore[no-untyped-def]

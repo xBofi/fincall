@@ -79,3 +79,16 @@ async def test_gestor_redacta_solo_turnos_interpretados_por_llm(deps: Dependenci
     assert estado["historial"][-1]["texto"] == estado["mensajes_bot"][0]
     assert estado["historial"][-2]["rol"] == "vecino"
     assert estado["tiempos_turno"]["redaccion"] == "llm"
+
+
+def test_sin_redaccion_local_con_proveedor_por_api(monkeypatch: Any) -> None:
+    # Con Vertex o Workers AI no hay Ollama: cada turno esperaba en balde 750 ms
+    from building_call.api.main import crear_redactor
+    from building_call.settings import settings
+
+    monkeypatch.setattr(settings, "redaccion", "llm")
+    for proveedor in ("vertex", "workers_ai"):
+        monkeypatch.setattr(settings, "llm", proveedor)
+        assert crear_redactor() is None
+    monkeypatch.setattr(settings, "llm", "ollama")
+    assert crear_redactor() is not None
