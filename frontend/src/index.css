@@ -74,3 +74,56 @@ body,
 .ops-latency { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--space-lg); }
 .ops-latency > div { min-width: 0; }
 @media (max-width: 1100px) { .ops-latency { grid-template-columns: 1fr; } .ops-workbench { grid-template-columns: 1fr; } .ops-metrics { grid-template-columns: repeat(2, 1fr); } .ops-topbar { flex-wrap: wrap; } }
+
+/* ------------------------------------------------------------------ flujo del asistente */
+.flujo { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--space-md); align-items: start; }
+@media (max-width: 1200px) { .flujo { grid-template-columns: 1fr; } }
+
+.flujo-lienzo { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.flujo-scroll { overflow: auto; max-height: 68vh; border: 1px solid var(--color-rule); border-radius: var(--radius-card); background: var(--color-paper); }
+
+.flujo-nodo { cursor: pointer; }
+.flujo-nodo rect { fill: var(--color-surface); stroke-width: 1.5; transition: fill var(--dur-short) var(--ease-out); }
+.flujo-nodo:hover rect { fill: var(--color-accent-soft); }
+.flujo-nodo.is-sel rect { fill: var(--color-accent-soft); stroke-width: 2.5; }
+.flujo-nodo:focus-visible rect { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.flujo-nodo-titulo { font: 600 .8rem var(--font-body); fill: var(--color-ink); }
+.flujo-nodo-meta { font: .68rem var(--font-mono); fill: var(--color-muted); }
+
+.flujo-arista { fill: none; stroke: var(--flujo-arista); opacity: .55; transition: opacity var(--dur-short) var(--ease-out); }
+.flujo-arista.is-activa { stroke: var(--color-accent); opacity: 1; }
+.flujo-arista.is-fria { stroke-dasharray: 3 4; opacity: .32; }
+
+.flujo-leyenda { display: flex; flex-wrap: wrap; gap: var(--space-sm); font: .72rem var(--font-mono); color: var(--color-muted); }
+.flujo-leyenda span { display: inline-flex; align-items: center; gap: .35rem; }
+.flujo-leyenda i { width: 11px; height: 3px; border-radius: 2px; display: inline-block; }
+
+.flujo-detalle { display: flex; flex-direction: column; gap: var(--space-sm); position: sticky; top: var(--space-sm); max-height: 84vh; overflow: auto; }
+.flujo-detalle .ant-card { border-radius: var(--radius-card); }
+.flujo-lista { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .3rem; font-size: .82rem; }
+.flujo-nota { font-size: .78rem; margin-bottom: var(--space-2xs) !important; }
+.flujo-cond { color: var(--color-muted); font-size: .78rem; }
+.flujo-veces { margin-left: .35rem; font: .68rem var(--font-mono); }
+.flujo-salto { border: 0; background: none; padding: 0; color: var(--color-accent); cursor: pointer; font: inherit; font-weight: 600; }
+.flujo-salto:hover { text-decoration: underline; }
+
+.flujo-plantilla { display: flex; flex-direction: column; gap: var(--space-2xs); padding: var(--space-2xs) 0; border-bottom: 1px solid var(--color-rule); }
+.flujo-plantilla:last-child { border-bottom: 0; }
+.flujo-plantilla-cab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2xs); font-size: .8rem; }
+.flujo-plantilla-pie { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2xs); flex-wrap: wrap; }
+.flujo-plantilla textarea { font-size: .84rem; }
+.flujo-var { font: .72rem var(--font-mono); }
+.flujo-texto-plano { font-size: .84rem; margin: 0 !important; color: var(--color-muted); }
+
+.flujo-prompt { border-top: 1px solid var(--color-rule); padding-top: var(--space-2xs); }
+.flujo-prompt summary { cursor: pointer; font-weight: 600; font-size: .82rem; }
+.flujo-prompt-texto { white-space: pre-wrap; font: .72rem/1.45 var(--font-mono); background: var(--color-paper); border: 1px solid var(--color-rule); border-radius: var(--radius-control); padding: var(--space-2xs); max-height: 260px; overflow: auto; }
+
+/* ------------------------------------------------------------------ catálogos */
+.catalogos { display: flex; flex-direction: column; gap: var(--space-sm); }
+.cat-detalle { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-sm); }
+.cat-viviendas { display: flex; flex-wrap: wrap; gap: .3rem; margin: var(--space-2xs) 0; }
+.cat-bloque { margin-top: var(--space-sm); display: flex; flex-direction: column; gap: .3rem; }
+.cat-lista { margin: 0; padding-left: 1.1rem; font-size: .84rem; }
+.cat-nota { font-size: .78rem; }
+.cat-admins { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-sm); }

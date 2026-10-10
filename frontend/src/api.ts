@@ -265,3 +265,130 @@ export const api = {
     pedir<{ agregados: Agregados; turnos: Record<string, unknown>[] }>(`/api/llamadas/${id}/metricas`),
   metricasGlobales: () => pedir<{ agregados: Agregados }>('/api/metricas'),
 }
+
+// ---------------------------------------------------------------- flujo del asistente
+
+export type TipoNodo = 'decision' | 'pregunta' | 'efecto' | 'terminal'
+
+export interface NodoGrafo {
+  id: string
+  titulo: string
+  resumen: string
+  tipo: TipoNodo
+  etapa: number
+  usa_llm: boolean
+  caminos_deterministas: string[]
+  efectos: string[]
+  plantillas: string[]
+}
+
+export interface AristaGrafo {
+  origen: string
+  destino: string
+  condicion: string
+  veces: number
+}
+
+export interface Grafo {
+  nodos: NodoGrafo[]
+  aristas: AristaGrafo[]
+  entrada: string
+  plantillas_globales: string[]
+  violaciones: string[]
+}
+
+export interface Plantilla {
+  id: string
+  nodo: string
+  descripcion: string
+  texto: string
+  texto_original: string
+  variables: string[]
+  pregunta: boolean
+  pregunta_en: string | null
+  sobrescrita: boolean
+  version: number
+}
+
+export interface VersionPlantilla {
+  version: number
+  texto: string
+  autor: string | null
+  creada_en: string | null
+}
+
+export interface PromptSistema {
+  id: string
+  titulo: string
+  version: string
+  fichero: string
+  cuando: string
+  texto: string
+  contrato: string[]
+}
+
+export interface Prompts {
+  editables: boolean
+  motivo: string
+  prompts: PromptSistema[]
+}
+
+export const flujo = {
+  grafo: () => pedir<Grafo>('/api/grafo'),
+  prompts: () => pedir<Prompts>('/api/prompts'),
+  plantillas: () => pedir<Plantilla[]>('/api/plantillas'),
+  plantilla: (id: string) => pedir<Plantilla & { historial: VersionPlantilla[] }>(`/api/plantillas/${encodeURIComponent(id)}`),
+  publicar: (id: string, texto: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, json({ texto }, 'PUT')),
+  restaurar: (id: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  validar: (id: string, texto: string) =>
+    pedir<{ problemas: string[]; hechos_obligatorios: string[] }>(`/api/plantillas/${encodeURIComponent(id)}/validar`, json({ texto })),
+}
+
+// ---------------------------------------------------------------- catálogos
+
+export interface FincaResumen {
+  id: string
+  direccion: string
+  administrador_id: string
+  administrador: string
+  correo: string
+  telefono_oficial: string
+  viviendas: number
+}
+
+export interface ViviendaCatalogo {
+  id: string
+  portal: string | null
+  piso: string
+  puerta: string
+}
+
+export interface FincaDetalle extends Omit<FincaResumen, 'viviendas'> {
+  viviendas: ViviendaCatalogo[]
+  configuracion_efectiva: Record<string, unknown>
+  configuracion_id: string | null
+}
+
+export interface EspecialistaCatalogo {
+  id: string
+  nombre: string
+  administrador_id: string
+  administrador: string
+  categoria_principal: string
+  canal_contacto: string
+  destino: string
+}
+
+export interface AdministradorCatalogo {
+  id: string
+  nombre: string
+  fincas: { id: string; direccion: string }[]
+  especialistas: Omit<EspecialistaCatalogo, 'administrador_id' | 'administrador'>[]
+}
+
+export const catalogos = {
+  fincas: () => pedir<FincaResumen[]>('/api/catalogos/fincas'),
+  finca: (id: string) => pedir<FincaDetalle>(`/api/catalogos/fincas/${encodeURIComponent(id)}`),
+  administradores: () => pedir<AdministradorCatalogo[]>('/api/catalogos/administradores'),
+  especialistas: () => pedir<EspecialistaCatalogo[]>('/api/catalogos/especialistas'),
+}

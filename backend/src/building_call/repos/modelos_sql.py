@@ -182,3 +182,30 @@ class IncidenciaHistorialSQL(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PlantillaSQL(Base):
+    """Sobrescritura publicada de una plantilla. Solo existe fila si se ha editado."""
+
+    __tablename__ = "plantillas"
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    texto: Mapped[str] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer)
+    actualizada_por: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actualizada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PlantillaVersionSQL(Base):
+    """Histórico: qué texto estuvo publicado, desde cuándo y por obra de quién."""
+
+    __tablename__ = "plantilla_versiones"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    plantilla_id: Mapped[str] = mapped_column(String(128), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    texto: Mapped[str] = mapped_column(Text)
+    autor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    creada_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

@@ -12,6 +12,7 @@ colgar, fuera de ámbito, pregunta) se atienden desde cualquier nodo.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -29,6 +30,8 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import Incidencia, Llamada, Vivienda
 from building_call.graph.estado import EstadoLlamada, Traza
+from building_call.graph.manifiesto import verificar_transicion
+from building_call.graph.plantillas import render
 from building_call.llm.base import ModeloLenguaje
 from building_call.llm.interpretacion import (
     VERSION_INTERPRETACION,
@@ -41,6 +44,8 @@ from building_call.llm.prompts import (
     sistema_clasificacion,
 )
 from building_call.repos.base import Repositorio
+
+logger = logging.getLogger(__name__)
 
 UMBRAL_FINCA = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
 
@@ -363,12 +368,45 @@ def _es_saludo(texto: str) -> bool:
 # --------------------------------------------------------------------------- utilidades de estado
 
 
+#: Transiciones observadas que el manifiesto no declara. Se exponen en `/api/metricas` para
+#: que una arista sin declarar se vea, en vez de romper la llamada de un vecino.
+VIOLACIONES_MANIFIESTO: list[str] = []
+
+
+def _verificar(estado: EstadoLlamada, destino: str) -> None:
+    """Comprueba la transición contra el manifiesto. Bajo pytest lanza; en producción, anota."""
+    motivo = verificar_transicion(estado.get("nodo_actual"), destino)
+    if motivo is not None:
+        logger.warning("Transición no declarada en el manifiesto: %s", motivo)
+        if motivo not in VIOLACIONES_MANIFIESTO:
+            VIOLACIONES_MANIFIESTO.append(motivo)
+
+
 def _con_traza(estado: EstadoLlamada, nodo: str, accion: str, detalle: str = "") -> list[Traza]:
     return [*estado.get("traza", []), Traza(nodo=nodo, accion=accion, detalle=detalle)]
 
 
+def _anotar_plantilla(estado: EstadoLlamada, nodo: str, texto: Any, extra: dict[str, Any]) -> None:
+    """Deja en la traza de qué plantilla y versión salió el mensaje.
+
+    En cuanto los textos son editables, una auditoría que solo guarde la frase no permite saber
+    qué se dijo ni con qué versión. `render` devuelve un `str` que lleva su propia identidad, así
+    que anotarlo no cuesta cablear el id por cada firma.
+    """
+    plantilla_id = getattr(texto, "plantilla_id", None)
+    if plantilla_id is None:
+        return
+    base = extra.get("traza", estado.get("traza", []))
+    extra["traza"] = [
+        *base,
+        Traza(nodo=nodo, accion="plantilla", detalle=f"{plantilla_id} v{texto.version}"),
+    ]
+
+
 def _preguntar(estado: EstadoLlamada, nodo: str, texto: str, **extra: Any) -> dict[str, Any]:
     # `historial` en extra ya incluye el turno del vecino; el mensaje del bot se añade después.
+    _verificar(estado, nodo)
+    _anotar_plantilla(estado, nodo, texto, extra)
     base = extra.pop("historial", estado.get("historial", []))
     return {
         "nodo_actual": nodo,
@@ -387,6 +425,8 @@ def _preguntar(estado: EstadoLlamada, nodo: str, texto: str, **extra: Any) -> di
 def _avanzar(
     estado: EstadoLlamada, nodo: str, mensaje: str | None = None, **extra: Any
 ) -> dict[str, Any]:
+    _verificar(estado, nodo)
+    _anotar_plantilla(estado, nodo, mensaje, extra)
     base = extra.pop("historial", estado.get("historial", []))
     cambios: dict[str, Any] = {
         "nodo_actual": nodo,
@@ -690,7 +730,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                f"Claro, le repito. {completo}",
+                render("global.repetir", mensaje=completo),
                 historial=historial,
                 traza=_con_traza(estado, nodo, "intencion", "repetir"),
                 **extra,
@@ -709,7 +749,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Lo siento, solo puedo gestionar incidencias y solicitudes de la finca. " + ultima,
+                render("global.fuera_ambito", pregunta=ultima),
                 historial=historial,
                 traza=_con_traza(estado, nodo, "intencion", "fuera_ambito"),
                 **extra,
@@ -748,7 +788,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             salida_rep = _preguntar(
                 estado,
                 nodo,
-                f"Perdone, le repito. {completo}",
+                render("global.no_oido", mensaje=completo),
                 historial=historial,
                 tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
                 interpretacion={"intencion": "repetir", "origen": "determinista", "llm_ms": 0},
@@ -765,7 +805,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             salida_relleno = _preguntar(
                 estado,
                 nodo,
-                "Claro, sin prisa. Dígame cuando quiera.",
+                render("global.relleno"),
                 historial=historial,
                 tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
                 interpretacion={"intencion": "relleno", "origen": "determinista", "llm_ms": 0},
@@ -809,14 +849,14 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     return _preguntar(
                         estado,
                         "identificar_finca",
-                        f"He identificado {finca.direccion}. ¿Es correcto?",
+                        render("identificar_finca.candidata", direccion=finca.direccion),
                         finca_candidata_id=finca.id,
                         pendientes=pend,
                         traza=traza,
                     )
                 return _reintento_finca(
                     estado,
-                    "No he encontrado esa dirección entre las fincas gestionadas.",
+                    render("identificar_finca.motivo_no_encontrada"),
                     pend,
                     traza,
                 )
@@ -852,8 +892,12 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     return _preguntar(
                         estado,
                         "identificar_vivienda",
-                        f"El {np_}º {npu} existe en varios portales. ¿En qué portal vive, "
-                        f"{' o '.join(portales)}?",
+                        render(
+                            "identificar_vivienda.varios_portales",
+                            piso=np_,
+                            puerta=npu,
+                            portales=" o ".join(portales),
+                        ),
                         pendientes=pend,
                         traza=traza,
                         **cambios,
@@ -881,7 +925,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 return _preguntar(
                     estado,
                     "identificar_vivienda",
-                    f"Tomo nota: {tiene}. ¿Y {falta}?",
+                    render("identificar_vivienda.parcial", tiene=tiene, falta=falta),
                     pendientes=pend,
                     traza=[*traza, Traza(nodo=nodo, accion="vivienda_parcial", detalle=tiene)],
                     **cambios,
@@ -981,7 +1025,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _preguntar(
             estado,
             "identificar_finca",
-            f"{prefijo} ¿Puede repetirme la calle y el número?",
+            render("identificar_finca.reintento", motivo=prefijo),
             intentos_finca=intentos,
             finca_candidata_id=None,
             pendientes=pend,
@@ -1034,7 +1078,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _preguntar(
             estado,
             "identificar_vivienda",
-            f"No encuentro esa vivienda. {ayuda}¿Cuál es su piso y su puerta?",
+            render("identificar_vivienda.reintento", ayuda=ayuda),
             intentos_vivienda=intentos,
             pendientes=pend,
             traza=traza,
@@ -1054,8 +1098,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Hola, soy el asistente de incidencias de su comunidad. "
-                "¿En qué finca se encuentra? Dígame la calle y el número.",
+                render("identificar_finca.saludo"),
             )
         candidata = estado.get("finca_candidata_id")
         if candidata:
@@ -1094,7 +1137,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             if interp.confirma is False:
                 return _reintento_finca(
                     {**estado, "historial": historial},
-                    "Entendido, no es esa.",
+                    render("identificar_finca.motivo_no_es_esa"),
                     _fusionar_pendientes(estado, interp),
                     estado.get("traza", []),
                     extra,
@@ -1102,7 +1145,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Perdone, ¿es correcta esa finca? Responda sí o no.",
+                render("identificar_finca.confirmar_si_no"),
                 historial=historial,
                 **extra,
             )
@@ -1114,7 +1157,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Hola, buenas. ¿En qué finca se encuentra? Dígame la calle y el número.",
+                render("identificar_finca.saludo_respuesta"),
                 historial=historial,
                 tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
                 interpretacion={"intencion": "saludo", "origen": "determinista", "llm_ms": 0},
@@ -1131,7 +1174,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                f"He identificado {finca.direccion}. ¿Es correcto?",
+                render("identificar_finca.candidata", direccion=finca.direccion),
                 historial=historial,
                 finca_candidata_id=finca.id,
                 tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
@@ -1147,7 +1190,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if not interp.direccion:
             return _reintento_finca(
                 {**estado, "historial": historial},
-                "No he entendido la dirección de la finca.",
+                render("identificar_finca.motivo_no_entendida"),
                 pend,
                 estado.get("traza", []),
                 extra,
@@ -1161,8 +1204,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Lo siento, no consigo identificar la finca; puede que no esté gestionada por este "
-                "administrador. Si quiere, cuénteme brevemente qué quería comunicar y quedará registrado.",
+                render("finca_no_identificada.recoger"),
             )
         historial = _registrar_entrada(estado)
         llamada = _llamada_desde(
@@ -1172,7 +1214,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "fin",
-            "Gracias. He registrado su llamada para que el equipo de calidad la revise. Hasta luego.",
+            render("finca_no_identificada.despedida"),
             historial=historial,
             solicitud=entrada,
             resultado="finca_no_identificada",
@@ -1187,7 +1229,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Gracias. ¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta.",
+                render("identificar_vivienda.preguntar"),
             )
         # Un "sí"/"no" suelto con datos parciales pendientes: no hay nada que extraer, se repite
         # la pregunta pendiente (el STT transcribe "sí" como "S.")
@@ -1200,7 +1242,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                estado.get("ultima_pregunta") or "¿Cuál es su piso y su puerta?",
+                estado.get("ultima_pregunta") or render("identificar_vivienda.repregunta"),
                 historial=_registrar_entrada(estado),
                 tiempos_turno=_tiempos(estado, origen_interpretacion="determinista"),
                 interpretacion={"confirma": True, "origen": "determinista", "llm_ms": 0},
@@ -1281,8 +1323,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "No he podido identificar correctamente la vivienda. Cuénteme igualmente su solicitud; "
-                "enviaré un resumen al administrador con su número de teléfono.",
+                render("vivienda_no_identificada.recoger"),
             )
         historial = _registrar_entrada(estado)
         cfg = _config(estado)
@@ -1294,7 +1335,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "fin",
-            "Gracias. He enviado el resumen al administrador, que se pondrá en contacto con usted. Hasta luego.",
+            render("vivienda_no_identificada.despedida"),
             historial=historial,
             solicitud=entrada,
             resultado="vivienda_no_identificada",
@@ -1313,7 +1354,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                f"Perfecto, {estado.get('vivienda_etiqueta')}. ¿Con quién hablo? Dígame su nombre.",
+                render("registrar_nombre.preguntar", vivienda=estado.get("vivienda_etiqueta")),
             )
         interp, historial, extra, salida = await _turno(estado, nodo)
         if salida:
@@ -1323,7 +1364,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                "Perdone, no he entendido su nombre. ¿Me lo puede repetir?",
+                render("registrar_nombre.repregunta"),
                 historial=historial,
                 pendientes=pend,
                 **extra,
@@ -1335,11 +1376,13 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         entrada = estado.get("entrada_usuario")
         if entrada is None:
             saludo = (
-                f"Gracias, {estado.get('nombre_declarado')}. "
+                render(
+                    "recoger_solicitud.saludo_con_nombre", nombre=estado.get("nombre_declarado")
+                )
                 if estado.get("nombre_declarado")
                 else ""
             )
-            return _preguntar(estado, nodo, f"{saludo}Cuénteme, ¿qué ocurre?")
+            return _preguntar(estado, nodo, render("recoger_solicitud.preguntar", saludo=saludo))
         interp, historial, extra, salida = await _turno(estado, nodo)
         if salida:
             return salida
@@ -1460,9 +1503,11 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             categoria = estado.get("categoria")
             # Nunca se le dice al vecino que "no se ha podido clasificar": se registra igual
             texto_cat = (
-                "lo registro como solicitud general para el administrador"
+                render("confirmar_resumen.categoria_no_clasificable")
                 if categoria == CATEGORIA_NO_CLASIFICABLE
-                else f"lo he clasificado como {categoria.replace('_', ' ')}"
+                else render(
+                    "confirmar_resumen.categoria", categoria=categoria.replace("_", " ")
+                )
             )
             # Se repiten nombre y vivienda para que el vecino pueda corregir lo que el STT oyó mal
             quien = (
@@ -1473,8 +1518,13 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 nodo,
-                f"Le resumo: {quien}. {estado.get('resumen')}. {texto_cat.capitalize()}, con urgencia "
-                f"{estado.get('urgencia')}. ¿Es correcto?",
+                render(
+                    "confirmar_resumen.resumen",
+                    quien=quien,
+                    resumen=estado.get("resumen"),
+                    categoria=texto_cat.capitalize(),
+                    urgencia=estado.get("urgencia"),
+                ),
             )
         interp, historial, extra, salida = await _turno(estado, nodo, si_no=True)
         if salida:
@@ -1494,7 +1544,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _avanzar(
                 estado,
                 "siguiente_paso",
-                "De acuerdo, lo corrijo.",
+                render("confirmar_resumen.corrigiendo"),
                 historial=historial,
                 pendientes=pend,
                 traza=traza_nombre,
@@ -1543,7 +1593,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _avanzar(
                 estado,
                 "siguiente_paso",
-                "De acuerdo, lo corrijo.",
+                render("confirmar_resumen.corrigiendo"),
                 historial=historial,
                 pendientes=pend,
                 traza=_con_traza(estado, nodo, "correccion", ", ".join(sorted(pend))),
@@ -1563,7 +1613,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return _preguntar(
                 estado,
                 "recoger_solicitud",
-                "De acuerdo. Cuénteme de nuevo qué ocurre, con más detalle si puede.",
+                render("confirmar_resumen.repetir_solicitud"),
                 historial=historial,
                 confirmado=False,
                 solicitud=None,
@@ -1577,7 +1627,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _preguntar(
             estado,
             nodo,
-            "Perdone, no le he entendido. ¿Es correcto el resumen? Responda sí o no.",
+            render("confirmar_resumen.confirmar_si_no"),
             historial=historial,
             **extra,
         )
@@ -1628,8 +1678,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "fin",
-            "Esta solicitud escapa a lo que puedo gestionar automáticamente. He enviado un resumen al "
-            "administrador para que la revise una persona. Gracias por su llamada.",
+            render("no_clasificable.despedida"),
             resultado="no_clasificable",
             finalizada=True,
             canal_aviso="correo",
@@ -1649,8 +1698,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "fin",
-            "De acuerdo. Envío ahora un resumen de su llamada al administrador para que una persona "
-            "se ponga en contacto con usted lo antes posible. Gracias, hasta luego.",
+            render("derivar_humano.despedida"),
             resultado="derivada_administrador",
             finalizada=True,
             canal_aviso="correo",
@@ -1664,7 +1712,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "fin",
-            "De acuerdo. Gracias por llamar; puede volver a llamar cuando quiera. Hasta luego.",
+            render("despedida.despedida"),
             resultado="abandonada",
             finalizada=True,
             traza=_con_traza(estado, nodo, "llamada_registrada"),
@@ -1740,35 +1788,29 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. No prometemos
         # hora: nadie ha hablado aún con el profesional (regla de Andreu, 2026-08-28).
         contacto = (
-            "le llamará a este mismo número"
+            render("avisar_canal.contacto_telefono")
             if estado.get("telefono_llamante")
-            else "se pondrá en contacto con usted"
+            else render("avisar_canal.contacto_generico")
         )
         if especialista is None:
             destino = cfg.contacto.correo if cfg.contacto else "administrador"
             canal = "correo"
-            aviso = (
-                f"El administrador la revisará hoy mismo, le asignará el profesional adecuado y "
-                f"{contacto} para concertar la visita."
-            )
+            aviso = render("avisar_canal.aviso_sin_especialista", contacto=contacto)
         elif destino_regla == "coordinador":
             destino = cfg.contacto.correo if cfg.contacto else "coordinador"
-            aviso = (
-                f"Por su urgencia aviso ahora mismo al coordinador y a {especialista}. "
-                f"{especialista.capitalize()} {contacto} lo antes posible para decirle cuándo puede ir; "
-                f"todavía no puedo confirmarle la hora."
+            aviso = render(
+                "avisar_canal.aviso_coordinador",
+                especialista=especialista,
+                especialista_mayus=especialista.capitalize(),
+                contacto=contacto,
             )
         else:
             destino = especialista if destino_regla == "especialista" else destino_regla
-            aviso = (
-                f"Se lo comunico ahora a {especialista}, que {contacto} para concertar la visita. "
-                f"Todavía no puedo darle hora porque depende de su disponibilidad; el siguiente paso "
-                f"es su llamada."
+            aviso = render(
+                "avisar_canal.aviso_especialista", especialista=especialista, contacto=contacto
             )
-        mensaje = (
-            f"He registrado su incidencia con referencia {estado.get('incidencia_id')}. "
-            f"{aviso} Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. "
-            f"Gracias por su llamada, hasta luego."
+        mensaje = render(
+            "avisar_canal.cierre", referencia=estado.get("incidencia_id"), aviso=aviso
         )
         return _avanzar(
             estado,

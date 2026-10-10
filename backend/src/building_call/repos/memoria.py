@@ -172,6 +172,8 @@ class RepositorioMemoria:
             self.decisiones: dict[str, list[dict[str, Any]]] = {}
             self.pistas: dict[str, dict[str, Any]] = {}
             self.auditoria: list[dict[str, Any]] = []
+            self.plantillas: dict[str, dict[str, Any]] = {}
+            self.plantilla_historial: list[dict[str, Any]] = []
 
     async def guardar_usuario(self, usuario: Usuario) -> None:
         self._operativo()
@@ -281,3 +283,32 @@ class RepositorioMemoria:
     async def listar_auditoria(self, limite: int = 200) -> list[dict[str, Any]]:
         self._operativo()
         return list(reversed(self.auditoria))[:limite]
+
+    # ----------------------------------------------------------------- plantillas del asistente
+
+    async def listar_plantillas_sobrescritas(self) -> dict[str, tuple[str, int]]:
+        self._operativo()
+        return {k: (v["texto"], v["version"]) for k, v in self.plantillas.items()}
+
+    async def guardar_plantilla(self, plantilla_id: str, texto: str, autor: str | None) -> int:
+        self._operativo()
+        version = self.plantillas.get(plantilla_id, {}).get("version", 0) + 1
+        self.plantillas[plantilla_id] = {"texto": texto, "version": version, "autor": autor}
+        self.plantilla_historial.append(
+            {
+                "plantilla_id": plantilla_id,
+                "version": version,
+                "texto": texto,
+                "autor": autor,
+                "creada_en": datetime.now(UTC).isoformat(),
+            }
+        )
+        return version
+
+    async def borrar_plantilla(self, plantilla_id: str) -> None:
+        self._operativo()
+        self.plantillas.pop(plantilla_id, None)
+
+    async def historial_plantilla(self, plantilla_id: str) -> list[dict[str, Any]]:
+        self._operativo()
+        return [h for h in reversed(self.plantilla_historial) if h["plantilla_id"] == plantilla_id]

@@ -53,6 +53,7 @@ ignore = ["E501"]
 "src/building_call/operaciones_api.py" = ["B008"]
 "src/building_call/acceso.py" = ["B008"]
 "src/building_call/api/main.py" = ["B008"]
+"src/building_call/flujo_api.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -26,4 +26,12 @@
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --dur-short: 180ms;
   --dur-medium: 420ms;
+
+  /* Flujo del asistente: un color por tipo de bloque */
+  --flujo-decision: oklch(58% 0.2 256);
+  --flujo-pregunta: oklch(59% 0.16 67);
+  --flujo-efecto: oklch(55% 0.14 154);
+  --flujo-terminal: oklch(52% 0.02 258);
+  --flujo-llm: oklch(58% 0.2 300);
+  --flujo-arista: oklch(72% 0.02 250);
 }

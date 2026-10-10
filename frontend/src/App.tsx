@@ -19,6 +19,8 @@ import { CambioContrasena } from './components/CambioContrasena'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
 import { GestionUsuarios } from './components/GestionUsuarios'
 import { Login } from './components/Login'
+import { PanelCatalogos } from './components/PanelCatalogos'
+import { PanelFlujo } from './components/PanelFlujo'
 import { PanelEstado } from './components/PanelEstado'
 import { PanelLatencia, type TurnoMedido } from './components/PanelLatencia'
 import { abrirStreaming, type SesionStreaming } from './streaming'
@@ -35,7 +37,7 @@ import {
 } from './voz'
 
 type ModoStt = 'navegador' | 'servidor' | 'streaming'
-type Pantalla = 'operaciones' | 'latencia' | 'usuarios'
+type Pantalla = 'operaciones' | 'flujo' | 'catalogos' | 'latencia' | 'usuarios'
 
 /** En la consola web el bot habla por el navegador: su pista la reconstruye el TTS del servidor. */
 const NOMBRE_PISTA: Record<string, string> = {
@@ -380,6 +382,8 @@ export default function App() {
   const esOwner = yo.rol === 'owner'
   const opcionesPantalla: { label: string; value: Pantalla }[] = [
     { label: 'Operaciones', value: 'operaciones' },
+    { label: 'Flujo', value: 'flujo' },
+    { label: 'Catálogos', value: 'catalogos' },
     { label: 'Latencia', value: 'latencia' },
     ...(esOwner ? [{ label: 'Usuarios', value: 'usuarios' as Pantalla }] : []),
   ]
@@ -432,6 +436,14 @@ export default function App() {
 
         {pantalla === 'usuarios' && esOwner && (
           <section className="ops-single"><GestionUsuarios yo={yo} /></section>
+        )}
+
+        {pantalla === 'flujo' && (
+          <section className="ops-single"><PanelFlujo esOwner={esOwner} /></section>
+        )}
+
+        {pantalla === 'catalogos' && (
+          <section className="ops-single"><PanelCatalogos /></section>
         )}
 
         {pantalla === 'latencia' && (

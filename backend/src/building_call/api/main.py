@@ -26,7 +26,9 @@ from pydantic import BaseModel
 
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
+from building_call.flujo_api import crear_router_flujo
 from building_call.grabacion import GrabadorConversacion
+from building_call.graph import plantillas
 from building_call.graph.estado import EstadoLlamada
 from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
 from building_call.graph.registro import REGISTRO
@@ -272,6 +274,12 @@ def crear_app(
         if hasattr(reconocedor, "calentar"):
             await reconocedor.calentar()
         await acceso.asegurar_admin_inicial()
+        # Las plantillas publicadas se cargan una vez: durante la llamada, `render` solo mira
+        # un diccionario en memoria (el presupuesto de latencia no admite una consulta por frase)
+        try:
+            plantillas.cargar(await deps.repo.listar_plantillas_sobrescritas())  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 - sin sobrescrituras se usa el texto del código
+            logger.exception("No se pudieron cargar las plantillas publicadas")
         if hasattr(tts, "precalentar"):
             await tts.precalentar()
         tarea_purga = asyncio.create_task(purga_periodica())
@@ -338,6 +346,8 @@ def crear_app(
     app.include_router(
         crear_router_operaciones(deps.repo, acceso, gestor.metricas, almacen_audio)  # type: ignore[arg-type]
     )
+    # Flujo del asistente: grafo, plantillas editables, prompts (solo lectura) y catálogos
+    app.include_router(crear_router_flujo(deps.repo, deps.repo, acceso))  # type: ignore[arg-type]
 
     async def purga_periodica() -> None:
         while True:

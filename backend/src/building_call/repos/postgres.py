@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -34,6 +34,8 @@ from building_call.repos.modelos_sql import (
     LlamadaSQL,
     LlamadaTurnoSQL,
     PistaAudioSQL,
+    PlantillaSQL,
+    PlantillaVersionSQL,
     SesionSQL,
     UsuarioSQL,
     ViviendaSQL,
@@ -314,3 +316,65 @@ class RepositorioPostgres:
         async with self.sesiones() as s:
             filas = (await s.execute(select(IncidenciaSQL))).scalars()
             return [Incidencia.model_validate(i, from_attributes=True) for i in filas]
+
+    # ----------------------------------------------------------------- plantillas del asistente
+
+    async def listar_plantillas_sobrescritas(self) -> dict[str, tuple[str, int]]:
+        async with self.sesiones() as s:
+            filas = (await s.execute(select(PlantillaSQL))).scalars().all()
+        return {f.id: (f.texto, f.version) for f in filas}
+
+    async def guardar_plantilla(self, plantilla_id: str, texto: str, autor: str | None) -> int:
+        async with self.sesiones() as s, s.begin():
+            actual = await s.get(PlantillaSQL, plantilla_id)
+            version = (actual.version if actual else 0) + 1
+            if actual is None:
+                s.add(
+                    PlantillaSQL(
+                        id=plantilla_id, texto=texto, version=version, actualizada_por=autor
+                    )
+                )
+            else:
+                actual.texto = texto
+                actual.version = version
+                actual.actualizada_por = autor
+                actual.actualizada_en = datetime.now(UTC)
+            s.add(
+                PlantillaVersionSQL(
+                    id=f"plv-{uuid4().hex[:16]}",
+                    plantilla_id=plantilla_id,
+                    version=version,
+                    texto=texto,
+                    autor=autor,
+                )
+            )
+        return version
+
+    async def borrar_plantilla(self, plantilla_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            actual = await s.get(PlantillaSQL, plantilla_id)
+            if actual is not None:
+                await s.delete(actual)
+
+    async def historial_plantilla(self, plantilla_id: str) -> list[dict[str, Any]]:
+        async with self.sesiones() as s:
+            filas = (
+                (
+                    await s.execute(
+                        select(PlantillaVersionSQL)
+                        .where(PlantillaVersionSQL.plantilla_id == plantilla_id)
+                        .order_by(PlantillaVersionSQL.version.desc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [
+            {
+                "version": f.version,
+                "texto": f.texto,
+                "autor": f.autor,
+                "creada_en": f.creada_en.isoformat() if f.creada_en else None,
+            }
+            for f in filas
+        ]
