@@ -94,6 +94,9 @@ class RegistroMetricas:
         self._indice: dict[tuple[str, int], TiemposTurno] = {}
 
     def registrar(self, tiempos: TiemposTurno) -> None:
+        if len(self._turnos) == self._turnos.maxlen:
+            viejo = self._turnos[0]  # el deque lo va a expulsar: el índice tampoco lo guarda
+            self._indice.pop((viejo.llamada_id, viejo.turno), None)
         self._turnos.append(tiempos)
         self._indice[(tiempos.llamada_id, tiempos.turno)] = tiempos
 

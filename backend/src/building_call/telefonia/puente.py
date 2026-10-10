@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 
 UMBRAL_VOZ = 300  # RMS PCM16; igual que la consola web
 
+# Si un turno falla (LLM caído o lento, error del grafo) el vecino no puede quedarse en silencio:
+# se le pide que repita y, si vuelve a fallar, se despide y la llamada queda para revisar.
+LIMITE_TURNO_S = 10.0
+FALLOS_SEGUIDOS_MAX = 2
+FRASE_REPETIR = "Perdone, no le he entendido bien. ¿Puede repetirlo?"
+FRASE_FALLO = (
+    "Disculpe, estoy teniendo un problema técnico. Avisaré al administrador para que se ponga "
+    "en contacto con usted. Gracias por llamar."
+)
+
 
 class CanalTelefono(Protocol):
     """Lo que el puente necesita del proveedor."""
@@ -54,6 +64,7 @@ class PuenteLlamada:
         repo: Any = None,
         almacen_audio: Any = None,
         palabras_bargein: int = 2,
+        limite_turno_s: float = LIMITE_TURNO_S,
     ) -> None:
         self.gestor = gestor
         self.fabrica_streaming = fabrica_streaming
@@ -64,6 +75,8 @@ class PuenteLlamada:
         self.repo = repo
         self.almacen_audio = almacen_audio
         self.palabras_bargein = palabras_bargein
+        self.limite_turno_s = limite_turno_s
+        self._fallos_seguidos = 0
 
         self.llamada_id: str | None = None
         self.turno_sonando: int | None = None
@@ -177,7 +190,49 @@ class PuenteLlamada:
                     },
                 )
 
+    async def _turno(self, texto: str) -> None:
+        assert self.llamada_id is not None
+        try:
+            estado = await asyncio.wait_for(
+                self.gestor.mensaje(self.llamada_id, texto), self.limite_turno_s
+            )
+        except Exception:  # noqa: BLE001 - cualquier fallo del turno se le explica al vecino
+            self._fallos_seguidos += 1
+            logger.exception(
+                "Turno fallido en la llamada %s (%d seguidos)",
+                self.llamada_id,
+                self._fallos_seguidos,
+            )
+            if self._fallos_seguidos < FALLOS_SEGUIDOS_MAX:
+                actual = self.gestor.obtener(self.llamada_id)
+                await self._decir(
+                    {"mensajes_bot": [FRASE_REPETIR], "turno": actual.get("turno", 0)}
+                )
+            else:
+                await self._despedir_por_fallo("el asistente falló varias veces seguidas")
+            return
+        self._fallos_seguidos = 0
+        await self._decir(estado)
+
+    async def _despedir_por_fallo(self, motivo: str) -> None:
+        assert self.llamada_id is not None
+        estado = await self.gestor.cerrar_por_fallo(self.llamada_id, motivo)
+        await self._decir({**estado, "mensajes_bot": [FRASE_FALLO]})
+
     async def _bombear_eventos(self) -> None:
+        try:
+            await self._escuchar()
+            if not self._cerrado and not self.finalizada:
+                # El STT cortó el stream sin que nadie colgara: el vecino ya no se oiría
+                logger.error("El STT se cerró en mitad de la llamada %s", self.llamada_id)
+                await self._despedir_por_fallo("se perdió el reconocimiento de voz")
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("Fallo en la llamada %s; se cuelga", self.llamada_id)
+            await self.canal.colgar()
+
+    async def _escuchar(self) -> None:
         assert self._sesion is not None
         async for ev in self._sesion.eventos():
             if ev.tipo == "parcial":
@@ -193,5 +248,4 @@ class PuenteLlamada:
                     await self._interrumpir()
                 if self.finalizada:
                     continue
-                estado = await self.gestor.mensaje(self.llamada_id, ev.texto)
-                await self._decir(estado)
+                await self._turno(ev.texto)

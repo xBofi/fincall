@@ -54,9 +54,17 @@ UMBRAL_FINCA = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
 class Dependencias:
     repo: Repositorio
     llm: ModeloLenguaje
-    # Interpretaciones lanzadas sobre transcripts parciales (antes del fin de turno), por clave
-    # normalizada del texto. `_interpretar` las reutiliza si el final coincide con el parcial.
-    especulaciones: dict[str, asyncio.Future[Interpretacion]] = field(default_factory=dict)
+    # Interpretaciones lanzadas sobre transcripts parciales (antes del fin de turno): por llamada
+    # y, dentro, por clave normalizada del texto. `_interpretar` las reutiliza si el final
+    # coincide con el parcial. Separadas por llamada: con varias a la vez, una no puede cancelar
+    # ni reutilizar lo que dijo el vecino de otra.
+    especulaciones: dict[str, dict[str, asyncio.Future[Interpretacion]]] = field(
+        default_factory=dict
+    )
+
+    def descartar_especulaciones(self, llamada_id: str) -> None:
+        for futuro in self.especulaciones.pop(llamada_id, {}).values():
+            futuro.cancel()
 
 
 def clave_especulacion(texto: str) -> str:
@@ -668,14 +676,15 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
         # a que termine): solapa el LLM con la detección de fin de turno del STT.
         clave = clave_especulacion(entrada)
-        futuro = deps.especulaciones.pop(clave, None)
-        if futuro is None and deps.especulaciones:
+        propias = deps.especulaciones.pop(estado["llamada_id"], {})
+        futuro = propias.pop(clave, None)
+        if futuro is None and propias:
             # El parcial y el final suelen diferir en una palabra o en un número en letra:
             # se acepta la especulación más parecida si supera el 90 % de similitud
             mejor, puntuacion = max(
                 (
                     (k, SequenceMatcher(None, _normalizar(k), _normalizar(clave)).ratio())
-                    for k in deps.especulaciones
+                    for k in propias
                 ),
                 key=lambda p: p[1],
             )
@@ -684,10 +693,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             duros = re.compile(r"\b(?:\d+|[a-z])\b")
             mismos_duros = duros.findall(_normalizar(mejor)) == duros.findall(_normalizar(clave))
             if puntuacion >= 0.9 or (puntuacion >= 0.8 and mismos_duros):
-                futuro = deps.especulaciones.pop(mejor)
-        for otro in list(deps.especulaciones.values()):
+                futuro = propias.pop(mejor)
+        for otro in propias.values():
             otro.cancel()
-        deps.especulaciones.clear()
         if futuro is not None and not futuro.cancelled():
             t0 = perf_counter()
             try:
@@ -699,7 +707,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     origen_interpretacion="llm_especulativo",
                 )
             except Exception:  # noqa: BLE001 - la especulación falló: interpretación normal
-                pass
+                logger.warning("Especulación fallida en %s; se interpreta de nuevo", nodo)
         interp = await interpretar(
             deps.llm, estado.get("ultima_pregunta"), entrada, nodo, catalogo=_catalogo(estado)
         )

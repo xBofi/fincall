@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import io
@@ -54,14 +55,7 @@ class AlmacenAudio:
         self.directorio.mkdir(parents=True, exist_ok=True)
         pista_id = f"aud-{uuid4().hex[:16]}"
         ruta = self.directorio / f"{pista_id}.wav"
-        buffer = io.BytesIO()
-        with wave.open(buffer, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(sample_rate)
-            w.writeframes(pcm)
-        datos = buffer.getvalue()
-        ruta.write_bytes(datos)
+        checksum = _escribir_wav(ruta, pcm, sample_rate)
         ahora = datetime.now(UTC)
         pista = {
             "id": pista_id,
@@ -69,7 +63,7 @@ class AlmacenAudio:
             "canal": canal,
             "clave_objeto": str(ruta),
             "mime": "audio/wav",
-            "checksum": hashlib.sha256(datos).hexdigest(),
+            "checksum": checksum,
             "duracion_ms": int(len(pcm) / 2 / sample_rate * 1000),
             "creada_en": ahora,
             "expira_en": ahora + self.retencion,
@@ -123,9 +117,22 @@ class AlmacenAudio:
         for pista in await repo.pistas_vencidas(ahora):
             ruta = Path(pista["clave_objeto"])
             try:
-                ruta.unlink(missing_ok=True)
+                await asyncio.to_thread(ruta.unlink, missing_ok=True)
             except OSError:
                 continue
             await repo.marcar_pista_eliminada(pista["id"], ahora)
             borradas += 1
         return borradas
+
+
+def _escribir_wav(ruta: Path, pcm: bytes, sample_rate: int) -> str:
+    """Escribe PCM16 mono como WAV y devuelve su sha256."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(pcm)
+    datos = buffer.getvalue()
+    ruta.write_bytes(datos)
+    return hashlib.sha256(datos).hexdigest()

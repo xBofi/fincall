@@ -514,16 +514,16 @@ def crear_app(
             if len(parcial.split()) < 2:
                 return
             clave = clave_especulacion(parcial)
-            if clave in deps.especulaciones:
+            propias = deps.especulaciones.get(llamada_id, {})
+            if clave in propias:
                 return
             try:
                 estado_actual = gestor.obtener(llamada_id)
             except LlamadaNoEncontrada:
                 return
-            for otra in deps.especulaciones.values():
-                otra.cancel()
-            deps.especulaciones.clear()
-            deps.especulaciones[clave] = asyncio.ensure_future(
+            deps.descartar_especulaciones(llamada_id)
+            deps.especulaciones[llamada_id] = {}
+            deps.especulaciones[llamada_id][clave] = asyncio.ensure_future(
                 interpretar(
                     deps.llm,
                     estado_actual.get("ultima_pregunta"),
@@ -624,6 +624,7 @@ def crear_app(
             for t in pendientes:
                 t.cancel()
         finally:
+            deps.descartar_especulaciones(llamada_id)
             await sesion.cerrar()
             if marca_bot is not None and texto_bot:
                 turnos_bot.append((marca_bot, texto_bot))

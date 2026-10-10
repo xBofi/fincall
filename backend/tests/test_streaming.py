@@ -174,7 +174,9 @@ async def test_interpretacion_especulativa_se_reutiliza(deps: Dependencias, llm:
     # El parcial "vivo en el tercero b y me llamo marta" ya se interpretó antes del final
     fut: asyncio.Future[Interpretacion] = asyncio.get_running_loop().create_future()
     fut.set_result(Interpretacion(piso="3", puerta="B", nombre="Marta", origen="llm"))
-    deps.especulaciones[clave_especulacion("Vivo en el tercero B y me llamo Marta.")] = fut
+    deps.especulaciones[estado["llamada_id"]] = {
+        clave_especulacion("Vivo en el tercero B y me llamo Marta."): fut
+    }
     n = len(llm.llamadas)
     estado = await gestor.mensaje(estado["llamada_id"], "Vivo en el tercero B y me llamo Marta.")
     assert len(llm.llamadas) == n  # no se volvió a llamar al modelo
@@ -182,3 +184,63 @@ async def test_interpretacion_especulativa_se_reutiliza(deps: Dependencias, llm:
     assert estado["nombre_declarado"] == "Marta"
     assert estado["tiempos_turno"]["origen_interpretacion"] == "llm_especulativo"
     assert deps.especulaciones == {}
+
+
+async def test_especulacion_de_otra_llamada_no_se_usa_ni_se_cancela(
+    deps: Dependencias, llm: Any
+) -> None:
+    """Dos llamadas a la vez: el parcial de una no puede acabar en el expediente de la otra."""
+    import asyncio
+
+    from building_call.graph.nodos import clave_especulacion
+    from building_call.llm.interpretacion import Interpretacion
+    from building_call.servicios import GestorLlamadas
+
+    gestor = GestorLlamadas(deps)
+    a = await gestor.iniciar()
+    b = await gestor.iniciar()
+    for t in ["Calle Mayor 12", "sí"]:
+        a = await gestor.mensaje(a["llamada_id"], t)
+        b = await gestor.mensaje(b["llamada_id"], t)
+    frase = "Vivo en el tercero B y me llamo Marta."
+    ajena: asyncio.Future[Interpretacion] = asyncio.get_running_loop().create_future()
+    deps.especulaciones[a["llamada_id"]] = {clave_especulacion(frase): ajena}
+    b = await gestor.mensaje(b["llamada_id"], frase)
+    assert b["tiempos_turno"]["origen_interpretacion"] != "llm_especulativo"
+    assert not ajena.cancelled()
+    assert a["llamada_id"] in deps.especulaciones
+
+
+async def test_llamadas_terminadas_o_abandonadas_salen_de_memoria(deps: Dependencias) -> None:
+    """El expediente ya está en el repositorio: el estado vivo no debe crecer sin límite."""
+    from building_call.servicios import GestorLlamadas, LlamadaNoEncontrada
+
+    ahora = [0.0]
+    gestor = GestorLlamadas(deps, reloj=lambda: ahora[0])
+    terminada = await gestor.iniciar()
+    terminada["finalizada"] = True
+    viva = await gestor.iniciar()
+    ahora[0] = GestorLlamadas.RETENCION_FINALIZADA_S + 1
+    await gestor.iniciar()  # cualquier turno barre lo caducado
+    with pytest.raises(LlamadaNoEncontrada):
+        gestor.obtener(terminada["llamada_id"])
+    assert gestor.obtener(viva["llamada_id"])  # sigue activa: se conserva
+    ahora[0] += GestorLlamadas.RETENCION_ABANDONADA_S + 1
+    await gestor.iniciar()
+    with pytest.raises(LlamadaNoEncontrada):
+        gestor.obtener(viva["llamada_id"])
+
+
+def test_metricas_no_crecen_sin_limite() -> None:
+    from building_call.metricas import RegistroMetricas, TiemposTurno
+
+    registro = RegistroMetricas(capacidad=3)
+    for i in range(10):
+        registro.registrar(
+            TiemposTurno(
+                llamada_id="l", turno=i, nodo_inicial="a", nodo_final="b", grafo_ms=1, servidor_ms=1
+            )
+        )
+    assert len(registro._indice) == 3
+    assert registro.completar_cliente("l", 0, {}) is None
+    assert registro.completar_cliente("l", 9, {}) is not None

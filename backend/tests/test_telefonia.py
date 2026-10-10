@@ -309,3 +309,63 @@ def test_evento_json_de_twilio_se_decodifica_como_esperamos() -> None:
         '{"event":"media","streamSid":"MZ1","media":{"track":"inbound","payload":"//8="}}'
     )
     assert base64.b64decode(m["media"]["payload"]) == b"\xff\xff"
+
+
+class GestorQueFalla(GestorLlamadas):
+    """Gestor real cuyo turno revienta (LLM caído, timeout...) las veces indicadas."""
+
+    def __init__(self, deps: Dependencias, fallos: int) -> None:
+        super().__init__(deps)
+        self.fallos = fallos
+
+    async def mensaje(self, llamada_id: str, texto: str, stt_ms: int | None = None):  # type: ignore[no-untyped-def]
+        if self.fallos:
+            self.fallos -= 1
+            raise RuntimeError("LLM caído")
+        return await super().mensaje(llamada_id, texto, stt_ms)
+
+
+async def test_puente_pide_repetir_si_un_turno_falla(deps: Dependencias) -> None:
+    gestor = GestorQueFalla(deps, fallos=1)
+    stt, tts, canal = SttFalso(), TtsFalso(), CanalFalso()
+    puente = PuenteLlamada(gestor, lambda _t, _v: stt, tts, canal, vocabulario=[], telefono=None)
+    llamada_id = await puente.iniciar()
+    await stt.cola.put(EventoTurno("final", "Calle Mayor 12"))
+    await _esperar(lambda: len(tts.textos) == 2)
+    assert "repet" in tts.textos[-1].lower()
+    assert not puente.finalizada and not canal.colgado
+    # El siguiente turno funciona con normalidad
+    await stt.cola.put(EventoTurno("final", "Calle Mayor 12"))
+    await _esperar(lambda: gestor.obtener(llamada_id)["turno"] == 1)
+    await puente.cerrar()
+
+
+async def test_puente_cierra_con_disculpa_y_deja_la_llamada_para_revisar(
+    deps: Dependencias,
+) -> None:
+    gestor = GestorQueFalla(deps, fallos=2)
+    stt, tts, canal = SttFalso(), TtsFalso(), CanalFalso()
+    puente = PuenteLlamada(gestor, lambda _t, _v: stt, tts, canal, vocabulario=[], telefono=None)
+    llamada_id = await puente.iniciar()
+    for _ in range(2):
+        n = len(tts.textos)
+        await stt.cola.put(EventoTurno("final", "Calle Mayor 12"))
+        await _esperar(lambda n=n: len(tts.textos) > n)
+    assert puente.finalizada
+    await puente.marca_reproducida(canal.marcas[-1])
+    assert canal.colgado
+    guardada = await deps.repo.obtener_llamada(llamada_id)  # type: ignore[attr-defined]
+    assert guardada.estado == "finalizada" and guardada.requiere_revision
+    assert guardada.motivo_revision
+    await puente.cerrar()
+
+
+async def test_puente_se_disculpa_si_el_stt_se_corta(gestor: GestorLlamadas) -> None:
+    stt, tts, canal = SttFalso(), TtsFalso(), CanalFalso()
+    puente = PuenteLlamada(gestor, lambda _t, _v: stt, tts, canal, vocabulario=[], telefono=None)
+    llamada_id = await puente.iniciar()
+    await stt.cola.put(None)  # AssemblyAI cierra el stream sin que nadie haya colgado
+    await _esperar(lambda: puente.finalizada)
+    assert len(tts.textos) == 2
+    assert gestor.obtener(llamada_id)["finalizada"]
+    await puente.cerrar()

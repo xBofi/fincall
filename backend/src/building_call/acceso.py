@@ -14,6 +14,7 @@ La consola es privada: no hay proveedor externo de identidad. Reglas:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from collections import defaultdict, deque
@@ -82,7 +83,12 @@ class LimitadorIntentos:
         return cola
 
     def bloqueado(self, clave: str, ahora: datetime | None = None) -> bool:
-        return len(self._purgar(clave, ahora or datetime.now(UTC))) >= self.maximo
+        if clave not in self._fallos:  # consultar no crea entradas: el dict no crece por IP
+            return False
+        cola = self._purgar(clave, ahora or datetime.now(UTC))
+        if not cola:
+            del self._fallos[clave]
+        return len(cola) >= self.maximo
 
     def fallo(self, clave: str, ahora: datetime | None = None) -> None:
         ahora = ahora or datetime.now(UTC)
@@ -199,7 +205,11 @@ class Acceso:
         usuario = await self.repo.obtener_usuario_por_nombre(nombre)
         # Se verifica siempre un hash para no revelar por tiempo si el usuario existe
         hash_objetivo = usuario.hash_contrasena if usuario else _HASH_SENUELO
-        valido = verificar_contrasena(contrasena, hash_objetivo) and usuario is not None
+        # scrypt tarda decenas de ms: fuera del bucle de eventos para no frenar las llamadas en curso
+        valido = (
+            await asyncio.to_thread(verificar_contrasena, contrasena, hash_objetivo)
+            and usuario is not None
+        )
         if not valido or usuario is None or not usuario.activo:
             self.limitador.fallo(clave_usuario)
             self.limitador.fallo(clave_ip)
@@ -253,7 +263,9 @@ class Acceso:
             response: Response,
             usuario: Usuario = Depends(con_cambio_pendiente),
         ) -> dict[str, Any]:
-            if not verificar_contrasena(cuerpo.actual, usuario.hash_contrasena):
+            if not await asyncio.to_thread(
+                verificar_contrasena, cuerpo.actual, usuario.hash_contrasena
+            ):
                 raise HTTPException(400, "La contraseña actual no es correcta")
             try:
                 validar_contrasena_nueva(cuerpo.nueva, usuario.nombre_usuario)
@@ -261,7 +273,7 @@ class Acceso:
                 raise HTTPException(400, str(e)) from e
             actualizado = usuario.model_copy(
                 update={
-                    "hash_contrasena": hash_contrasena(cuerpo.nueva),
+                    "hash_contrasena": await asyncio.to_thread(hash_contrasena, cuerpo.nueva),
                     "debe_cambiar_contrasena": False,
                 }
             )
@@ -326,7 +338,7 @@ class Acceso:
                 nombre=cuerpo.nombre,
                 rol=cuerpo.rol,
                 activo=True,
-                hash_contrasena=hash_contrasena(contrasena),
+                hash_contrasena=await asyncio.to_thread(hash_contrasena, contrasena),
                 debe_cambiar_contrasena=True,
                 creado_en=datetime.now(UTC),
             )
@@ -364,7 +376,7 @@ class Acceso:
             temporal = generar_contrasena_temporal()
             actualizado = objetivo.model_copy(
                 update={
-                    "hash_contrasena": hash_contrasena(temporal),
+                    "hash_contrasena": await asyncio.to_thread(hash_contrasena, temporal),
                     "debe_cambiar_contrasena": True,
                 }
             )

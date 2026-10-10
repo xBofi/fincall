@@ -143,12 +143,15 @@ class SintetizadorPiper:
             return b""
         if (pcm := self._cache.get(texto)) is not None:
             return pcm
-        async with self._cerrojo:  # onnxruntime no es reentrante por sesión
-            if self._paquete_disponible():
-                salida = await asyncio.wait_for(
-                    asyncio.to_thread(self._sintetizar_en_proceso, texto), timeout=self.timeout_s
-                )
-            else:
+        if self._paquete_disponible():
+            # onnxruntime no es reentrante por sesión. Si vence el timeout el hilo sigue usando la
+            # sesión: el cerrojo se suelta cuando el hilo termina, no cuando se rinde quien espera
+            await self._cerrojo.acquire()
+            hilo = asyncio.ensure_future(asyncio.to_thread(self._sintetizar_en_proceso, texto))
+            hilo.add_done_callback(lambda _: self._cerrojo.release())
+            salida = await asyncio.wait_for(asyncio.shield(hilo), timeout=self.timeout_s)
+        else:
+            async with self._cerrojo:
                 salida = await self._sintetizar_subproceso(texto)
         self._cache.put(texto, salida)
         return salida

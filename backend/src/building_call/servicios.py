@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 from uuid import uuid4
 
@@ -44,12 +45,18 @@ def _merece_redaccion(estado: EstadoLlamada, entrada: str | None) -> bool:
 
 
 class GestorLlamadas:
+    # El expediente se persiste en cada turno; el estado vivo solo hace falta mientras la llamada
+    # sigue (y un margen para las últimas entregas de audio de la consola)
+    RETENCION_FINALIZADA_S = 15 * 60
+    RETENCION_ABANDONADA_S = 2 * 60 * 60
+
     def __init__(
         self,
         deps: Dependencias,
         grafo_por_defecto: str = "estandar",
         metricas: RegistroMetricas | None = None,
         redactor: Any | None = None,
+        reloj: Callable[[], float] = monotonic,
     ) -> None:
         """`redactor`: modelo que reformula las respuestas del grafo (paráfrasis controlada).
         None = plantillas tal cual."""
@@ -59,6 +66,21 @@ class GestorLlamadas:
         self.metricas = metricas or RegistroMetricas()
         self._grafos: dict[str, Any] = {}
         self._estados: dict[str, EstadoLlamada] = {}
+        self._ultimo_uso: dict[str, float] = {}
+        self._reloj = reloj
+
+    def _guardar_estado(self, estado: EstadoLlamada) -> None:
+        ahora = self._reloj()
+        self._estados[estado["llamada_id"]] = estado
+        self._ultimo_uso[estado["llamada_id"]] = ahora
+        for llamada_id, uso in list(self._ultimo_uso.items()):
+            inactiva = ahora - uso
+            if inactiva > self.RETENCION_ABANDONADA_S or (
+                inactiva > self.RETENCION_FINALIZADA_S
+                and self._estados[llamada_id].get("finalizada")
+            ):
+                del self._estados[llamada_id], self._ultimo_uso[llamada_id]
+                self.deps.descartar_especulaciones(llamada_id)
 
     def _grafo(self, nombre: str) -> Any:
         if nombre not in self._grafos:
@@ -160,7 +182,7 @@ class GestorLlamadas:
         if stt_ms is not None:
             tiempos["stt_ms"] = stt_ms
         nuevo["tiempos_turno"] = tiempos
-        self._estados[nuevo["llamada_id"]] = nuevo
+        self._guardar_estado(nuevo)
         await self._guardar_operacion(nuevo)
         await self._guardar_trazabilidad(estado, nuevo, entrada, tiempos)
         return nuevo
@@ -213,6 +235,21 @@ class GestorLlamadas:
             return estado
         return await self._ejecutar(estado, texto, stt_ms)
 
+    async def cerrar_por_fallo(self, llamada_id: str, motivo: str) -> EstadoLlamada:
+        """El asistente no puede seguir (LLM, STT o TTS caídos): se cierra la llamada y queda
+        derivada al administrador y marcada para revisar, en vez de quedarse "activa"."""
+        estado = self.obtener(llamada_id)
+        if not estado.get("finalizada"):
+            estado = {
+                **estado,
+                "finalizada": True,
+                "resultado": "derivada_administrador",
+                "motivo_revision": motivo,
+            }
+            self._guardar_estado(estado)
+            await self._guardar_operacion(estado)
+        return estado
+
     def registrar_entrega(
         self, llamada_id: str, turno: int, estado_entrega: str, ratio: float, texto: str | None
     ) -> EstadoLlamada:
@@ -225,7 +262,7 @@ class GestorLlamadas:
             "ratio": max(0.0, min(1.0, ratio)),
             "texto_entregado": texto,
         }
-        self._estados[llamada_id] = estado
+        self._guardar_estado(estado)
         return estado
 
     def obtener(self, llamada_id: str) -> EstadoLlamada:
