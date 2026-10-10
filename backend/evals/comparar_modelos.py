@@ -3,6 +3,7 @@ clasificación. Mide exactitud y latencia (p50/p95) para decidir el modelo de pr
 
 Uso:
     uv run python evals/comparar_modelos.py --modelos qwen3.5:4b,qwen2.5:1.5b --repeticiones 1
+    uv run python evals/comparar_modelos.py --modelos vertex:gemini-2.5-flash-lite,cf:@cf/qwen/qwen3.8-27b
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from building_call.graph.nodos import (  # noqa: E402
 from building_call.llm.interpretacion import interpretar  # noqa: E402
 from building_call.llm.ollama import ModeloOllama  # noqa: E402
 from building_call.llm.prompts import esquema_clasificacion, sistema_clasificacion  # noqa: E402
+from building_call.llm.vertex import ModeloVertex  # noqa: E402
 from building_call.llm.workers_ai import ModeloWorkersAI  # noqa: E402
 
 AQUI = Path(__file__).resolve().parent
@@ -165,7 +167,17 @@ def _leer_env() -> dict[str, str]:
 
 
 def _crear_llm(nombre: str, url_ollama: str) -> Any:
-    """`cf:@cf/qwen/qwen3.8-27b` -> Workers AI; cualquier otro nombre -> Ollama local."""
+    """`cf:@cf/qwen/qwen3.8-27b` -> Workers AI; `vertex:gemini-2.5-flash-lite` -> Vertex AI (UE);
+    cualquier otro nombre -> Ollama local."""
+    if nombre.startswith("vertex:"):
+        env = _leer_env()
+        return ModeloVertex(
+            env.get("BC_VERTEX_PROYECTO", ""),
+            nombre[7:],
+            ubicacion=env.get("BC_VERTEX_UBICACION", "eu"),
+            ruta_credenciales=str(AQUI.parent / ruta) if (ruta := env.get("BC_VERTEX_CREDENCIALES")) else "",
+            timeout_s=60,
+        )
     if nombre.startswith("cf:"):
         env = _leer_env()
         return ModeloWorkersAI(

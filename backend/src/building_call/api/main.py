@@ -35,6 +35,7 @@ from building_call.graph.registro import REGISTRO
 from building_call.llm.carrera import ModeloCarrera
 from building_call.llm.interpretacion import interpretar
 from building_call.llm.ollama import ModeloOllama
+from building_call.llm.vertex import ModeloVertex
 from building_call.llm.workers_ai import ModeloWorkersAI
 from building_call.metricas import UMBRALES_MS
 from building_call.operaciones_api import crear_router_operaciones
@@ -162,6 +163,14 @@ def crear_llm() -> Any:
         modo = "carrera" if hay_cloudflare else "ollama"
     if modo == "ollama":
         return local
+    if modo == "vertex":
+        return ModeloVertex(
+            settings.vertex_proyecto,
+            settings.vertex_modelo,
+            ubicacion=settings.vertex_ubicacion,
+            ruta_credenciales=settings.vertex_credenciales,
+            timeout_s=settings.vertex_timeout_s,
+        )
     nube = ModeloWorkersAI(
         settings.cloudflare_account_id,
         settings.cloudflare_api_token,

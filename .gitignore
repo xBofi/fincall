@@ -15,3 +15,5 @@ backend/evals/audio_sintetico/
 backend/.audio/
 backend/.voces/
 backend/evals/voz_resultados/
+backend/*credenciales*.json
+backend/gcp-*.json

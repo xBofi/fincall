@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/building_call"
 
     # LLM: "auto" (carrera si hay credenciales de Cloudflare, si no ollama) | "ollama" | "workers_ai" |
+    # "vertex" (Gemini en Vertex AI, solo Europa) |
     # "carrera" (Cloudflare preferido por exactitud; si el local acaba antes, espera este margen).
     # Medido 2026-08-28: local 92%/p95 828 ms; Cloudflare 100%/p95 10 s; carrera+150 ms 96%/p95 831 ms.
     llm: str = "auto"
@@ -34,6 +35,15 @@ class Settings(BaseSettings):
     cloudflare_api_token: str = ""
     cloudflare_modelo: str = "@cf/qwen/qwen3.8-27b"
     cloudflare_timeout_s: float = 20.0
+
+    # Google Vertex AI (Gemini). Ubicación SOLO europea: "eu" (multi-región UE) o "europe-*"
+    # (se valida al crear el cliente). Credenciales: JSON de cuenta de servicio en
+    # `vertex_credenciales`; vacío = credenciales por defecto (`gcloud auth application-default login`).
+    vertex_proyecto: str = ""
+    vertex_ubicacion: str = "eu"
+    vertex_modelo: str = "gemini-2.5-flash-lite"
+    vertex_credenciales: str = ""
+    vertex_timeout_s: float = 20.0
 
     # STT por lotes en servidor: "ninguno" (el navegador transcribe) | "whisper" (faster-whisper local)
     stt: str = "ninguno"
