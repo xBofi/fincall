@@ -13,6 +13,7 @@ services:
   db:
     image: postgres:17-alpine
     container_name: building-call-db
+    restart: unless-stopped # la base de datos vuelve sola al arrancar Docker
     environment:
       POSTGRES_DB: building_call
       POSTGRES_USER: building_call
