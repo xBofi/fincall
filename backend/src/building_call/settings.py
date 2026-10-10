@@ -84,7 +84,12 @@ class Settings(BaseSettings):
     twilio_numero: str = ""  # E.164, p. ej. +34912345678
     telefonia_palabras_bargein: int = 2
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
-    tts: str = "auto"  # auto | piper | workers_ai | ninguno
+    tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | ninguno
+    # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).
+    elevenlabs_api_key: str = ""
+    elevenlabs_voz: str = ""  # voice ID, no el nombre
+    elevenlabs_modelo: str = "eleven_flash_v2_5"
+    elevenlabs_url: str = "https://api.elevenlabs.io"
     piper_bin: str = "piper"
     piper_modelo: str = ""  # ruta al .onnx (junto a su .onnx.json), p. ej. es_ES-davefx-medium
     cloudflare_tts_modelo: str = "@cf/myshell-ai/melotts"

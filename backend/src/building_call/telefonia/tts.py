@@ -1,6 +1,9 @@
-"""Síntesis de voz en servidor para la telefonía (en la consola web sigue hablando el navegador).
+"""Síntesis de voz en servidor: telefonía y, si hay una configurada, también la consola web.
 
-Contrato: `sintetizar(texto)` devuelve PCM16 mono a `tasa` Hz. Implementaciones:
+Contrato: `sintetizar(texto)` devuelve PCM16 mono a `tasa` Hz; `fragmentos(texto)` lo entrega
+por trozos según llega (la consola empieza a reproducir sin esperar la frase). Implementaciones:
+- `SintetizadorElevenLabs`: ElevenLabs Flash v2.5 por API, PCM 16 kHz en streaming. Medido
+  2026-10-11: primer audio ~170 ms, frase completa ~420 ms (Piper local: ~300-580 ms).
 - `SintetizadorPiper`: Piper local en proceso (`piper-tts`), modelo cargado una vez (~150 ms por
   frase en CPU), voces españolas (`es_ES-davefx-medium`, `es_ES-sharvard-medium`), sin red. Preferido.
 - `SintetizadorWorkersAI`: Cloudflare Workers AI (MeloTTS, `lang=es`) → MP3 → PCM con ffmpeg.
@@ -16,6 +19,7 @@ import json
 import logging
 import shutil
 from collections import OrderedDict
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -31,6 +35,15 @@ class SintetizadorVoz(Protocol):
     def disponible(self) -> bool: ...
 
     async def sintetizar(self, texto: str) -> bytes: ...
+
+
+async def fragmentos(tts: SintetizadorVoz, texto: str) -> AsyncIterator[bytes]:
+    """Audio por trozos si el sintetizador sabe darlo así; si no, la frase entera de una vez."""
+    if isinstance(tts, SintetizadorElevenLabs):
+        async for trozo in tts.fragmentos(texto):
+            yield trozo
+    else:
+        yield await tts.sintetizar(texto)
 
 
 class _Cache:
@@ -224,9 +237,77 @@ class SintetizadorWorkersAI:
         return pcm
 
 
+class SintetizadorElevenLabs:
+    tasa = 16000
+
+    def __init__(
+        self,
+        api_key: str,
+        voz: str,
+        modelo: str = "eleven_flash_v2_5",
+        url: str = "https://api.elevenlabs.io",
+        timeout_s: float = 10.0,
+        cliente: httpx.AsyncClient | None = None,
+    ) -> None:
+        self.api_key = api_key
+        self.voz = voz
+        self.modelo = modelo
+        self.url = url.rstrip("/")
+        self.nombre = f"elevenlabs/{modelo}"
+        # Cliente persistente: reutiliza la conexión TLS entre frases (~100 ms menos por frase)
+        self._cliente = cliente or httpx.AsyncClient(timeout=timeout_s)
+        self._cache = _Cache()
+
+    def disponible(self) -> bool:
+        return bool(self.api_key and self.voz)
+
+    async def precalentar(self) -> None:
+        """Abre la conexión antes de la primera llamada; sin sintetizar (cada carácter se paga)."""
+        try:
+            await self._cliente.get(f"{self.url}/v1/models", headers={"xi-api-key": self.api_key})
+        except httpx.HTTPError as e:
+            logger.warning("ElevenLabs no responde al precalentar: %s", type(e).__name__)
+
+    async def fragmentos(self, texto: str) -> AsyncIterator[bytes]:
+        texto = " ".join(texto.split())
+        if not texto:
+            return
+        if (pcm := self._cache.get(texto)) is not None:
+            yield pcm
+            return
+        url = f"{self.url}/v1/text-to-speech/{self.voz}/stream?output_format=pcm_{self.tasa}"
+        cuerpo = {"text": texto, "model_id": self.modelo, "language_code": "es"}
+        completo = bytearray()
+        resto = b""  # un byte suelto entre trozos: PCM16 va por pares
+        async with self._cliente.stream(
+            "POST", url, headers={"xi-api-key": self.api_key}, json=cuerpo
+        ) as r:
+            if r.status_code != 200:
+                detalle = (await r.aread())[:200].decode(errors="ignore")
+                raise RuntimeError(f"ElevenLabs error {r.status_code}: {detalle}")
+            async for trozo in r.aiter_bytes():
+                trozo = resto + trozo
+                corte = len(trozo) - len(trozo) % 2
+                trozo, resto = trozo[:corte], trozo[corte:]
+                if trozo:
+                    completo += trozo
+                    yield trozo
+        self._cache.put(texto, bytes(completo))
+
+    async def sintetizar(self, texto: str) -> bytes:
+        return b"".join([trozo async for trozo in self.fragmentos(texto)])
+
+
 def crear_tts(settings: Any) -> SintetizadorVoz:
-    """`BC_TTS`: auto (Piper si está, si no Workers AI) | piper | workers_ai | ninguno."""
+    """`BC_TTS`: auto (Piper si está, si no Workers AI) | elevenlabs | piper | workers_ai | ninguno."""
     modo = settings.tts
+    if modo == "elevenlabs":
+        return SintetizadorElevenLabs(
+            settings.elevenlabs_api_key,
+            settings.elevenlabs_voz,
+            settings.elevenlabs_modelo,
+            settings.elevenlabs_url,
+        )
     piper = SintetizadorPiper(settings.piper_bin, settings.piper_modelo)
     workers = SintetizadorWorkersAI(
         settings.cloudflare_account_id,

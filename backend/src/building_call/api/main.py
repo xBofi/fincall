@@ -22,7 +22,8 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
@@ -46,7 +47,7 @@ from building_call.stt import ReconocedorNoDisponible, ReconocedorVoz, Reconoced
 from building_call.stt_streaming import SesionStreamingAssemblyAI, validar_endpoint_eu
 from building_call.telefonia.configurar import motivo_no_listo
 from building_call.telefonia.puente import PuenteLlamada
-from building_call.telefonia.tts import crear_tts
+from building_call.telefonia.tts import crear_tts, fragmentos
 from building_call.telefonia.twilio import CanalTwilio, crear_router_twilio
 
 logger = logging.getLogger(__name__)
@@ -100,6 +101,10 @@ class NuevaLlamada(BaseModel):
 
 class Mensaje(BaseModel):
     texto: str
+
+
+class VozBot(BaseModel):
+    texto: str = Field(min_length=1, max_length=800)  # cada carácter se paga en una voz por API
 
 
 class Entrega(BaseModel):
@@ -667,6 +672,31 @@ def crear_app(
         except LlamadaNoEncontrada as e:
             raise HTTPException(404, "Llamada no encontrada") from e
         return {"entrega_ultima": estado.get("entrega_ultima")}
+
+    @app.post("/api/voz-bot", dependencies=protegido)
+    async def voz_bot(cuerpo: VozBot) -> StreamingResponse:
+        """La consola habla con la misma voz que el teléfono: PCM16 mono por trozos (`X-Tasa`)."""
+        if not tts.disponible():
+            raise HTTPException(503, "No hay voz de servidor configurada")
+        trozos = fragmentos(tts, cuerpo.texto)
+        # El primer trozo se pide antes de responder: un fallo del proveedor es un 502 limpio
+        # (la consola vuelve a la voz del navegador) y no un audio cortado a medias
+        try:
+            primero = await anext(trozos, b"")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Voz del bot no disponible: %s", e)
+            raise HTTPException(502, "La voz del servidor no responde") from e
+
+        async def audio() -> Any:
+            yield primero
+            async for trozo in trozos:
+                yield trozo
+
+        return StreamingResponse(
+            audio(),
+            media_type="application/octet-stream",
+            headers={"X-Tasa": str(tts.tasa), "Cache-Control": "no-store"},
+        )
 
     @app.post("/api/llamadas/{llamada_id}/metricas", dependencies=protegido)
     async def metricas_cliente(llamada_id: str, cuerpo: MetricasCliente) -> dict[str, Any]:
