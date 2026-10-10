@@ -72,6 +72,25 @@ def clave_especulacion(texto: str) -> str:
     return _normalizar_basico(texto)
 
 
+# Cómo se dice cada categoría en voz alta (los códigos van sin tildes)
+_CATEGORIA_HABLADA = {
+    "fontaneria": "fontanería",
+    "cerrajeria": "cerrajería",
+    "albanileria": "albañilería",
+    "jardineria": "jardinería",
+    "administrativo": "gestión administrativa",
+}
+
+
+def categoria_hablada(categoria: str) -> str:
+    return _CATEGORIA_HABLADA.get(categoria, categoria.replace("_", " "))
+
+
+def _mayuscula_inicial(texto: str) -> str:
+    """Como `str.capitalize` pero sin pasar a minúsculas el resto ("Fontanería Pérez")."""
+    return texto[:1].upper() + texto[1:]
+
+
 def catalogo_para(estado: EstadoLlamada) -> list[str]:
     return _catalogo(estado)
 
@@ -1507,7 +1526,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 render("confirmar_resumen.categoria_no_clasificable")
                 if categoria == CATEGORIA_NO_CLASIFICABLE
                 else render(
-                    "confirmar_resumen.categoria", categoria=categoria.replace("_", " ")
+                    "confirmar_resumen.categoria", categoria=categoria_hablada(categoria or "")
                 )
             )
             # Se repiten nombre y vivienda para que el vecino pueda corregir lo que el STT oyó mal
@@ -1523,7 +1542,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     "confirmar_resumen.resumen",
                     quien=quien,
                     resumen=estado.get("resumen"),
-                    categoria=texto_cat.capitalize(),
+                    categoria=_mayuscula_inicial(texto_cat),
                     urgencia=estado.get("urgencia"),
                 ),
             )
@@ -1802,7 +1821,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             aviso = render(
                 "avisar_canal.aviso_coordinador",
                 especialista=especialista,
-                especialista_mayus=especialista.capitalize(),
+                especialista_mayus=_mayuscula_inicial(especialista),
                 contacto=contacto,
             )
         else:

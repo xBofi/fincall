@@ -161,3 +161,35 @@ async def test_historial_contiene_turnos_de_bot_y_vecino(gestor: GestorLlamadas)
     roles = [t["rol"] for t in estado["historial"]]
     assert roles == ["bot", "vecino", "bot", "vecino", "bot"]
     assert estado["historial"][0]["texto"].startswith("Hola")
+
+
+async def test_el_resumen_nombra_la_categoria_como_se_dice(gestor: GestorLlamadas) -> None:
+    """El código interno (`fontaneria`) no se lee en voz alta: el vecino oye «fontanería»."""
+    estado = await _conversar(
+        gestor,
+        [
+            "Vivo en la calle Mayor número 12",
+            "sí",
+            "tercero B",
+            "Soy Marta",
+            "Hay una fuga de agua en el baño y está inundando el suelo",
+        ],
+    )
+    resumen = " ".join(estado["mensajes_bot"])
+    assert "fontanería" in resumen and "fontaneria" not in resumen
+
+
+async def test_el_cierre_respeta_las_mayusculas_del_profesional(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(
+        gestor,
+        [
+            "Vivo en la calle Mayor número 12",
+            "sí",
+            "tercero B",
+            "Soy Marta",
+            "Hay una fuga de agua en el baño y está inundando el suelo",
+            "sí, correcto",
+        ],
+    )
+    cierre = " ".join(estado["mensajes_bot"])
+    assert "pérez" not in cierre and "Pérez" in cierre
