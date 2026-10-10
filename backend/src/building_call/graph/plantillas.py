@@ -224,34 +224,25 @@ CATALOGO: dict[str, Plantilla] = dict(
             "Gracias. He enviado el resumen al administrador, que se pondrá en contacto con "
             "usted. Hasta luego.",
         ),
-        # ---------------------------------------------------------------- registrar nombre
-        _p(
-            "registrar_nombre.preguntar",
-            "registrar_nombre",
-            "Se pregunta el nombre, confirmando de paso la vivienda identificada.",
-            "Perfecto, {vivienda}. ¿Con quién hablo? Dígame su nombre.",
-            pregunta=True,
-        ),
-        _p(
-            "registrar_nombre.repregunta",
-            "registrar_nombre",
-            "No se ha entendido el nombre.",
-            "Perdone, no he entendido su nombre. ¿Me lo puede repetir?",
-            pregunta=True,
-        ),
         # ---------------------------------------------------------------- recoger solicitud
         _p(
             "recoger_solicitud.preguntar",
             "recoger_solicitud",
-            "Se pregunta qué ocurre. {saludo} lleva el nombre del vecino si se conoce.",
+            "Se pregunta qué ocurre. {saludo} confirma la vivienda (y el nombre, si lo ha dicho).",
             "{saludo}Cuénteme, ¿qué ocurre?",
             pregunta=True,
         ),
         _p(
+            "recoger_solicitud.saludo",
+            "recoger_solicitud",
+            "Prefijo que confirma la vivienda identificada antes de preguntar qué ocurre.",
+            "Perfecto, {vivienda}. ",
+        ),
+        _p(
             "recoger_solicitud.saludo_con_nombre",
             "recoger_solicitud",
-            "Prefijo con el nombre del vecino para la pregunta de solicitud.",
-            "Gracias, {nombre}. ",
+            "Prefijo cuando el vecino ha dicho su nombre sin que se le pidiera.",
+            "Gracias, {nombre}: {vivienda}. ",
         ),
         # ---------------------------------------------------------------- confirmar resumen
         _p(

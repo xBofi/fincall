@@ -100,8 +100,8 @@ def test_las_etapas_ordenan_la_conversacion() -> None:
     etapas = {id_: n.etapa for id_, n in MANIFIESTO.items()}
     assert etapas["siguiente_paso"] == 0, "el enrutador es el origen de todo"
     assert etapas["identificar_finca"] < etapas["identificar_vivienda"]
-    assert etapas["identificar_vivienda"] < etapas["registrar_nombre"]
-    assert etapas["registrar_nombre"] < etapas["recoger_solicitud"]
+    assert etapas["identificar_vivienda"] < etapas["recoger_solicitud"]
+    assert "registrar_nombre" not in etapas, "el nombre no se pregunta: basta la vivienda"
     assert etapas["recoger_solicitud"] < etapas["confirmar_resumen"]
     assert etapas["confirmar_resumen"] < etapas["validar_datos"]
     assert etapas["validar_datos"] < etapas["crear_ticket"]

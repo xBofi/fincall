@@ -28,7 +28,6 @@ async def test_flujo_completo_crea_incidencia(
             "Vivo en la calle Mayor número 12",
             "sí",
             "tercero B",
-            "Soy Marta",
             "Hay una fuga de agua en el baño y está inundando el suelo",
             "sí, correcto",
         ],
@@ -37,7 +36,7 @@ async def test_flujo_completo_crea_incidencia(
     assert estado["resultado"] == "incidencia_creada"
     assert estado["finca_id"] == "finca-mayor-12"
     assert estado["vivienda_id"] == "finca-mayor-12-u-3B"
-    assert estado["nombre_declarado"] == "Marta"
+    assert estado["nombre_declarado"] is None  # el nombre no se pregunta
     assert estado["categoria"] == "fontaneria"
     assert estado["urgencia"] == "alta"
     assert estado["especialista_id"] == "esp-fontanero"
@@ -92,12 +91,14 @@ async def test_vivienda_no_identificada_respeta_intentos_de_la_finca(
 async def test_vivienda_con_portal(gestor: GestorLlamadas) -> None:
     estado = await _conversar(gestor, ["Alameda 5", "sí", "portal 2, segundo C"])
     assert estado["vivienda_id"] == "finca-alameda-5-2-2C"
-    assert estado["nodo_actual"] == "registrar_nombre"
+    assert estado["nodo_actual"] == "recoger_solicitud"
+    # Sin preguntar el nombre: se confirma la vivienda y se pasa directamente al problema
+    assert estado["mensajes_bot"][-1] == "Perfecto, portal 2 2º C. Cuénteme, ¿qué ocurre?"
 
 
 async def test_rechazar_resumen_vuelve_a_recoger_solicitud(gestor: GestorLlamadas) -> None:
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "1 A", "Me llamo Luis", "No hay luz en la escalera", "no"]
+        gestor, ["Calle Mayor 12", "sí", "1 A", "No hay luz en la escalera", "no"]
     )
     assert estado["nodo_actual"] == "recoger_solicitud"
     assert estado["confirmado"] is False
@@ -110,7 +111,7 @@ async def test_no_clasificable_crea_incidencia_pendiente(
     gestor: GestorLlamadas, repo: RepositorioMemoria
 ) -> None:
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "2 B", "Ana", "He visto un ovni en la azotea", "sí"]
+        gestor, ["Calle Mayor 12", "sí", "2 B", "He visto un ovni en la azotea", "sí"]
     )
     # Nosotros sustituimos al administrador: aunque no se clasifique, la incidencia se crea
     # y queda pendiente para él
@@ -133,7 +134,6 @@ async def test_categoria_sin_especialista_queda_pendiente_del_administrador(
             "Calle Mayor 12",
             "sí",
             "2 B",
-            "Ana",
             "La basura del portal lleva días sin recogerse",
             "sí",
         ],
@@ -144,9 +144,7 @@ async def test_categoria_sin_especialista_queda_pendiente_del_administrador(
 
 
 async def test_mensaje_tras_finalizar_no_cambia_estado(gestor: GestorLlamadas) -> None:
-    estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "2 B", "Ana", "He visto un ovni", "sí"]
-    )
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "2 B", "He visto un ovni", "sí"])
     de_nuevo = await gestor.mensaje(estado["llamada_id"], "hola?")
     assert de_nuevo == estado
 
@@ -171,7 +169,6 @@ async def test_el_resumen_nombra_la_categoria_como_se_dice(gestor: GestorLlamada
             "Vivo en la calle Mayor número 12",
             "sí",
             "tercero B",
-            "Soy Marta",
             "Hay una fuga de agua en el baño y está inundando el suelo",
         ],
     )
@@ -186,7 +183,6 @@ async def test_el_cierre_respeta_las_mayusculas_del_profesional(gestor: GestorLl
             "Vivo en la calle Mayor número 12",
             "sí",
             "tercero B",
-            "Soy Marta",
             "Hay una fuga de agua en el baño y está inundando el suelo",
             "sí, correcto",
         ],

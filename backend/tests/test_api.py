@@ -59,7 +59,6 @@ async def test_conversacion_por_api(cliente: AsyncClient, repo: object) -> None:
         "Calle Mayor 12",
         "sí",
         "4 A",
-        "Pedro",
         "No funciona el enchufe de la cocina",
         "sí",
     ]:
@@ -67,7 +66,7 @@ async def test_conversacion_por_api(cliente: AsyncClient, repo: object) -> None:
         assert r.status_code == 200
     vista = r.json()
     assert vista["finalizada"] is True
-    assert vista["turno"] == 6
+    assert vista["turno"] == 5
     assert vista["datos"]["categoria"] == "electricidad"
     assert vista["datos"]["incidencia_id"]
     assert "servidor_ms" in vista["tiempos"]

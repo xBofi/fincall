@@ -23,7 +23,6 @@ _ORDEN_ESTANDAR = [
     "finca_no_identificada",
     "identificar_vivienda",
     "vivienda_no_identificada",
-    "registrar_nombre",
     "recoger_solicitud",
     "clasificar_problema",
     "pedir_detalle",

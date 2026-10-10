@@ -507,59 +507,6 @@ def _llamada_desde(estado: EstadoLlamada, resultado: str, motivo: str | None = N
 # --------------------------------------------------------------------------- interpretación
 
 
-_PREFIJOS_NOMBRE = re.compile(
-    r"^(?:hola[, ]*)?(?:soy|me llamo|mi nombre es|aqui)\s+", re.IGNORECASE
-)
-
-
-def _nombre_simple(texto: str) -> str | None:
-    """'Soy Marta López' -> 'Marta López' sin LLM; None si la frase no es solo un nombre."""
-    limpio = _PREFIJOS_NOMBRE.sub("", texto.strip().strip(".!"))
-    return limpio.title() if _es_nombre_simple(limpio) else None
-
-
-def _es_nombre_simple(texto: str) -> bool:
-    t = _normalizar_basico(texto)
-    palabras = t.split()
-    return (
-        1 <= len(palabras) <= 3
-        and not any(ch.isdigit() for ch in t)
-        and not (
-            set(palabras)
-            & {
-                "no",
-                "si",
-                "que",
-                "hola",
-                "es",
-                "el",
-                "la",
-                "en",
-                "un",
-                "una",
-                "por",
-                "para",
-                # palabras del dominio que el STT suelta sueltas ("Puerta.") y no son nombres
-                "puerta",
-                "piso",
-                "portal",
-                "finca",
-                "calle",
-                "avenida",
-                "vivienda",
-                "letra",
-                "bajo",
-                "atico",
-                "vale",
-                "gracias",
-                "perdon",
-                "perdone",
-                "espere",
-            }  # fmt: skip
-        )
-    )
-
-
 def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[str, str]:
     pend = dict(estado.get("pendientes", {}))
     for campo in ("direccion", "portal", "piso", "puerta", "nombre", "problema"):
@@ -640,7 +587,7 @@ _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
             "por que mi nombre",
             "para que el nombre",
         ),
-        "Solo necesito su nombre para saber quién comunica la incidencia. ",
+        "No necesito su nombre: con la dirección y la vivienda es suficiente. ",
     ),
     (
         ("quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"),
@@ -681,9 +628,6 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 return interp, _tiempos(estado, origen_interpretacion="determinista")
         if _es_pregunta_faq(entrada):
             interp = Interpretacion(intencion="pregunta", pregunta=entrada, origen="determinista")
-            return interp, _tiempos(estado, origen_interpretacion="determinista")
-        if nodo == "registrar_nombre" and (nombre := _nombre_simple(entrada)):
-            interp = Interpretacion(nombre=nombre, origen="determinista")
             return interp, _tiempos(estado, origen_interpretacion="determinista")
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
         # a que termine): solapa el LLM con la detección de fin de turno del STT.
@@ -955,21 +899,12 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     estado, "identificar_vivienda", pendientes=pend, traza=traza, **cambios
                 )
 
-        if not estado.get("nombre_declarado"):
-            nombre = pend.pop("nombre", None)
-            if nombre:
-                cambios["nombre_declarado"] = nombre
-                traza.append(Traza(nodo=nodo, accion="nombre_registrado", detalle=nombre))
-                estado = {**estado, **cambios}  # type: ignore[assignment]
-            else:
-                return _avanzar(
-                    estado,
-                    "registrar_nombre",
-                    pendientes=pend,
-                    traza=traza,
-                    validaciones=validaciones,
-                    **cambios,
-                )
+        # El nombre no se pregunta: con la finca y la vivienda basta. Si el vecino lo dice por
+        # su cuenta, se guarda para el resumen y la ficha.
+        if not estado.get("nombre_declarado") and (nombre := pend.pop("nombre", None)):
+            cambios["nombre_declarado"] = nombre
+            traza.append(Traza(nodo=nodo, accion="nombre_registrado", detalle=nombre))
+            estado = {**estado, **cambios}  # type: ignore[assignment]
 
         if not estado.get("solicitud"):
             problema = pend.pop("problema", None)
@@ -1367,40 +1302,20 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             ),
         )
 
-    async def registrar_nombre(estado: EstadoLlamada) -> dict[str, Any]:
-        nodo = "registrar_nombre"
-        entrada = estado.get("entrada_usuario")
-        if entrada is None:
-            return _preguntar(
-                estado,
-                nodo,
-                render("registrar_nombre.preguntar", vivienda=estado.get("vivienda_etiqueta")),
-            )
-        interp, historial, extra, salida = await _turno(estado, nodo)
-        if salida:
-            return salida
-        pend = _fusionar_pendientes(estado, interp)
-        if not pend.get("nombre"):
-            return _preguntar(
-                estado,
-                nodo,
-                render("registrar_nombre.repregunta"),
-                historial=historial,
-                pendientes=pend,
-                **extra,
-            )
-        return _avanzar(estado, "siguiente_paso", historial=historial, pendientes=pend, **extra)
-
     async def recoger_solicitud(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "recoger_solicitud"
         entrada = estado.get("entrada_usuario")
         if entrada is None:
+            # Se confirma de paso la vivienda, para que el vecino corrija lo que el STT oyó mal
+            vivienda = estado.get("vivienda_etiqueta")
             saludo = (
                 render(
-                    "recoger_solicitud.saludo_con_nombre", nombre=estado.get("nombre_declarado")
+                    "recoger_solicitud.saludo_con_nombre",
+                    nombre=estado.get("nombre_declarado"),
+                    vivienda=vivienda,
                 )
                 if estado.get("nombre_declarado")
-                else ""
+                else render("recoger_solicitud.saludo", vivienda=vivienda)
             )
             return _preguntar(estado, nodo, render("recoger_solicitud.preguntar", saludo=saludo))
         interp, historial, extra, salida = await _turno(estado, nodo)
@@ -1848,7 +1763,6 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         "finca_no_identificada": finca_no_identificada,
         "identificar_vivienda": identificar_vivienda,
         "vivienda_no_identificada": vivienda_no_identificada,
-        "registrar_nombre": registrar_nombre,
         "recoger_solicitud": recoger_solicitud,
         "clasificar_problema": clasificar_problema,
         "pedir_detalle": pedir_detalle,

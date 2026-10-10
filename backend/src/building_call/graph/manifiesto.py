@@ -67,7 +67,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
         resumen=(
             "El único nodo que decide el orden de las preguntas. Consume lo que el vecino ya haya "
             "dicho (aunque no fuera lo que se le preguntaba) y salta a lo primero que falte: "
-            "finca, vivienda, nombre, solicitud, categoría, urgencia, detalle o confirmación. "
+            "finca, vivienda, solicitud, categoría, urgencia, detalle o confirmación. "
             "Los nodos no se encadenan entre sí: todos vuelven aquí."
         ),
         tipo="decision",
@@ -81,7 +81,6 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
             Arista("finca_no_identificada", "agotados los intentos de identificar la finca"),
             Arista("identificar_vivienda", "hay finca pero no vivienda, o falta un dato de ella"),
             Arista("vivienda_no_identificada", "agotados los intentos de identificar la vivienda"),
-            Arista("registrar_nombre", "falta el nombre del vecino"),
             Arista("recoger_solicitud", "falta saber qué le ocurre"),
             Arista("clasificar_problema", "hay solicitud pero no categoría"),
             Arista("determinar_urgencia", "hay categoría pero no urgencia"),
@@ -164,23 +163,9 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
             Arista(FIN, "recogida la solicitud, se cierra la llamada"),
         ),
     ),
-    "registrar_nombre": NodoManifiesto(
-        id="registrar_nombre",
-        etapa=3,
-        titulo="Registrar nombre",
-        resumen="Pregunta con quién se habla. Un nombre suelto se acepta sin pasar por el modelo.",
-        tipo="pregunta",
-        usa_llm=True,
-        caminos_deterministas=("nombre simple", *_DETERMINISTAS_TURNO),
-        destinos=(
-            Arista("registrar_nombre", "no se ha entendido el nombre"),
-            Arista("siguiente_paso", "nombre registrado"),
-            *_INTENCIONES_GLOBALES,
-        ),
-    ),
     "recoger_solicitud": NodoManifiesto(
         id="recoger_solicitud",
-        etapa=4,
+        etapa=3,
         titulo="Recoger solicitud",
         resumen=(
             "Pregunta qué ocurre. La interpretación del turno clasifica en la misma llamada al "
@@ -197,7 +182,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "clasificar_problema": NodoManifiesto(
         id="clasificar_problema",
-        etapa=4,
+        etapa=3,
         titulo="Clasificar problema",
         resumen=(
             "Respaldo: solo se ejecuta si la interpretación del turno no trajo ya la categoría. "
@@ -209,7 +194,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "pedir_detalle": NodoManifiesto(
         id="pedir_detalle",
-        etapa=5,
+        etapa=4,
         titulo="Pedir detalle",
         resumen=(
             "Una sola pregunta de detalle antes del resumen, para que el profesional sepa a qué "
@@ -226,7 +211,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "determinar_urgencia": NodoManifiesto(
         id="determinar_urgencia",
-        etapa=4,
+        etapa=3,
         titulo="Determinar urgencia",
         resumen=(
             "Convierte la urgencia declarada en la efectiva según la configuración. Mientras las "
@@ -238,7 +223,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "confirmar_resumen": NodoManifiesto(
         id="confirmar_resumen",
-        etapa=6,
+        etapa=5,
         titulo="Confirmar resumen",
         resumen=(
             "Lee al vecino quién es, qué ocurre y con qué urgencia, y espera un sí o un no. "
@@ -257,7 +242,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "validar_datos": NodoManifiesto(
         id="validar_datos",
-        etapa=7,
+        etapa=6,
         titulo="Validar datos",
         resumen=(
             "Última comprobación antes de tocar la base de datos: que haya finca, vivienda, "
@@ -272,7 +257,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "no_clasificable": NodoManifiesto(
         id="no_clasificable",
-        etapa=9,
+        etapa=8,
         titulo="No clasificable",
         resumen=(
             "La solicitud no encaja en ninguna categoría del catálogo: queda para el "
@@ -285,7 +270,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "derivar_humano": NodoManifiesto(
         id="derivar_humano",
-        etapa=9,
+        etapa=8,
         titulo="Derivar a humano",
         resumen=(
             "El vecino ha pedido expresamente hablar con una persona. Exige palabras explícitas, "
@@ -298,7 +283,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "despedida": NodoManifiesto(
         id="despedida",
-        etapa=9,
+        etapa=8,
         titulo="Despedida",
         resumen="El vecino se despide antes de terminar el guion. Se cierra sin incidencia.",
         tipo="terminal",
@@ -308,7 +293,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "asignar_especialista": NodoManifiesto(
         id="asignar_especialista",
-        etapa=8,
+        etapa=7,
         titulo="Asignar especialista",
         resumen=(
             "Busca el profesional de la categoría en la configuración efectiva de la finca y "
@@ -321,7 +306,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "crear_ticket": NodoManifiesto(
         id="crear_ticket",
-        etapa=8,
+        etapa=7,
         titulo="Crear incidencia",
         resumen="Persiste la llamada y la incidencia. Es el punto sin retorno del flujo.",
         tipo="efecto",
@@ -331,7 +316,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
     ),
     "avisar_canal": NodoManifiesto(
         id="avisar_canal",
-        etapa=8,
+        etapa=7,
         titulo="Avisar y despedir",
         resumen=(
             "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué "

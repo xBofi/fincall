@@ -75,9 +75,7 @@ async def test_sin_sesion_las_apis_operativas_responden_401(cliente: AsyncClient
 async def test_revisor_ve_expedientes_transcripcion_y_decisiones(
     cliente: AsyncClient, repo: RepositorioMemoria
 ) -> None:
-    lid = await _conversar(
-        cliente, ["Calle Mayor 12", "sí", "3 B", "Marta", "Gotea el grifo", "sí"]
-    )
+    lid = await _conversar(cliente, ["Calle Mayor 12", "sí", "3 B", "Gotea el grifo", "sí"])
     await _sesion(cliente, repo, Rol.calidad)
     assert (await cliente.get("/api/auth/me")).json()["rol"] == "calidad"
 
@@ -89,7 +87,7 @@ async def test_revisor_ve_expedientes_transcripcion_y_decisiones(
 
     detalle = (await cliente.get(f"/api/operaciones/llamadas/{lid}")).json()
     assert detalle["llamada"]["resultado"] == "incidencia_creada"
-    assert len(detalle["turnos"]) == 7  # saludo + 6 turnos
+    assert len(detalle["turnos"]) == 6  # saludo + 5 turnos
     assert detalle["turnos"][1]["vecino"] == "Calle Mayor 12"
     assert any(d["nodo"] == "crear_ticket" for d in detalle["decisiones"])
 

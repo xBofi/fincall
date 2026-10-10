@@ -159,7 +159,7 @@ async def test_puente_saluda_responde_y_cuelga(gestor: GestorLlamadas) -> None:
     assert gestor.obtener(llamada_id)["entrega_ultima"]["estado"] == "interrumpida"
 
     # Conversación hasta el final: al reproducirse la despedida se cuelga
-    for texto in ["sí", "3 B", "Marta", "Gotea el grifo", "sí"]:
+    for texto in ["sí", "3 B", "Gotea el grifo", "sí"]:
         n = len(tts.textos)
         await stt.cola.put(EventoTurno("final", texto))
         await _esperar(lambda n=n: len(tts.textos) > n or puente.finalizada)

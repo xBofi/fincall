@@ -66,7 +66,7 @@ async def test_pregunta_del_vecino_se_responde_y_se_retoma(gestor: GestorLlamada
 
 async def test_fuera_de_ambito_explica_y_retoma(gestor: GestorLlamadas) -> None:
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "2 B", "Ana", "¿Cuánto pago de cuota al mes?"]
+        gestor, ["Calle Mayor 12", "sí", "2 B", "¿Cuánto pago de cuota al mes?"]
     )
     assert estado["nodo_actual"] == "recoger_solicitud"
     assert "solo puedo gestionar incidencias" in estado["mensajes_bot"][-1].lower()
@@ -101,9 +101,7 @@ async def test_rechazar_candidata_con_otra_direccion_no_gasta_intento(
 
 
 async def test_correccion_en_el_resumen_reclasifica(gestor: GestorLlamadas) -> None:
-    estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
-    )
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B", "No hay luz en la escalera"])
     assert estado["categoria"] == "electricidad"
     estado = await gestor.mensaje(
         estado["llamada_id"], "No, me he equivocado, es una fuga de agua en el baño"
@@ -114,27 +112,23 @@ async def test_correccion_en_el_resumen_reclasifica(gestor: GestorLlamadas) -> N
 
 
 async def test_correccion_de_vivienda_en_el_resumen(gestor: GestorLlamadas) -> None:
-    estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
-    )
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B", "No hay luz en la escalera"])
     estado = await gestor.mensaje(estado["llamada_id"], "No, antes le he dicho 3 B pero es 3 A")
     assert estado["vivienda_id"] == "finca-mayor-12-u-3A"
     assert estado["nodo_actual"] == "confirmar_resumen"
 
 
 async def test_turnos_deterministas_no_llaman_al_llm(gestor: GestorLlamadas, llm: Any) -> None:
-    await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B", "Soy Marta"])
-    # dirección corta, sí/no, vivienda por regex y nombre simple: cero llamadas al modelo
+    await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B"])
+    # dirección corta, sí/no y vivienda por regex: cero llamadas al modelo
     assert llm.llamadas == []
     agregados = gestor.metricas.agregados()
-    assert agregados["turnos"] == 5
-    assert agregados["servidor_ms_sin_llm"]["n"] == 5
+    assert agregados["turnos"] == 4
+    assert agregados["servidor_ms_sin_llm"]["n"] == 4
 
 
 async def test_metricas_registran_llamadas_llm_y_tiempos(gestor: GestorLlamadas, llm: Any) -> None:
-    estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "3 B", "Marta", "No hay luz en la escalera"]
-    )
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "3 B", "No hay luz en la escalera"])
     turnos = gestor.metricas.turnos(estado["llamada_id"])
     ultimo = turnos[-1]
     assert ultimo.llm_llamadas == 1  # interpretación fusionada con clasificación
@@ -190,7 +184,7 @@ async def test_piso_y_puerta_en_varios_portales_pregunta_el_portal(gestor: Gesto
 
 async def test_resumen_incluye_nombre_y_permite_corregirlo(gestor: GestorLlamadas) -> None:
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "3 B", "Reubofibra", "No hay luz en la escalera"]
+        gestor, ["Calle Mayor 12", "sí", "3 B", "Soy Reubofibra y no hay luz en la escalera"]
     )
     assert "Reubofibra, 3º B" in estado["mensajes_bot"][-1]
     estado = await gestor.mensaje(estado["llamada_id"], "No, me llamo Andreu Bofi")
@@ -201,7 +195,7 @@ async def test_resumen_incluye_nombre_y_permite_corregirlo(gestor: GestorLlamada
 
 async def test_cierre_explica_el_siguiente_paso(gestor: GestorLlamadas) -> None:
     estado = await gestor.iniciar(telefono_llamante="+34600000000")
-    for t in ["Calle Mayor 12", "sí", "3 B", "Marta", "Gotea el grifo del patio", "sí"]:
+    for t in ["Calle Mayor 12", "sí", "3 B", "Gotea el grifo del patio", "sí"]:
         estado = await gestor.mensaje(estado["llamada_id"], t)
     final = estado["mensajes_bot"][-1]
     assert "Fontanería Pérez" in final
@@ -232,7 +226,7 @@ async def test_comentario_sobre_el_bot_no_es_una_correccion(
     gestor: GestorLlamadas, llm: Any
 ) -> None:
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "1 A", "Andreu", "Hay que pintar las paredes del corredor"]
+        gestor, ["Calle Mayor 12", "sí", "1 A", "Hay que pintar las paredes del corredor"]
     )
     assert (
         "solicitud general" in estado["mensajes_bot"][-1] or "pintura" in estado["mensajes_bot"][-1]
@@ -305,7 +299,7 @@ async def test_faq_sin_signos_de_interrogacion(gestor: GestorLlamadas, llm: Any)
 async def test_pregunta_de_detalle_antes_del_resumen(gestor_detalle: GestorLlamadas) -> None:
     gestor = gestor_detalle
     estado = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", "No funciona la luz del pasillo del segundo"]
+        gestor, ["Calle Mayor 12", "sí", "1 A", "No funciona la luz del pasillo del segundo"]
     )
     assert estado["nodo_actual"] == "pedir_detalle"
     assert "electricista" in estado["mensajes_bot"][-1]
@@ -322,14 +316,14 @@ async def test_descripcion_larga_no_pide_detalle(gestor_detalle: GestorLlamadas)
         "No funciona ninguna de las luces del pasillo del segundo piso desde ayer por la noche, "
         "no encienden aunque le des al interruptor y el resto del edificio tiene luz"
     )
-    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", larga])
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", larga])
     assert estado["nodo_actual"] == "confirmar_resumen"
 
 
 async def test_repetir_devuelve_el_mensaje_completo_y_hola_tras_mensaje_no_oido(
     gestor: GestorLlamadas, llm: Any
 ) -> None:
-    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Ana", "Gotea el grifo"])
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Gotea el grifo"])
     resumen = estado["mensajes_bot"][-1]
     assert resumen.startswith("Le resumo")
     # El navegador informa de que el mensaje se cortó al 20 %
@@ -343,12 +337,17 @@ async def test_repetir_devuelve_el_mensaje_completo_y_hola_tras_mensaje_no_oido(
     assert resumen in estado["mensajes_bot"][-1]
 
 
-async def test_mi_nombre_es_no_dispara_la_faq(gestor: GestorLlamadas) -> None:
-    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Mi nombre es Andreu Pofir."])
-    assert estado["nombre_declarado"] == "Andreu Pofir"
+async def test_el_nombre_no_se_pregunta(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A"])
     assert estado["nodo_actual"] == "recoger_solicitud"
-    estado2 = await _conversar(
-        gestor, ["Calle Mayor 12", "sí", "1 A", "¿Para qué necesita mi nombre?"]
-    )
-    assert "Solo necesito su nombre" in estado2["mensajes_bot"][-1]
-    assert estado2["nombre_declarado"] is None
+    assert not any("nombre" in m for m in estado["mensajes_bot"])
+    estado = await gestor.mensaje(estado["llamada_id"], "¿Para qué necesita mi nombre?")
+    assert "No necesito su nombre" in estado["mensajes_bot"][-1]
+    assert estado["nombre_declarado"] is None
+    assert estado["nodo_actual"] == "recoger_solicitud"
+
+
+async def test_nombre_dicho_por_su_cuenta_se_guarda(gestor: GestorLlamadas) -> None:
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A, soy Ana"])
+    assert estado["nombre_declarado"] == "Ana"
+    assert estado["mensajes_bot"][-1].startswith("Gracias, Ana: 1º A.")
