@@ -4,7 +4,7 @@ import { KeyOutlined, PlusOutlined, UserDeleteOutlined } from '@ant-design/icons
 import { ApiError, usuarios as apiUsuarios, type Rol, type UsuarioConsola } from '../api'
 
 const ROLES: { value: Rol; label: string; ayuda: string }[] = [
-  { value: 'owner', label: 'Owner', ayuda: 'Todo, incluida la gestión de usuarios' },
+  { value: 'owner', label: 'Propietario', ayuda: 'Todo, incluida la gestión de usuarios' },
   { value: 'administrador', label: 'Administrador', ayuda: 'Expedientes, grabaciones y auditoría' },
   { value: 'calidad', label: 'Calidad', ayuda: 'Expedientes y grabaciones' },
 ]

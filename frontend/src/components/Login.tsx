@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Form, Input } from 'antd'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { ApiError, auth, type UsuarioConsola } from '../api'
+import Logo from './Logo'
 
 /** Pantalla de acceso a la consola privada: usuario y contraseña internos. */
 export function Login({ onEntrar }: { onEntrar: (usuario: UsuarioConsola) => void }) {
@@ -26,9 +27,8 @@ export function Login({ onEntrar }: { onEntrar: (usuario: UsuarioConsola) => voi
     <main className="ops-login">
       <section className="ops-login-card" aria-labelledby="titulo-acceso">
         <div className="ops-brand">
-          <span className="ops-brand-mark" aria-hidden="true">B</span>
-          <div>
-            <p className="ops-eyebrow">Building Call Assistant</p>
+          <Logo conNombre />
+          <div className="ops-brand-producto">
             <h1 id="titulo-acceso">Centro operativo</h1>
           </div>
         </div>

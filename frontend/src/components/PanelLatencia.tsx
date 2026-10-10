@@ -1,4 +1,5 @@
 import { Statistic, Table, Tag, Typography } from 'antd'
+import { calificar } from '../textos'
 
 export interface TurnoMedido {
   turno: number
@@ -13,19 +14,6 @@ export interface TurnoMedido {
   tts_inicio_ms?: number
   respuesta_ms?: number
   interrumpido?: boolean
-}
-
-export const UMBRALES: [number, string, string][] = [
-  [700, 'excelente', 'green'],
-  [1200, 'objetivo', 'cyan'],
-  [1500, 'tolerable', 'gold'],
-  [2000, 'mal', 'volcano'],
-]
-
-export function calificar(ms: number | undefined): { nombre: string; color: string } {
-  if (ms === undefined) return { nombre: '—', color: 'default' }
-  for (const [limite, nombre, color] of UMBRALES) if (ms <= limite) return { nombre, color }
-  return { nombre: 'muy mal', color: 'red' }
 }
 
 function p(valores: number[], q: number): number | undefined {

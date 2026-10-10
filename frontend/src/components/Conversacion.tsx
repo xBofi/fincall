@@ -7,7 +7,7 @@ export type EstadoVoz = 'inactivo' | 'esperando_voz' | 'hablando' | 'procesando'
 
 const ETIQUETA: Record<EstadoVoz, { texto: string; color: string; icono?: React.ReactNode }> = {
   inactivo: { texto: 'En espera', color: 'default' },
-  esperando_voz: { texto: 'Escuchando… hable cuando quiera', color: 'processing', icono: <AudioOutlined /> },
+  esperando_voz: { texto: 'Escuchando… habla cuando quieras', color: 'processing', icono: <AudioOutlined /> },
   hablando: { texto: 'Le oigo…', color: 'green', icono: <AudioOutlined /> },
   procesando: { texto: 'Pensando…', color: 'gold', icono: <LoadingOutlined /> },
   respondiendo: { texto: 'Asistente hablando (puede interrumpir)', color: 'blue', icono: <SoundOutlined /> },
@@ -80,7 +80,7 @@ export function Conversacion({ historial, parcial, estadoVoz, ocupado, finalizad
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             onPressEnter={enviar}
-            placeholder={finalizada ? 'Llamada finalizada' : 'O escriba lo que diría el vecino…'}
+            placeholder={finalizada ? 'Llamada finalizada' : 'O escribe lo que diría el vecino…'}
             disabled={ocupado || finalizada}
           />
           <Button type="primary" icon={<SendOutlined />} onClick={enviar} loading={ocupado} disabled={finalizada}>

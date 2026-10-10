@@ -4,7 +4,6 @@ import type { VistaLlamada } from '../api'
 const NODOS_PRINCIPALES = [
   'identificar_finca',
   'identificar_vivienda',
-  'registrar_nombre',
   'recoger_solicitud',
   'clasificar_problema',
   'determinar_urgencia',

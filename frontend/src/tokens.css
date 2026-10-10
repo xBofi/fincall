@@ -5,18 +5,23 @@
   --color-ink: oklch(24% 0.02 258);
   --color-muted: oklch(48% 0.018 257);
   --color-rule: oklch(90% 0.012 250);
+  --color-rule-strong: oklch(78% 0.015 250);
   --color-accent: oklch(58% 0.2 256);
   --color-accent-ink: oklch(100% 0 0);
   --color-focus: oklch(58% 0.2 256);
   --color-accent-soft: oklch(95% 0.035 256);
   --color-good: oklch(55% 0.14 154);
   --color-review: oklch(59% 0.16 67);
+  --color-good-soft: oklch(96% 0.035 154);
+  --color-review-soft: oklch(96% 0.04 75);
   --color-bot: oklch(95% 0.03 256);
   --color-neighbor: oklch(96% 0.035 140);
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   --space-2xs: .5rem;
+  --ancho-max: 3200px;
+  --margen-lateral: clamp(1rem, 2.2vw, 3rem);
   --space-xs: .75rem;
   --space-sm: 1rem;
   --space-md: 1.5rem;
@@ -25,7 +30,6 @@
   --radius-card: 10px;
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --dur-short: 180ms;
-  --dur-medium: 420ms;
 
   /* Flujo del asistente: un color por tipo de bloque */
   --flujo-decision: oklch(58% 0.2 256);

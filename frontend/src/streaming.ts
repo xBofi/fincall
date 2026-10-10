@@ -59,7 +59,6 @@ export interface CallbacksStreaming {
 export interface SesionStreaming {
   pausar: () => void
   reanudar: () => void
-  forzarFinTurno: () => void
   /** Ledger de salida: informa al servidor de qué parte del mensaje del turno llegó a sonar. */
   informarEntrega: (turno: number, estado: string, ratio: number, textoEntregado: string) => void
   cerrar: () => void
@@ -74,12 +73,21 @@ export async function abrirStreaming(
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   })
   const ctx = new AudioContext({ sampleRate: 16000 })
-  const url = URL.createObjectURL(new Blob([CODIGO_WORKLET], { type: 'application/javascript' }))
-  await ctx.audioWorklet.addModule(url)
-  URL.revokeObjectURL(url)
-  const fuente = ctx.createMediaStreamSource(stream)
-  const nodo = new AudioWorkletNode(ctx, 'captura-pcm')
-  fuente.connect(nodo)
+  let fuente: MediaStreamAudioSourceNode
+  let nodo: AudioWorkletNode
+  try {
+    const url = URL.createObjectURL(new Blob([CODIGO_WORKLET], { type: 'application/javascript' }))
+    await ctx.audioWorklet.addModule(url)
+    URL.revokeObjectURL(url)
+    fuente = ctx.createMediaStreamSource(stream)
+    nodo = new AudioWorkletNode(ctx, 'captura-pcm')
+    fuente.connect(nodo)
+  } catch (e) {
+    // Sin esto el micrófono quedaría encendido aunque la llamada no llegue a empezar
+    stream.getTracks().forEach((t) => t.stop())
+    void ctx.close().catch(() => undefined)
+    throw e
+  }
   // No conectamos a destino: no queremos oír el micrófono
 
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -131,7 +139,12 @@ export async function abrirStreaming(
   }
 
   ws.onmessage = (e) => {
-    const m = JSON.parse(e.data as string) as MensajeServidor
+    let m: MensajeServidor
+    try {
+      m = JSON.parse(e.data as string) as MensajeServidor
+    } catch {
+      return // mensaje que no es del protocolo: se ignora
+    }
     switch (m.type) {
       case 'listo':
         cb.onListo(m.conexion_ms)
@@ -164,7 +177,10 @@ export async function abrirStreaming(
   }
   let listo = false
   ws.onclose = (e) => {
-    if (!listo) cb.onError(`El WebSocket de voz se cerró antes de estar listo (código ${e.code}). ¿Proxy sin ws:true o backend caído?`)
+    if (!listo) {
+      console.error(`WebSocket de voz cerrado antes de estar listo (código ${e.code})`)
+      cb.onError('No se pudo conectar el reconocimiento de voz. Comprueba que el servidor está en marcha.')
+    }
     limpiar()
   }
   ws.onerror = () => cb.onError('Error de conexión con el servidor de voz')
@@ -187,7 +203,6 @@ export async function abrirStreaming(
       vozDesde = 0
       enviar({ type: 'reanudar' })
     },
-    forzarFinTurno: () => enviar({ type: 'fin_turno' }),
     informarEntrega: (turno, estado, ratio, textoEntregado) =>
       enviar({ type: 'entrega', turno, estado, ratio, texto_entregado: textoEntregado }),
     cerrar: () => {

@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Dropdown, Segmented, Slider, Spin, Switch, message } from 'antd'
-import { KeyOutlined, LogoutOutlined, PhoneOutlined, ReloadOutlined, SoundOutlined, UserOutlined } from '@ant-design/icons'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Alert, Button, Dropdown, Popover, Segmented, Slider, Spin, Switch, Tooltip, message } from 'antd'
+import {
+  CheckOutlined,
+  CloseOutlined,
+  KeyOutlined,
+  LogoutOutlined,
+  PhoneOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
 import {
   api,
   auth,
@@ -15,15 +24,18 @@ import {
   type Salud,
   type VistaLlamada,
 } from './api'
+import Logo from './components/Logo'
 import { CambioContrasena } from './components/CambioContrasena'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
-import { GestionUsuarios } from './components/GestionUsuarios'
 import { Login } from './components/Login'
-import { PanelCatalogos } from './components/PanelCatalogos'
-import { PanelFlujo } from './components/PanelFlujo'
+import { BaseDatos } from './components/BaseDatos'
+import { FichaLlamada } from './components/FichaLlamada'
+import { Historial } from './components/Historial'
 import { PanelEstado } from './components/PanelEstado'
-import { PanelLatencia, type TurnoMedido } from './components/PanelLatencia'
+import type { TurnoMedido } from './components/PanelLatencia'
+import { useCatalogo } from './catalogo'
 import { abrirStreaming, type SesionStreaming } from './streaming'
+import { ROLES, mensajeError } from './textos'
 import {
   VAD_POR_DEFECTO,
   SinVozError,
@@ -36,15 +48,33 @@ import {
   ttsDisponible,
 } from './voz'
 
-type ModoStt = 'navegador' | 'servidor' | 'streaming'
-type Pantalla = 'operaciones' | 'flujo' | 'catalogos' | 'latencia' | 'usuarios'
+// Pantallas que no se usan al simular: se descargan al abrirlas (el arranque pesa menos)
+const GestionUsuarios = lazy(() => import('./components/GestionUsuarios').then((m) => ({ default: m.GestionUsuarios })))
+const PanelFlujo = lazy(() => import('./components/PanelFlujo').then((m) => ({ default: m.PanelFlujo })))
+const PanelLatencia = lazy(() => import('./components/PanelLatencia').then((m) => ({ default: m.PanelLatencia })))
 
-/** En la consola web el bot habla por el navegador: su pista la reconstruye el TTS del servidor. */
-const NOMBRE_PISTA: Record<string, string> = {
-  mezcla: 'Conversación completa',
-  cliente: 'Solo el vecino',
-  asistente: 'Solo el asistente',
-}
+type ModoStt = 'navegador' | 'servidor' | 'streaming'
+type Pantalla = 'simular' | 'historial' | 'datos' | 'flujo' | 'latencia' | 'usuarios'
+
+/** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
+/** El barge-in (cortar al bot cuando el vecino habla) está siempre activo en la consola. */
+const BARGE_IN = true
+
+const PUEDE = [
+  'Identifica la finca por la dirección, aunque el vecino la diga con otras palabras.',
+  'Localiza la vivienda por portal, piso y puerta.',
+  'Entiende el problema, lo clasifica por tipo de avería y decide la urgencia.',
+  'Lee un resumen al vecino y le pide confirmación antes de crear nada.',
+  'Crea la incidencia y avisa al profesional que la finca tiene asignado para esa avería.',
+  'Responde dudas frecuentes (¿se graba la llamada?, ¿cuánto tardarán?).',
+]
+const NO_PUEDE = [
+  'No atiende fincas que no estén dadas de alta: guarda el mensaje para revisarlo.',
+  'Sin la vivienda identificada no crea incidencia: avisa al administrador.',
+  'Si ningún profesional cubre esa avería, la incidencia queda pendiente para el administrador.',
+  'Si el vecino pide hablar con una persona, no transfiere la llamada: avisa al administrador.',
+  'No promete hora de visita: todavía nadie ha hablado con el profesional.',
+]
 
 export default function App() {
   const [salud, setSalud] = useState<Salud | null>(null)
@@ -54,18 +84,17 @@ export default function App() {
   const [parcial, setParcial] = useState<string | null>(null)
   const [vozActiva, setVozActiva] = useState(ttsDisponible())
   const [manosLibres, setManosLibres] = useState(true)
-  const [bargeIn] = useState(true)
   const [modoStt, setModoStt] = useState<ModoStt>('navegador')
   const [silencioMs, setSilencioMs] = useState(VAD_POR_DEFECTO.silencioMs)
   const [turnos, setTurnos] = useState<TurnoMedido[]>([])
   const [error, setError] = useState<string | null>(null)
   const [streamingInfo, setStreamingInfo] = useState<string | null>(null)
-  // Consola operativa: acceso, indicadores, cola de expedientes y dossier seleccionado
+  // Consola: acceso, indicadores, historial de llamadas y la llamada abierta en el historial
   const [acceso, setAcceso] = useState<EstadoAcceso | null>(null)
   const [resumenOps, setResumenOps] = useState<ResumenOperaciones | null>(null)
   const [expedientes, setExpedientes] = useState<Expediente[]>([])
   const [seleccionado, setSeleccionado] = useState<DetalleExpediente | null>(null)
-  const [pantalla, setPantalla] = useState<Pantalla>('operaciones')
+  const [pantalla, setPantalla] = useState<Pantalla>('simular')
   const [tel, setTel] = useState<EstadoTelefonia | null>(null)
   const [cambioAbierto, setCambioAbierto] = useState(false)
 
@@ -90,25 +119,17 @@ export default function App() {
   const sesionAbierta = useCallback(
     (usuario: UsuarioConsola) => {
       setAcceso({ modo: 'local', autenticado: true, usuario })
-      setPantalla('operaciones')
+      setPantalla('simular')
       void refrescarOperaciones()
     },
     [refrescarOperaciones],
   )
 
-  const salir = useCallback(async () => {
-    await auth.logout().catch(() => undefined)
-    setAcceso({ modo: 'local', autenticado: false, usuario: null })
-    setResumenOps(null)
-    setExpedientes([])
-    setSeleccionado(null)
-  }, [])
-
   const abrirExpediente = useCallback(async (id: string) => {
     try {
       setSeleccionado(await operaciones.detalle(id))
     } catch (e) {
-      message.error(String(e))
+      message.error(mensajeError(e))
     }
   }, [])
 
@@ -118,8 +139,11 @@ export default function App() {
   const cancelarHablaRef = useRef<() => void>(() => undefined)
   const streamingRef = useRef<SesionStreaming | null>(null)
   const bucleActivoRef = useRef(false)
-  const opcionesRef = useRef({ vozActiva, manosLibres, bargeIn, modoStt, silencioMs })
-  opcionesRef.current = { vozActiva, manosLibres, bargeIn, modoStt, silencioMs }
+  // Cada llamada (o colgar) invalida lo que siga en vuelo de la anterior: micrófono, WebSocket
+  const generacionRef = useRef(0)
+  const abriendoStreamingRef = useRef<Promise<void> | null>(null)
+  const opcionesRef = useRef({ vozActiva, manosLibres, modoStt, silencioMs })
+  opcionesRef.current = { vozActiva, manosLibres, modoStt, silencioMs }
 
   useEffect(() => {
     api
@@ -129,9 +153,20 @@ export default function App() {
         if (s.stt_streaming) setModoStt('streaming')
         else if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
       })
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(mensajeError(e)))
     void refrescarOperaciones()
   }, [refrescarOperaciones])
+
+  // El historial se refresca mientras está a la vista, no tras cada turno de voz: así no compite
+  // con la respuesta del asistente y recoge también las llamadas que entren por teléfono
+  useEffect(() => {
+    if (pantalla !== 'historial') return
+    void refrescarOperaciones()
+    const id = window.setInterval(() => {
+      if (!document.hidden) void refrescarOperaciones()
+    }, 15_000)
+    return () => window.clearInterval(id)
+  }, [pantalla, refrescarOperaciones])
 
   const registrarTurno = useCallback((t: TurnoMedido) => {
     setTurnos((prev) => [...prev.filter((x) => x.turno !== t.turno), t])
@@ -152,7 +187,7 @@ export default function App() {
         streamingRef.current?.pausar()
         // En streaming el barge-in lo detecta el propio micrófono de la sesión (onBargeIn);
         // en los otros modos, la vigilancia interna de `hablar`
-        const rep = hablar(texto, opcionesRef.current.bargeIn && !v.finalizada && !streamingRef.current)
+        const rep = hablar(texto, BARGE_IN && !v.finalizada && !streamingRef.current)
         cancelarHablaRef.current = rep.cancelar
         ttsInicioAt = await rep.inicio
         const fin = await rep.fin
@@ -196,15 +231,13 @@ export default function App() {
         streamingRef.current?.cerrar()
         streamingRef.current = null
       }
-      // La cola y los indicadores reflejan el expediente persistido tras cada turno
-      void refrescarOperaciones()
       setEstadoVoz(streamingRef.current && !v.finalizada ? 'esperando_voz' : 'inactivo')
       if (!v.finalizada && opcionesRef.current.manosLibres && bucleActivoRef.current && modo !== 'streaming') {
         void escuchar()
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [registrarTurno, refrescarOperaciones],
+    [registrarTurno],
   )
 
   const enviarTexto = useCallback(
@@ -220,7 +253,7 @@ export default function App() {
         const red = Math.round(performance.now() - t0 - (nueva.tiempos.servidor_ms ?? 0))
         await responder(nueva, null, { red_ms: Math.max(0, red) })
       } catch (e) {
-        message.error(String(e))
+        message.error(mensajeError(e))
         setEstadoVoz('inactivo')
       } finally {
         setOcupado(false)
@@ -231,12 +264,15 @@ export default function App() {
 
   /** Modo streaming: una sesión por llamada; el proveedor detecta el fin de turno. */
   const abrirStreamingLlamada = useCallback(
-    async (llamadaId: string) => {
+    (llamadaId: string): Promise<void> => {
+      if (abriendoStreamingRef.current) return abriendoStreamingRef.current
       streamingRef.current?.cerrar()
+      streamingRef.current = null
+      const generacion = generacionRef.current
       let finVozTurno = 0
-      streamingRef.current = await abrirStreaming(llamadaId, {
+      const apertura = abrirStreaming(llamadaId, {
         onListo: (ms) => {
-          setStreamingInfo(`STT streaming conectado (${ms ?? '?'} ms)`)
+          setStreamingInfo(`Reconocimiento de voz conectado (${ms ?? '?'} ms)`)
           setEstadoVoz('esperando_voz')
         },
         onParcial: (t) => setParcial(t),
@@ -247,17 +283,25 @@ export default function App() {
         },
         onRespuesta: (v, ultimaVozAt) => {
           setParcial(null)
-          void responder(v, finVozTurno || ultimaVozAt || null, {
-            stt_ms: v.tiempos.stt_eou_a_respuesta_ms !== undefined ? undefined : undefined,
-          })
+          void responder(v, finVozTurno || ultimaVozAt || null, {})
         },
         onError: (m) => message.error(m),
         onVoz: (hablando) => setEstadoVoz(hablando ? 'hablando' : 'esperando_voz'),
         onBargeIn: () => {
-          if (opcionesRef.current.bargeIn) cancelarHablaRef.current()
+          if (BARGE_IN) cancelarHablaRef.current()
         },
         onCerrado: () => setStreamingInfo(null),
       })
+        .then((sesion) => {
+          // Si se colgó (o empezó otra llamada) mientras se abría el micrófono, no se engancha
+          if (generacion !== generacionRef.current) sesion.cerrar()
+          else streamingRef.current = sesion
+        })
+        .finally(() => {
+          abriendoStreamingRef.current = null
+        })
+      abriendoStreamingRef.current = apertura
+      return apertura
     },
     [responder],
   )
@@ -320,29 +364,35 @@ export default function App() {
         return
       }
       if (e instanceof Error && e.message === 'cancelado') return
-      message.error(String(e))
+      message.error(mensajeError(e))
     }
   }, [responder, abrirStreamingLlamada])
 
-  const iniciar = async () => {
-    setError(null)
-    setOcupado(true)
+  /** Corta todo lo que tenga en marcha la llamada: escucha, voz del bot, micrófono y WebSocket. */
+  const detenerVoz = () => {
+    generacionRef.current += 1
     cancelarEscuchaRef.current()
     cancelarHablaRef.current()
     streamingRef.current?.cerrar()
     streamingRef.current = null
     silenciar()
+  }
+
+  const iniciar = async () => {
+    setError(null)
+    setOcupado(true)
+    detenerVoz()
     setTurnos([])
     bucleActivoRef.current = true
     try {
       const v = await api.iniciar()
       if (opcionesRef.current.modoStt === 'streaming' && opcionesRef.current.manosLibres) {
         // Abrimos el STT mientras suena el saludo para que la conexión no cueste latencia
-        void abrirStreamingLlamada(v.llamada_id).catch((e) => message.error(String(e)))
+        void abrirStreamingLlamada(v.llamada_id).catch((e) => message.error(mensajeError(e)))
       }
       await responder(v, null, {})
     } catch (e) {
-      setError(String(e))
+      setError(mensajeError(e))
     } finally {
       setOcupado(false)
     }
@@ -350,24 +400,25 @@ export default function App() {
 
   const colgar = () => {
     bucleActivoRef.current = false
-    cancelarEscuchaRef.current()
-    cancelarHablaRef.current()
-    streamingRef.current?.cerrar()
-    streamingRef.current = null
-    silenciar()
+    detenerVoz()
     setEstadoVoz('inactivo')
+  }
+
+  const salir = async () => {
+    colgar() // salir con una llamada en curso no puede dejar el micrófono abierto
+    setVista(null)
+    await auth.logout().catch(() => undefined)
+    setAcceso({ modo: 'local', autenticado: false, usuario: null })
+    setResumenOps(null)
+    setExpedientes([])
+    setSeleccionado(null)
   }
 
   const sttServidorOk = !!salud?.stt_disponible
   const sttStreamingOk = !!salud?.stt_streaming
   const sttNavegadorOk = sttNavegadorDisponible()
-  const respuestas = turnos
-    .map((turno) => turno.respuesta_ms)
-    .filter((valor): valor is number => typeof valor === 'number')
-    .sort((a, b) => a - b)
-  const p50 = respuestas.length ? respuestas[Math.floor(respuestas.length / 2)] : null
-  const resultado = vista?.datos.resultado as string | undefined
-  const resuelta = resultado === 'incidencia_creada'
+  const sesionLista = !!acceso?.autenticado && !acceso.usuario?.debe_cambiar_contrasena
+  const catalogo = useCatalogo(sesionLista)
 
   if (acceso === null) {
     return (
@@ -381,15 +432,58 @@ export default function App() {
   const yo = acceso.usuario
   const esOwner = yo.rol === 'owner'
   const opcionesPantalla: { label: string; value: Pantalla }[] = [
-    { label: 'Operaciones', value: 'operaciones' },
+    { label: 'Simular llamada', value: 'simular' },
+    { label: 'Historial', value: 'historial' },
+    { label: 'Fincas y profesionales', value: 'datos' },
     { label: 'Flujo', value: 'flujo' },
-    { label: 'Catálogos', value: 'catalogos' },
-    { label: 'Latencia', value: 'latencia' },
+    { label: 'Rendimiento', value: 'latencia' },
     ...(esOwner ? [{ label: 'Usuarios', value: 'usuarios' as Pantalla }] : []),
   ]
 
+  const enCurso = !!vista && !vista.finalizada
+  const ajustesVoz = (
+    <div className="sim-ajustes">
+      <label>
+        <span>
+          <b>Voz del asistente</b>
+          <small>Lee las respuestas en voz alta</small>
+        </span>
+        <Switch checked={vozActiva} onChange={setVozActiva} disabled={!ttsDisponible()} size="small" />
+      </label>
+      <label>
+        <span>
+          <b>Manos libres</b>
+          <small>Vuelve a escuchar solo después de cada respuesta</small>
+        </span>
+        <Switch checked={manosLibres} onChange={setManosLibres} size="small" />
+      </label>
+      <div>
+        <b>Reconocimiento de voz</b>
+        <Segmented
+          block
+          size="small"
+          value={modoStt}
+          onChange={(valor) => setModoStt(valor as ModoStt)}
+          options={[
+            { label: 'Servidor', value: 'streaming', disabled: !sttStreamingOk },
+            { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk },
+            { label: 'Grabación', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() },
+          ]}
+        />
+        <small>«Servidor» es el que se usará con llamadas reales.</small>
+      </div>
+      {modoStt === 'servidor' && (
+        <div>
+          <b>Silencio que cierra el turno: {silencioMs} ms</b>
+          <Slider min={300} max={1200} step={50} value={silencioMs} onChange={setSilencioMs} />
+        </div>
+      )}
+      {streamingInfo && <small className="ops-mono">{streamingInfo}</small>}
+    </div>
+  )
+
   return (
-      <main className="ops-shell">
+      <main className={`ops-shell ${pantalla === 'simular' ? 'is-fija' : ''}`}>
         <CambioContrasena
           abierto={cambioAbierto || yo.debe_cambiar_contrasena}
           obligatorio={yo.debe_cambiar_contrasena}
@@ -398,42 +492,143 @@ export default function App() {
         />
         <header className="ops-topbar">
           <div className="ops-brand">
-            <span className="ops-brand-mark" aria-hidden="true">B</span>
-            <div>
-              <p className="ops-eyebrow">Building Call Assistant</p>
-              <h1>Centro operativo</h1>
+            <Logo conNombre />
+            <div className="ops-brand-producto">
+              <h1>Asistente de incidencias</h1>
+              <div className="ops-system">
+                <Tooltip title={salud?.modelo_disponible ? 'El asistente puede atender llamadas' : 'El modelo de lenguaje no responde'}>
+                  <span className="ops-estado">
+                    <span className={`ops-signal ${salud?.modelo_disponible ? 'is-online' : ''}`} />
+                    {salud?.modelo_disponible ? 'Asistente disponible' : 'Asistente no disponible'}
+                  </span>
+                </Tooltip>
+                {tel && (
+                  <Tooltip title={tel.lista ? `Teléfono ${tel.numero ?? ''}` : 'Pendiente de contratar el número. Mientras tanto, las llamadas se simulan desde esta consola.'}>
+                    <span className="ops-estado">
+                      <span className={`ops-signal ${tel.lista ? 'is-online' : ''}`} />
+                      {tel.lista ? `Línea ${tel.numero ?? 'activa'}` : 'Línea telefónica pendiente'}
+                    </span>
+                  </Tooltip>
+                )}
+              </div>
             </div>
           </div>
-          <Segmented<Pantalla> value={pantalla} onChange={setPantalla} options={opcionesPantalla} />
-          <div className="ops-system">
-            <span className={`ops-signal ${salud?.modelo_disponible ? 'is-online' : ''}`} />
-            <span>{salud?.modelo_disponible ? 'Sistema operativo' : 'Modelo no disponible'}</span>
-            {tel && (
-              <span className="ops-tel" title={tel.lista ? `Teléfono ${tel.numero ?? ''} · TTS ${tel.tts}` : tel.motivo ?? ''}>
-                <span className={`ops-signal ${tel.lista ? 'is-online' : ''}`} />
-                {tel.lista ? `Teléfono ${tel.numero ?? 'activo'}` : 'Teléfono sin configurar'}
-              </span>
-            )}
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'rol', label: `Rol: ${yo.rol}`, disabled: true },
-                  { type: 'divider' },
-                  { key: 'contrasena', icon: <KeyOutlined />, label: 'Cambiar contraseña', onClick: () => setCambioAbierto(true) },
-                  { key: 'salir', icon: <LogoutOutlined />, label: 'Salir', onClick: () => void salir() },
-                ],
-              }}
-            >
-              <Button size="small" icon={<UserOutlined />}>{yo.nombre ?? yo.nombre_usuario}</Button>
-            </Dropdown>
-            <Button className="ops-primary" type="primary" icon={vista ? <ReloadOutlined /> : <PhoneOutlined />} onClick={iniciar} loading={ocupado && !vista}>
-              {vista ? 'Nueva llamada' : 'Iniciar llamada'}
-            </Button>
-          </div>
+          <Segmented<Pantalla> className="ops-nav" value={pantalla} onChange={setPantalla} options={opcionesPantalla} />
+          <Dropdown
+            menu={{
+              items: [
+                { key: 'rol', label: `Rol: ${ROLES[yo.rol] ?? yo.rol}`, disabled: true },
+                { type: 'divider' },
+                { key: 'contrasena', icon: <KeyOutlined />, label: 'Cambiar contraseña', onClick: () => setCambioAbierto(true) },
+                { key: 'salir', icon: <LogoutOutlined />, label: 'Salir', onClick: () => void salir() },
+              ],
+            }}
+          >
+            <Tooltip title={yo.nombre ?? yo.nombre_usuario} placement="left">
+              <Button className="ops-usuario" icon={<UserOutlined />}><span>{yo.nombre ?? yo.nombre_usuario}</span></Button>
+            </Tooltip>
+          </Dropdown>
         </header>
 
-        {error && <Alert className="ops-alert" type="error" message={error} showIcon />}
+        {error && <Alert className="ops-alert" type="error" message={error} showIcon closable onClose={() => setError(null)} />}
 
+        {pantalla === 'simular' && (
+          <section className="sim">
+            <section className="sim-col sim-llamada" aria-label="Llamada">
+              <div className="ops-panel-heading">
+                <div>
+                  <p className="ops-eyebrow">Llamada simulada</p>
+                  <h2>{enCurso ? 'En curso' : vista?.finalizada ? 'Llamada terminada' : 'Línea libre'}</h2>
+                </div>
+                <div className="sim-acciones">
+                  <Popover content={ajustesVoz} title="Ajustes de voz" trigger="click" placement="bottomRight">
+                    <Button icon={<SettingOutlined />} title="Ajustes de voz" />
+                  </Popover>
+                  {enCurso ? (
+                    <Button danger onClick={colgar}>Colgar</Button>
+                  ) : vista && (
+                    <Button type="primary" icon={<ReloadOutlined />} onClick={() => void iniciar()} loading={ocupado}>
+                      Nueva llamada
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="sim-conversacion">
+                {vista ? (
+                  <Conversacion historial={vista.historial} parcial={parcial} estadoVoz={estadoVoz} ocupado={ocupado} finalizada={vista.finalizada} manosLibres={manosLibres} onEnviar={enviarTexto} onEscuchar={() => void escuchar()} />
+                ) : (
+                  <div className="sim-bienvenida">
+                    <p className="sim-intro">
+                      Haz de vecino: pulsa <b>Iniciar llamada</b> y habla con el micrófono, o escribe lo que diría.
+                      Las direcciones y viviendas que existen están en <b>Fincas y profesionales</b>.
+                    </p>
+                    <Button type="primary" size="large" icon={<PhoneOutlined />} onClick={() => void iniciar()} loading={ocupado}>
+                      Iniciar llamada
+                    </Button>
+                    <div className="sim-capacidades">
+                      <div>
+                        <h3>Qué hace el asistente</h3>
+                        <ul>{PUEDE.map((t) => <li key={t}><CheckOutlined className="is-good" />{t}</li>)}</ul>
+                      </div>
+                      <div>
+                        <h3>Qué no hace</h3>
+                        <ul>{NO_PUEDE.map((t) => <li key={t}><CloseOutlined className="is-review" />{t}</li>)}</ul>
+                      </div>
+                    </div>
+                    <small className="sim-pie">En esta demostración los avisos a profesionales y administradores se simulan: no se envía ningún correo ni llamada.</small>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="sim-col sim-ficha" aria-label="Lo que ha entendido el asistente">
+              <div className="ops-panel-heading">
+                <div>
+                  <p className="ops-eyebrow">En tiempo real</p>
+                  <h2>Lo que ha entendido el asistente</h2>
+                </div>
+              </div>
+              <FichaLlamada vista={vista} />
+            </section>
+
+            <section className="sim-col sim-datos" aria-label="Fincas y profesionales">
+              <div className="ops-panel-heading">
+                <div>
+                  <p className="ops-eyebrow">Para comprobar</p>
+                  <h2>Fincas y profesionales</h2>
+                </div>
+              </div>
+              <BaseDatos
+                modo="panel"
+                catalogo={catalogo}
+                resaltado={{
+                  fincaId: vista?.datos.finca_id,
+                  viviendaId: vista?.datos.vivienda_id,
+                  profesionalId: vista?.datos.especialista_id,
+                  categoria: vista?.datos.categoria,
+                }}
+              />
+            </section>
+          </section>
+        )}
+
+        {pantalla === 'historial' && (
+          <Historial resumen={resumenOps} expedientes={expedientes} seleccionado={seleccionado} onAbrir={(id) => void abrirExpediente(id)} catalogo={catalogo} />
+        )}
+
+        {pantalla === 'datos' && (
+          <section className="ops-single">
+            <div className="ops-panel-heading">
+              <div>
+                <p className="ops-eyebrow">Lo que el asistente consulta en cada llamada</p>
+                <h2>Fincas y profesionales</h2>
+              </div>
+            </div>
+            <BaseDatos modo="pagina" catalogo={catalogo} />
+          </section>
+        )}
+
+        <Suspense fallback={<Spin className="ops-cargando" />}>
         {pantalla === 'usuarios' && esOwner && (
           <section className="ops-single"><GestionUsuarios yo={yo} /></section>
         )}
@@ -442,109 +637,19 @@ export default function App() {
           <section className="ops-single"><PanelFlujo esOwner={esOwner} /></section>
         )}
 
-        {pantalla === 'catalogos' && (
-          <section className="ops-single"><PanelCatalogos /></section>
-        )}
-
         {pantalla === 'latencia' && (
           <section className="ops-single ops-latency">
             <div>
-              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Pipeline de voz · esta sesión</p><h2>Latencia por turno</h2></div><span className="ops-mono">{turnos.length} turnos</span></div>
-              <p className="ops-queue-note" style={{ marginTop: 4 }}>respuesta_ms = fin de voz del vecino → inicio de voz del bot. ≤700 excelente · ≤1200 objetivo · ≤1500 tolerable · ≥2000 muy mal.</p>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Voz · esta sesión</p><h2>Tiempo de respuesta por turno</h2></div><span className="ops-mono">{turnos.length} turnos</span></div>
               <PanelLatencia turnos={turnos} />
             </div>
             <div>
-              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>Estado del grafo</h2></div></div>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>Estado interno del asistente</h2></div></div>
               <PanelEstado vista={vista} />
             </div>
           </section>
         )}
-
-        {pantalla === 'operaciones' && (<>
-        <section className="ops-metrics" aria-label="Indicadores operativos">
-          <article><p>Llamadas registradas</p><strong>{resumenOps?.llamadas ?? (vista ? 1 : 0)}</strong><span>{resumenOps ? `${resumenOps.activas} activas · ${resumenOps.requieren_revision} a revisar` : 'en esta consola'}</span></article>
-          <article><p>Respuesta p50</p><strong>{(resumenOps?.latencia_global.p50 ?? p50) == null ? '—' : `${resumenOps?.latencia_global.p50 ?? p50} ms`}</strong><span>{(resumenOps?.latencia_global.p50 ?? p50 ?? Infinity) <= 1200 ? 'dentro del objetivo' : 'por encima del objetivo (1200 ms)'}</span></article>
-          <article><p>Resueltas</p><strong>{resumenOps ? `${resumenOps.resueltas}/${resumenOps.llamadas}` : turnos.length}</strong><span>{resumenOps ? 'incidencia creada en la llamada' : 'turnos medidos'}</span></article>
-          <article><p>Llamada actual</p><strong className={resultado ? (resuelta ? 'is-good' : 'is-review') : ''}>{resultado ? (resuelta ? 'Resuelta' : 'A revisar') : vista ? 'En curso' : '—'}</strong><span>{resultado ?? (vista ? 'aún sin cierre' : 'sin llamada')}</span></article>
-        </section>
-
-        <section className="ops-workbench">
-          <aside className="ops-queue" aria-label="Cola de llamadas">
-            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Cola operativa</p><h2>Expedientes</h2></div><span>{String(expedientes.length).padStart(2, '0')}</span></div>
-            <button className={`ops-call-row ${vista && !seleccionado ? 'is-selected' : ''}`} type="button" onClick={() => { setSeleccionado(null); if (!vista) void iniciar() }}>
-              <span className="ops-row-state" />
-              <span><b>{vista?.datos.nombre_declarado ?? (vista ? 'Llamada en directo' : 'Nueva llamada')}</b><small>{vista?.datos.finca_direccion ?? 'Sin identificar'}</small></span>
-              <time>{vista ? 'ahora' : 'lista'}</time>
-            </button>
-            {expedientes.filter((e) => e.id !== vista?.llamada_id).map((e) => (
-              <button key={e.id} className={`ops-call-row ${seleccionado?.llamada.id === e.id ? 'is-selected' : ''}`} type="button" onClick={() => void abrirExpediente(e.id)}>
-                <span className="ops-row-state" style={{ background: e.requiere_revision ? 'var(--color-review)' : e.estado === 'activa' ? 'var(--color-accent)' : 'var(--color-good)' }} />
-                <span><b>{e.nombre_declarado ?? 'Sin nombre'}</b><small>{e.resumen ?? e.resultado ?? e.estado}{e.requiere_revision ? ' · revisar' : ''}</small></span>
-                <time>{new Date(e.iniciada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</time>
-              </button>
-            ))}
-            <div className="ops-queue-note">Expedientes persistidos por turno, con trazabilidad completa. Pulse uno para abrir su dossier.</div>
-          </aside>
-
-          <section className="ops-dossier" aria-label="Dossier operativo">
-            {seleccionado ? (
-              <>
-                <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada · {seleccionado.llamada.estado}</p><h2>{seleccionado.llamada.nombre_declarado ?? 'Sin nombre'}</h2></div><span className="ops-mono">{seleccionado.llamada.id.slice(-6)}</span></div>
-                <dl className="ops-facts">
-                  <div><dt>Inicio</dt><dd>{new Date(seleccionado.llamada.iniciada_en).toLocaleString('es-ES')}</dd></div>
-                  <div><dt>Teléfono</dt><dd>{seleccionado.llamada.telefono_llamante ?? '—'}</dd></div>
-                  <div><dt>Vivienda</dt><dd>{seleccionado.llamada.vivienda_id ?? 'No identificada'}</dd></div>
-                  <div><dt>Resultado</dt><dd className={seleccionado.llamada.resultado === 'incidencia_creada' ? 'is-good' : 'is-review'}>{seleccionado.llamada.resultado ?? 'en curso'}{seleccionado.llamada.motivo_revision ? ` · ${seleccionado.llamada.motivo_revision}` : ''}</dd></div>
-                </dl>
-                <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{seleccionado.llamada.resumen ?? '—'}</p></div>
-                {seleccionado.pistas.length > 0 && (
-                  <div className="ops-summary" style={{ marginTop: 12 }}>
-                    <p className="ops-eyebrow">Grabación · URL firmada, expira en 5 min · retención 14 días</p>
-                    {seleccionado.pistas.map((p) => (
-                      <div key={p.id} style={{ marginBottom: 8 }}>
-                        <small>{NOMBRE_PISTA[p.canal] ?? p.canal}</small>
-                        {p.url ? <audio controls preload="none" src={p.url} style={{ width: '100%' }} /> : <small> · eliminada por retención</small>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Transcripción y decisiones</p><h2>Rastro verificable</h2></div></div>
-                  <ol>{seleccionado.turnos.map((t) => <li key={t.turno}><span>{t.turno}</span><div>{t.vecino && <b>Vecino: {t.vecino}</b>}<small>Asistente: {t.asistente.join(' ')}</small><small>{t.nodo_inicial} → {t.nodo_final}{t.tiempos?.servidor_ms != null ? ` · ${t.tiempos.servidor_ms} ms servidor` : ''}{t.tiempos?.origen_interpretacion ? ` · ${t.tiempos.origen_interpretacion}` : ''}</small>{seleccionado.decisiones.filter((d) => d.turno === t.turno).map((d, i) => <small key={i}>↳ {d.nodo}: {d.accion}{d.detalle ? ` · ${d.detalle}` : ''}</small>)}</div></li>)}</ol>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="ops-panel-heading"><div><p className="ops-eyebrow">Dossier de llamada</p><h2>{vista?.datos.finca_direccion ?? 'Esperando una llamada'}</h2></div><span className="ops-mono">{vista?.llamada_id?.slice(-6) ?? '—'}</span></div>
-                <dl className="ops-facts">
-                  <div><dt>Vecino</dt><dd>{vista?.datos.nombre_declarado ?? 'No identificado'}</dd></div>
-                  <div><dt>Vivienda</dt><dd>{vista?.datos.vivienda_etiqueta ?? 'Pendiente'}</dd></div>
-                  <div><dt>Categoría</dt><dd>{vista?.datos.categoria ?? 'Sin clasificar'}</dd></div>
-                  <div><dt>Urgencia</dt><dd>{vista?.datos.urgencia ?? '—'}</dd></div>
-                </dl>
-                <div className="ops-summary"><p className="ops-eyebrow">Resumen</p><p>{vista?.datos.resumen ?? 'El expediente se irá completando mientras el vecino responde.'}</p></div>
-                <div className="ops-decision"><div className="ops-panel-heading"><div><p className="ops-eyebrow">Flujo de decisión</p><h2>Rastro verificable</h2></div></div>
-                  {vista?.traza?.length ? <ol>{vista.traza.slice(-5).map((paso, index) => <li key={`${paso.nodo}-${index}`}><span>{index + 1}</span><div><b>{paso.nodo}</b><small>{paso.accion}{paso.detalle ? ` · ${paso.detalle}` : ''}</small></div></li>)}</ol> : <p className="ops-empty">Cada decisión del grafo aparecerá aquí, con el motivo que la activó.</p>}
-                </div>
-              </>
-            )}
-          </section>
-
-          <aside className="ops-live" aria-label="Llamada en directo">
-            <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>{vista?.finalizada ? 'Finalizada' : vista ? 'En curso' : 'Preparada'}</h2></div>{vista && !vista.finalizada && <Button danger onClick={colgar}>Colgar</Button>}</div>
-            <div className="ops-voice-controls">
-              <label><SoundOutlined /> Voz <Switch checked={vozActiva} onChange={setVozActiva} disabled={!ttsDisponible()} size="small" /></label>
-              <label>Manos libres <Switch checked={manosLibres} onChange={setManosLibres} size="small" /></label>
-              <Segmented size="small" value={modoStt} onChange={(valor) => setModoStt(valor as ModoStt)} options={[{ label: 'Streaming', value: 'streaming', disabled: !sttStreamingOk }, { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk }, { label: 'Whisper', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() }]} />
-              {modoStt === 'servidor' && <Slider min={300} max={1200} step={50} value={silencioMs} onChange={setSilencioMs} />}
-              {streamingInfo && <span className="ops-streaming-info">{streamingInfo}</span>}
-            </div>
-            <div className="ops-conversation">
-              {vista ? <Conversacion historial={vista.historial} parcial={parcial} estadoVoz={estadoVoz} ocupado={ocupado} finalizada={vista.finalizada} manosLibres={manosLibres} onEnviar={enviarTexto} onEscuchar={() => void escuchar()} /> : <div className="ops-call-placeholder"><span className="ops-radar" /><p>La línea está libre</p><small>Inicia una llamada para observar conversación, tiempos y decisiones en tiempo real.</small></div>}
-            </div>
-            <footer className="ops-retention">Grabaciones: acceso restringido a owner, administradores y calidad · retención de 14 días.</footer>
-          </aside>
-        </section>
-        </>)}
+        </Suspense>
       </main>
     )
 }

@@ -66,7 +66,9 @@ export function capturarTurno(
   opts: OpcionesVad,
   onEstado: (estado: 'esperando_voz' | 'hablando') => void,
 ): { resultado: Promise<Captura>; cancelar: () => void } {
-  let cancelar = () => {}
+  // `cancelar` se devuelve antes de tener micrófono: se marca y se aplica en cuanto lo haya
+  let cancelado = false
+  let detener = () => {}
   const resultado = new Promise<Captura>((resolve, reject) => {
     if (!capturaDisponible()) {
       reject(new Error('El navegador no permite capturar audio.'))
@@ -75,6 +77,11 @@ export function capturarTurno(
     navigator.mediaDevices
       .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
       .then((stream) => {
+        if (cancelado) {
+          stream.getTracks().forEach((t) => t.stop())
+          reject(new Error('cancelado'))
+          return
+        }
         const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : ''
         const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
         const chunks: BlobPart[] = []
@@ -110,7 +117,7 @@ export function capturarTurno(
           fuente.disconnect()
           void ctx.close().catch(() => undefined)
         }
-        cancelar = () => terminar('cancelado')
+        detener = () => terminar('cancelado')
 
         const analizar = () => {
           if (terminado) return
@@ -148,6 +155,9 @@ export function capturarTurno(
 
         recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
         recorder.onerror = () => {
+          terminado = true
+          if (frame) cancelAnimationFrame(frame)
+          window.clearTimeout(temporizador)
           limpiar()
           reject(new Error('No se ha podido grabar el audio.'))
         }
@@ -177,6 +187,10 @@ export function capturarTurno(
       })
       .catch((e: unknown) => reject(e instanceof Error ? e : new Error(String(e))))
   })
+  const cancelar = () => {
+    cancelado = true
+    detener()
+  }
   return { resultado, cancelar }
 }
 

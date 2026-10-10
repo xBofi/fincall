@@ -2,45 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Card, Empty, Input, Space, Spin, Tag, Tooltip, Typography, message } from 'antd'
 import { ReloadOutlined, RobotOutlined, ThunderboltOutlined, UndoOutlined } from '@ant-design/icons'
 import { ApiError, flujo } from '../api'
-import type { AristaGrafo, Grafo, NodoGrafo, Plantilla, Prompts } from '../api'
+import type { AristaGrafo, Grafo, Plantilla, Prompts } from '../api'
+import { disponer } from './grafoDisposicion'
 
 const { Paragraph, Text } = Typography
-
-// Disposición: una fila por etapa (la pista viene del manifiesto, no se reinventa aquí).
-const ANCHO_NODO = 178
-const ALTO_NODO = 54
-const SEP_X = 26
-const SEP_Y = 82
-const MARGEN = 28
-
-interface Caja { nodo: NodoGrafo; x: number; y: number }
-
-function disponer(nodos: NodoGrafo[]): { cajas: Map<string, Caja>; ancho: number; alto: number } {
-  const porEtapa = new Map<number, NodoGrafo[]>()
-  for (const n of nodos) {
-    const fila = porEtapa.get(n.etapa) ?? []
-    fila.push(n)
-    porEtapa.set(n.etapa, fila)
-  }
-  const etapas = [...porEtapa.keys()].sort((a, b) => a - b)
-  const maxPorFila = Math.max(...etapas.map((e) => porEtapa.get(e)!.length))
-  const ancho = MARGEN * 2 + maxPorFila * ANCHO_NODO + (maxPorFila - 1) * SEP_X
-  const cajas = new Map<string, Caja>()
-  etapas.forEach((etapa, fila) => {
-    const enFila = porEtapa.get(etapa)!
-    const anchoFila = enFila.length * ANCHO_NODO + (enFila.length - 1) * SEP_X
-    const inicio = (ancho - anchoFila) / 2
-    enFila.forEach((nodo, i) => {
-      cajas.set(nodo.id, {
-        nodo,
-        x: inicio + i * (ANCHO_NODO + SEP_X),
-        y: MARGEN + fila * (ALTO_NODO + SEP_Y),
-      })
-    })
-  })
-  const alto = MARGEN * 2 + etapas.length * (ALTO_NODO + SEP_Y)
-  return { cajas, ancho, alto }
-}
 
 const COLOR_TIPO: Record<string, string> = {
   decision: 'var(--flujo-decision)',
@@ -56,32 +21,10 @@ const ETIQUETA_TIPO: Record<string, string> = {
   terminal: 'Cierre',
 }
 
-/** Curva entre dos cajas. Una arista a sí mismo se dibuja como lazo a la derecha. */
-function trazo(a: Caja, b: Caja | null): string {
-  if (b === null) {
-    const x = a.x + ANCHO_NODO
-    const y = a.y + ALTO_NODO / 2
-    return `M ${x} ${y - 10} C ${x + 46} ${y - 26}, ${x + 46} ${y + 26}, ${x} ${y + 10}`
-  }
-  const x1 = a.x + ANCHO_NODO / 2
-  const y1 = a.y + ALTO_NODO
-  const x2 = b.x + ANCHO_NODO / 2
-  const y2 = b.y
-  if (y2 < y1) {
-    // Vuelta atrás (casi siempre hacia `siguiente_paso`): se rodea por la izquierda
-    const desvio = Math.min(a.x, b.x) - 34
-    return `M ${a.x} ${a.y + ALTO_NODO / 2} C ${desvio} ${a.y + ALTO_NODO / 2}, ${desvio} ${b.y + ALTO_NODO / 2}, ${b.x} ${b.y + ALTO_NODO / 2}`
-  }
-  const medio = (y1 + y2) / 2
-  return `M ${x1} ${y1} C ${x1} ${medio}, ${x2} ${medio}, ${x2} ${y2}`
-}
-
 function EditorPlantilla({ plantilla, onCambio }: { plantilla: Plantilla; onCambio: () => void }) {
   const [texto, setTexto] = useState(plantilla.texto)
   const [problemas, setProblemas] = useState<string[]>([])
   const [guardando, setGuardando] = useState(false)
-
-  useEffect(() => { setTexto(plantilla.texto); setProblemas([]) }, [plantilla.id, plantilla.texto])
 
   const sucio = texto.trim() !== plantilla.texto.trim()
 
@@ -171,7 +114,7 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
 
   useEffect(() => { void cargar() }, [cargar])
 
-  const disposicion = useMemo(() => (grafo ? disponer(grafo.nodos) : null), [grafo])
+  const disposicion = useMemo(() => (grafo ? disponer(grafo) : null), [grafo])
   const nodo = useMemo(
     () => grafo?.nodos.find((n) => n.id === seleccion) ?? null,
     [grafo, seleccion],
@@ -192,20 +135,17 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
   if (error) return <Alert type="error" showIcon message={error} />
   if (!grafo || !disposicion) return <Spin tip="Leyendo el flujo…"><div style={{ minHeight: 200 }} /></Spin>
 
-  const { cajas, ancho, alto } = disposicion
+  const { cajas, trazos, fin, finales, repiten, rotuloSalidas, ancho, alto } = disposicion
 
   return (
     <div className="flujo">
       <div className="flujo-lienzo">
         <div className="ops-panel-heading">
           <div>
-            <p className="ops-eyebrow">Grafo del asistente · {grafo.nodos.length} bloques</p>
+            <p className="ops-eyebrow">Flujo del asistente · {grafo.nodos.length} bloques</p>
             <h2>Flujo de la llamada</h2>
           </div>
-          <Space>
-            <span className="ops-mono">grosor = veces recorrida</span>
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => void cargar()} />
-          </Space>
+          <Button size="small" icon={<ReloadOutlined />} onClick={() => void cargar()} title="Volver a leer el flujo" />
         </div>
 
         {grafo.violaciones.length > 0 && (
@@ -218,48 +158,89 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
         )}
 
         <div className="flujo-scroll">
-          <svg width={ancho} height={alto} role="img" aria-label="Grafo del flujo de llamada">
+          <svg viewBox={`0 0 ${ancho} ${alto}`} style={{ width: `min(100%, ${Math.round(ancho * 1.3)}px)`, minWidth: ancho }} role="img" aria-label="Grafo del flujo de llamada">
             <defs>
-              <marker id="punta" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <path d="M0,0 L7,3.5 L0,7 z" fill="var(--flujo-arista)" />
-              </marker>
+              {(['normal', 'activa'] as const).map((t) => (
+                <marker key={t} id={`punta-${t}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                  <path d="M0,1 L9,5 L0,9 z" fill={t === 'activa' ? 'var(--color-accent)' : 'var(--flujo-arista)'} />
+                </marker>
+              ))}
             </defs>
-            {grafo.aristas.map((a) => {
-              const origen = cajas.get(a.origen)
-              if (!origen) return null
-              const destino = a.destino === a.origen ? null : (cajas.get(a.destino) ?? null)
-              if (a.destino !== a.origen && destino === null) return null // hacia `fin`
-              const activa = a.origen === seleccion || a.destino === seleccion
+
+            {rotuloSalidas && (
+              <text className="flujo-rotulo" x={rotuloSalidas.x} y={rotuloSalidas.y}>
+                Desde cualquier pregunta
+              </text>
+            )}
+
+            {trazos.map((t) => {
+              const activa = seleccion !== null && (t.origen === seleccion || t.destino === seleccion)
+              if (t.soloActiva && !activa) return null
+              const punta = `url(#punta-${activa ? 'activa' : 'normal'})`
               return (
                 <path
-                  key={`${a.origen}->${a.destino}`}
-                  d={trazo(origen, destino)}
-                  className={`flujo-arista ${activa ? 'is-activa' : ''} ${a.veces === 0 ? 'is-fria' : ''}`}
-                  strokeWidth={1 + (a.veces / maxVeces) * 2.5}
-                  markerEnd="url(#punta)"
+                  key={t.clave}
+                  d={t.d}
+                  className={`flujo-arista ${activa ? 'is-activa' : ''} ${t.veces === 0 ? 'is-fria' : ''}`}
+                  strokeWidth={1.25 + (t.veces / maxVeces) * 2.25}
+                  markerEnd={t.final ? punta : undefined}
+                  markerStart={t.inicio ? punta : undefined}
                 >
-                  <title>{`${a.origen} → ${a.destino}\n${a.condicion}\nRecorrida ${a.veces} ${a.veces === 1 ? 'vez' : 'veces'}`}</title>
+                  <title>{t.titulo}</title>
                 </path>
               )
             })}
-            {[...cajas.values()].map(({ nodo: n, x, y }) => (
-              <g
-                key={n.id}
-                transform={`translate(${x},${y})`}
-                className={`flujo-nodo ${seleccion === n.id ? 'is-sel' : ''}`}
-                onClick={() => setSeleccion(n.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSeleccion(n.id) }}
-              >
-                <rect width={ANCHO_NODO} height={ALTO_NODO} rx={9} style={{ stroke: COLOR_TIPO[n.tipo] }} />
-                <text className="flujo-nodo-titulo" x={11} y={22}>{n.titulo}</text>
-                <text className="flujo-nodo-meta" x={11} y={40}>
-                  {ETIQUETA_TIPO[n.tipo]}{n.usa_llm ? ' · modelo' : ''}
-                </text>
-                {n.usa_llm && <circle cx={ANCHO_NODO - 14} cy={16} r={4} fill="var(--flujo-llm)" />}
+
+            {finales.map((f) => (
+              <g key={`fin-${f.origen}`} className={`flujo-fin-marca ${f.origen === seleccion ? 'is-activa' : ''}`}>
+                <path d={`M ${f.x - 16} ${f.y} L ${f.x - 5} ${f.y}`} />
+                <circle cx={f.x} cy={f.y} r={4.5} />
+                <title>Termina la llamada</title>
               </g>
             ))}
+
+            {fin && (
+              <g className="flujo-fin" transform={`translate(${fin.x - 66},${fin.y - 11})`}>
+                <rect width={132} height={24} rx={12} />
+                <text x={66} y={16} textAnchor="middle">Fin de la llamada</text>
+              </g>
+            )}
+
+            {[...cajas.values()].map((c) => {
+              const n = c.nodo
+              return (
+                <g
+                  key={n.id}
+                  transform={`translate(${c.x},${c.y})`}
+                  className={`flujo-nodo ${c.columna === 'eje' ? 'is-eje' : ''} ${seleccion === n.id ? 'is-sel' : ''}`}
+                  onClick={() => setSeleccion(n.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSeleccion(n.id) }}
+                >
+                  <rect width={c.ancho} height={c.alto} rx={9} style={{ stroke: COLOR_TIPO[n.tipo] }} />
+                  <text className="flujo-nodo-titulo" x={12} y={21}>{n.titulo}</text>
+                  <text className="flujo-nodo-meta" x={12} y={38}>
+                    {ETIQUETA_TIPO[n.tipo]}
+                    {n.usa_llm ? ' · modelo' : ''}
+                    {c.columna === 'salida' ? ` · desde ${c.origenes} pasos` : ''}
+                  </text>
+                  {c.columna === 'eje' && (
+                    <text className="flujo-eje-texto" x={12} y={64}>
+                      {['Reparte las preguntas:', 'salta a lo primero que', 'aún falte. Todos los', 'pasos vuelven aquí.'].map((l, i) => (
+                        <tspan key={l} x={12} dy={i === 0 ? 0 : 16}>{l}</tspan>
+                      ))}
+                    </text>
+                  )}
+                  {repiten.has(n.id) && (
+                    <text className="flujo-repite" x={c.ancho - (n.usa_llm ? 30 : 16)} y={20} textAnchor="middle">
+                      ↻<title>Puede repetir la pregunta si no entiende la respuesta</title>
+                    </text>
+                  )}
+                  {n.usa_llm && <circle cx={c.ancho - 12} cy={15} r={4} fill="var(--flujo-llm)" />}
+                </g>
+              )
+            })}
           </svg>
         </div>
 
@@ -268,6 +249,9 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
             <span key={tipo}><i style={{ background: COLOR_TIPO[tipo] }} />{etiqueta}</span>
           ))}
           <span><i style={{ background: 'var(--flujo-llm)', borderRadius: '50%' }} />Puede llamar al modelo</span>
+          <span>↻ Puede repetir la pregunta</span>
+          <span><i className="flujo-leyenda-fin" />Termina la llamada</span>
+          <span>Grosor = veces recorrida · punteado = aún no recorrida</span>
         </div>
       </div>
 
@@ -285,8 +269,8 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
             {nodo.caminos_deterministas.length > 0 && (
               <Card size="small" title={<><ThunderboltOutlined /> Se resuelve sin modelo</>}>
                 <Paragraph type="secondary" className="flujo-nota">
-                  Estos casos no pasan por el LLM: son los turnos de ~0 ms. Editar un texto no
-                  cambia cómo se entienden.
+                  Estos casos no necesitan el modelo de lenguaje: el asistente responde al instante.
+                  Editar un texto no cambia cómo se entienden.
                 </Paragraph>
                 <Space size={4} wrap>
                   {nodo.caminos_deterministas.map((c) => <Tag key={c}>{c}</Tag>)}
@@ -318,7 +302,7 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
               {suyas.length === 0
                 ? <Text type="secondary">Este bloque no le dice nada al vecino: solo decide.</Text>
                 : esOwner
-                  ? suyas.map((p) => <EditorPlantilla key={p.id} plantilla={p} onCambio={() => void cargar()} />)
+                  ? suyas.map((p) => <EditorPlantilla key={`${p.id}:${p.version}`} plantilla={p} onCambio={() => void cargar()} />)
                   : suyas.map((p) => (
                       <div key={p.id} className="flujo-plantilla">
                         <Text strong>{p.descripcion}</Text>
@@ -326,12 +310,12 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
                       </div>
                     ))}
               {!esOwner && suyas.length > 0 && (
-                <Text type="secondary">Solo el owner puede editar los textos.</Text>
+                <Text type="secondary">Solo el propietario puede editar los textos.</Text>
               )}
             </Card>
 
             {prompts && (
-              <Card size="small" title={<><RobotOutlined /> Prompts del sistema</>}>
+              <Card size="small" title={<><RobotOutlined /> Instrucciones del modelo de lenguaje</>}>
                 <Alert type="info" showIcon message={prompts.motivo} className="flujo-nota" />
                 {prompts.prompts.map((p) => (
                   <details key={p.id} className="flujo-prompt">

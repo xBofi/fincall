@@ -78,14 +78,6 @@ export interface Salud {
   umbrales_ms: Record<string, number>
 }
 
-export interface Finca {
-  id: string
-  direccion: string
-  correo: string
-  telefono_oficial: string
-  viviendas: string[]
-}
-
 export interface MetricasCliente {
   turno: number
   vad_silencio_ms?: number
@@ -94,28 +86,6 @@ export interface MetricasCliente {
   respuesta_ms?: number
   stt_cliente?: string
   extra?: Record<string, unknown>
-}
-
-export interface Resumen {
-  n: number
-  p50: number | null
-  p95: number | null
-  max: number | null
-}
-
-export interface Agregados {
-  turnos: number
-  respuesta_ms: Resumen
-  calificaciones: Record<string, number>
-  servidor_ms: Resumen
-  servidor_ms_con_llm: Resumen
-  servidor_ms_sin_llm: Resumen
-  stt_ms: Resumen
-  interpretacion_ms: Resumen
-  clasificacion_ms: Resumen
-  vad_silencio_ms: Resumen
-  tts_inicio_ms: Resumen
-  umbrales_ms: Record<string, number>
 }
 
 export class ApiError extends Error {
@@ -204,6 +174,13 @@ export const usuarios = {
   eliminar: (id: string) => pedir<void>(`/api/usuarios/${id}`, { method: 'DELETE' }),
 }
 
+export interface Resumen {
+  n: number
+  p50: number | null
+  p95: number | null
+  max: number | null
+}
+
 export interface ResumenOperaciones {
   llamadas: number
   resueltas: number
@@ -246,7 +223,6 @@ export const operaciones = {
 
 export const api = {
   salud: () => pedir<Salud>('/api/salud'),
-  fincas: () => pedir<Finca[]>('/api/fincas'),
   iniciar: (telefono?: string) =>
     pedir<VistaLlamada>('/api/llamadas', json({ telefono_llamante: telefono ?? null })),
   mensaje: (id: string, texto: string) =>
@@ -261,9 +237,6 @@ export const api = {
     pedir<unknown>(`/api/llamadas/${id}/metricas`, json(cuerpo)),
   entrega: (id: string, turno: number, estado: string, ratio: number, texto_entregado: string) =>
     pedir<unknown>(`/api/llamadas/${id}/entrega`, json({ turno, estado, ratio, texto_entregado })),
-  metricasLlamada: (id: string) =>
-    pedir<{ agregados: Agregados; turnos: Record<string, unknown>[] }>(`/api/llamadas/${id}/metricas`),
-  metricasGlobales: () => pedir<{ agregados: Agregados }>('/api/metricas'),
 }
 
 // ---------------------------------------------------------------- flujo del asistente
@@ -310,13 +283,6 @@ export interface Plantilla {
   version: number
 }
 
-export interface VersionPlantilla {
-  version: number
-  texto: string
-  autor: string | null
-  creada_en: string | null
-}
-
 export interface PromptSistema {
   id: string
   titulo: string
@@ -337,11 +303,8 @@ export const flujo = {
   grafo: () => pedir<Grafo>('/api/grafo'),
   prompts: () => pedir<Prompts>('/api/prompts'),
   plantillas: () => pedir<Plantilla[]>('/api/plantillas'),
-  plantilla: (id: string) => pedir<Plantilla & { historial: VersionPlantilla[] }>(`/api/plantillas/${encodeURIComponent(id)}`),
   publicar: (id: string, texto: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, json({ texto }, 'PUT')),
   restaurar: (id: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  validar: (id: string, texto: string) =>
-    pedir<{ problemas: string[]; hechos_obligatorios: string[] }>(`/api/plantillas/${encodeURIComponent(id)}/validar`, json({ texto })),
 }
 
 // ---------------------------------------------------------------- catálogos
@@ -379,16 +342,8 @@ export interface EspecialistaCatalogo {
   destino: string
 }
 
-export interface AdministradorCatalogo {
-  id: string
-  nombre: string
-  fincas: { id: string; direccion: string }[]
-  especialistas: Omit<EspecialistaCatalogo, 'administrador_id' | 'administrador'>[]
-}
-
 export const catalogos = {
   fincas: () => pedir<FincaResumen[]>('/api/catalogos/fincas'),
   finca: (id: string) => pedir<FincaDetalle>(`/api/catalogos/fincas/${encodeURIComponent(id)}`),
-  administradores: () => pedir<AdministradorCatalogo[]>('/api/catalogos/administradores'),
   especialistas: () => pedir<EspecialistaCatalogo[]>('/api/catalogos/especialistas'),
 }
