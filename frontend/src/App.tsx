@@ -46,6 +46,7 @@ import {
   silenciar,
   sttNavegadorDisponible,
   ttsDisponible,
+  usarVozServidor,
 } from './voz'
 
 // Pantallas que no se usan al simular: se descargan al abrirlas (el arranque pesa menos)
@@ -150,6 +151,7 @@ export default function App() {
       .salud()
       .then((s) => {
         setSalud(s)
+        usarVozServidor(!!s.tts_servidor)
         if (s.stt_streaming) setModoStt('streaming')
         else if (s.stt_disponible && !sttNavegadorDisponible()) setModoStt('servidor')
       })

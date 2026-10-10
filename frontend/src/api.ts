@@ -74,6 +74,8 @@ export interface Salud {
   stt_servidor: string
   stt_disponible: boolean
   stt_streaming: string | null
+  /** Voz del servidor (la del teléfono); null si no hay y la consola usa la del navegador. */
+  tts_servidor: string | null
   grafos: string[]
   umbrales_ms: Record<string, number>
 }

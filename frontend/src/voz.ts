@@ -3,7 +3,8 @@
  *
  * - Captura con detección de fin de turno (VAD por energía): MediaRecorder + AudioContext.
  * - STT: Web Speech API (SpeechRecognition, Chrome/Edge) o el servidor (faster-whisper).
- * - TTS: SpeechSynthesis. Se mide el instante real de inicio de audio (`onstart`).
+ * - TTS: la voz del servidor (la misma del teléfono) en streaming si la hay; si no, o si falla,
+ *   SpeechSynthesis. Se mide el instante real de inicio de audio.
  * - Barge-in: vigilancia de energía del micrófono mientras habla el asistente.
  *
  * Todos los instantes son `performance.now()` para poder calcular la métrica principal:
@@ -21,7 +22,12 @@ function obtenerReconocimiento(): RecognitionCtor | null {
 }
 
 export const sttNavegadorDisponible = (): boolean => obtenerReconocimiento() !== null
-export const ttsDisponible = (): boolean => 'speechSynthesis' in window
+// Voz del servidor (`/api/voz-bot`): la consola suena como sonará el teléfono
+let vozServidor = false
+export function usarVozServidor(activa: boolean): void {
+  vozServidor = activa
+}
+export const ttsDisponible = (): boolean => vozServidor || 'speechSynthesis' in window
 export const capturaDisponible = (): boolean =>
   typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window
 
@@ -289,6 +295,134 @@ if (ttsDisponible()) {
 
 /** Habla y permite barge-in: si `permitirInterrupcion`, al detectar voz del vecino se corta. */
 export function hablar(texto: string, permitirInterrupcion: boolean): Reproduccion {
+  return vozServidor ? hablarServidor(texto, permitirInterrupcion) : hablarNavegador(texto, permitirInterrupcion)
+}
+
+let ctxVoz: AudioContext | undefined
+let pararServidor = () => {}
+
+/** Reproduce el PCM16 de `/api/voz-bot` según llega: suena con el primer trozo, no con la frase. */
+function hablarServidor(texto: string, permitirInterrupcion: boolean): Reproduccion {
+  let resolverInicio: (t: number) => void = () => {}
+  let resolverFin: (r: ResultadoReproduccion) => void = () => {}
+  const inicio = new Promise<number>((r) => (resolverInicio = r))
+  const fin = new Promise<ResultadoReproduccion>((r) => (resolverFin = r))
+  pararServidor()
+  const abortar = new AbortController()
+  const ctx = (ctxVoz ??= new AudioContext())
+  void ctx.resume()
+  const fuentes: AudioBufferSourceNode[] = []
+  let inicioCtx = 0 // instante del contexto de audio en que empieza a sonar
+  let siguiente = 0 // instante en que empieza el próximo trozo
+  let empezo = false
+  let completo = false // ya llegó todo el audio
+  let terminado = false
+  let respaldo: Reproduccion | undefined
+  let pararVigilancia = () => {}
+
+  const terminar = (interrumpida: boolean) => {
+    if (terminado) return
+    terminado = true
+    const sonado = empezo ? Math.max(0, ctx.currentTime - inicioCtx) : 0
+    const total = siguiente - inicioCtx
+    pararVigilancia()
+    abortar.abort()
+    fuentes.forEach((f) => {
+      try {
+        f.stop()
+      } catch {
+        // aún no había empezado
+      }
+    })
+    if (!empezo) {
+      resolverInicio(performance.now())
+      resolverFin({ interrumpida, estado: 'no_reproducida', ratio: 0, textoEntregado: '' })
+      return
+    }
+    if (!interrumpida) {
+      resolverFin({ interrumpida, estado: 'completada', ratio: 1, textoEntregado: texto })
+      return
+    }
+    // Lo que sonó, por tiempo: exacto si ya llegó todo el audio; si no, ~14 caracteres/s
+    const estimado = completo && total > 0 ? sonado / total : (sonado * 14) / Math.max(1, texto.length)
+    const ratio = Math.max(0, Math.min(1, estimado))
+    resolverFin({ interrumpida, estado: 'interrumpida', ratio, textoEntregado: texto.slice(0, Math.round(ratio * texto.length)) })
+  }
+
+  const encolar = (datos: Uint8Array, tasa: number) => {
+    const muestras = new Int16Array(datos.slice().buffer)
+    const buffer = ctx.createBuffer(1, muestras.length, tasa)
+    const canal = buffer.getChannelData(0)
+    for (let i = 0; i < muestras.length; i++) canal[i] = muestras[i] / 32768
+    const fuente = ctx.createBufferSource()
+    fuente.buffer = buffer
+    fuente.connect(ctx.destination)
+    if (!empezo) {
+      empezo = true
+      inicioCtx = ctx.currentTime + 0.03
+      siguiente = inicioCtx
+      resolverInicio(performance.now() + (inicioCtx - ctx.currentTime) * 1000)
+      if (permitirInterrupcion) pararVigilancia = vigilarInterrupcion(() => terminar(true))
+    }
+    const en = Math.max(siguiente, ctx.currentTime)
+    fuente.start(en)
+    siguiente = en + buffer.duration
+    fuentes.push(fuente)
+    fuente.onended = () => {
+      if (completo && fuente === fuentes[fuentes.length - 1]) terminar(false)
+    }
+  }
+
+  void (async () => {
+    try {
+      const r = await fetch('/api/voz-bot', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+        signal: abortar.signal,
+      })
+      if (!r.ok || !r.body) throw new Error(`voz del servidor: ${r.status}`)
+      const tasa = Number(r.headers.get('X-Tasa')) || 16000
+      const lector = r.body.getReader()
+      let resto: Uint8Array | null = null // PCM16 va por pares de bytes
+      for (;;) {
+        const { done, value } = await lector.read()
+        if (done || terminado) break
+        let datos = value
+        if (resto) {
+          datos = new Uint8Array(resto.length + value.length)
+          datos.set(resto)
+          datos.set(value, resto.length)
+          resto = null
+        }
+        const par = datos.length - (datos.length % 2)
+        if (par < datos.length) resto = datos.slice(par)
+        if (par) encolar(datos.subarray(0, par), tasa)
+      }
+      completo = true
+      if (!empezo || ctx.currentTime >= siguiente) terminar(false)
+    } catch {
+      if (terminado) return
+      if (empezo) {
+        terminar(true)
+        return
+      }
+      // Sin voz del servidor: habla el navegador para no dejar al vecino en silencio
+      respaldo = hablarNavegador(texto, permitirInterrupcion)
+      void respaldo.inicio.then(resolverInicio)
+      void respaldo.fin.then((f) => {
+        terminado = true
+        resolverFin(f)
+      })
+    }
+  })()
+  const cancelar = () => (respaldo ? respaldo.cancelar() : terminar(true))
+  pararServidor = cancelar
+  return { inicio, fin, cancelar }
+}
+
+function hablarNavegador(texto: string, permitirInterrupcion: boolean): Reproduccion {
   let resolverInicio: (t: number) => void = () => {}
   let resolverFin: (r: ResultadoReproduccion) => void = () => {}
   const inicio = new Promise<number>((r) => (resolverInicio = r))
@@ -317,7 +451,7 @@ export function hablar(texto: string, permitirInterrupcion: boolean): Reproducci
     pararVigilancia()
     resolverFin(ledger(interrumpida))
   }
-  if (!ttsDisponible()) {
+  if (!('speechSynthesis' in window)) {
     resolverInicio(performance.now())
     terminar(false)
     return { inicio, fin, cancelar: () => undefined }
@@ -359,7 +493,8 @@ export function hablar(texto: string, permitirInterrupcion: boolean): Reproducci
 }
 
 export function silenciar(): void {
-  if (ttsDisponible()) window.speechSynthesis.cancel()
+  pararServidor()
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 }
 
 /** Vigila el micrófono mientras habla el asistente; llama a `onVoz` si hay voz sostenida. */
