@@ -233,7 +233,8 @@ export function PanelFlujo({ esOwner }: { esOwner: boolean }) {
                     </text>
                   )}
                   {repiten.has(n.id) && (
-                    <text className="flujo-repite" x={c.ancho - (n.usa_llm ? 30 : 16)} y={20} textAnchor="middle">
+                    // En la línea de la meta, que siempre es corta: en la del título lo pisan los nombres largos.
+                    <text className="flujo-repite" x={c.ancho - 14} y={39} textAnchor="middle">
                       ↻<title>Puede repetir la pregunta si no entiende la respuesta</title>
                     </text>
                   )}
