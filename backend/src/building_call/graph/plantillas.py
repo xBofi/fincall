@@ -34,6 +34,9 @@ class Plantilla:
     #: Nombre de la variable que aporta el interrogante, cuando la pregunta no está en el texto
     #: sino en un dato que el nodo inyecta (por ejemplo, la pregunta anterior que se recupera).
     pregunta_en: str | None = None
+    #: Lo que dice no se puede perder: el aviso de IA y grabación y el siguiente paso del cierre.
+    #: Si el vecino lo corta, el ledger de entrega hace que se diga otra vez (2026-10-21).
+    aviso: bool = False
 
 
 class TextoRenderizado(str):
@@ -60,6 +63,7 @@ def _p(
     *,
     pregunta: bool = False,
     pregunta_en: str | None = None,
+    aviso: bool = False,
 ) -> tuple[str, Plantilla]:
     variables = tuple(dict.fromkeys(_VARIABLE.findall(texto)))
     assert pregunta_en is None or pregunta_en in variables, id_
@@ -71,6 +75,7 @@ def _p(
         variables=variables,
         pregunta=pregunta or pregunta_en is not None,
         pregunta_en=pregunta_en,
+        aviso=aviso,
     )
 
 
@@ -112,6 +117,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "Esta llamada puede ser grabada para mejorar la calidad del servicio. "
             "¿En qué finca se encuentra? Dígame la calle y el número.",
             pregunta=True,
+            aviso=True,
         ),
         _p(
             "identificar_finca.saludo_respuesta",
@@ -174,6 +180,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "Cierre tras registrar la llamada para que la revise calidad.",
             "Gracias. He registrado su llamada para que el equipo de calidad la revise. "
             "Hasta luego.",
+            aviso=True,
         ),
         # ---------------------------------------------------------------- identificar vivienda
         _p(
@@ -232,6 +239,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "Cierre tras avisar al administrador por correo.",
             "Gracias. He enviado el resumen al administrador, que se pondrá en contacto con "
             "usted. Hasta luego.",
+            aviso=True,
         ),
         # ---------------------------------------------------------------- recoger solicitud
         _p(
@@ -301,6 +309,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "La solicitud no encaja en el catálogo: la revisará una persona.",
             "Esta solicitud escapa a lo que puedo gestionar automáticamente. He enviado un "
             "resumen al administrador para que la revise una persona. Gracias por su llamada.",
+            aviso=True,
         ),
         _p(
             "derivar_humano.despedida",
@@ -308,6 +317,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "El vecino ha pedido hablar con una persona.",
             "De acuerdo. Envío ahora un resumen de su llamada al administrador para que una "
             "persona se ponga en contacto con usted lo antes posible. Gracias, hasta luego.",
+            aviso=True,
         ),
         _p(
             "despedida.despedida",
@@ -324,6 +334,7 @@ CATALOGO: dict[str, Plantilla] = dict(
             "He registrado su incidencia. {aviso} Si en veinticuatro "
             "horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, "
             "hasta luego.",
+            aviso=True,
         ),
         _p(
             "avisar_canal.aviso_sin_especialista",
@@ -456,4 +467,3 @@ def cargar(sobrescrituras: dict[str, tuple[str, int]]) -> None:
         if id_ in CATALOGO:
             _EFECTIVO[id_] = texto
             _VERSION[id_] = version
-

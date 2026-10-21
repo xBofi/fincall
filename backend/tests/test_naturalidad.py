@@ -485,3 +485,16 @@ async def test_averia_sin_elemento_pide_que_falla_y_reclasifica(
     )
     assert estado["nodo_actual"] == "confirmar_resumen"
     assert estado["categoria"] == "ascensor"
+
+
+async def test_frase_cortada_sin_categoria_tampoco_se_toma_por_averia(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
+    # Si el modelo devuelve el problema sin categoría, el hueco era el mismo
+    original = llm._interpretar
+    llm._interpretar = lambda usuario, esquema: {"problema": "Primero abre la"}  # type: ignore[method-assign]
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "Primero abre la"])
+    llm._interpretar = original  # type: ignore[method-assign]
+    estado = await gestor.mensaje(estado["llamada_id"], "Piso 1, puerta A.")
+    assert estado["nodo_actual"] == "recoger_solicitud"
+    assert not estado.get("solicitud")

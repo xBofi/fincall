@@ -95,7 +95,12 @@ async def evaluar_interpretacion(
                     else None
                 )
                 r = await interpretar(
-                    llm, caso["pregunta"], caso["entrada"], caso["nodo"], catalogo=catalogo
+                    llm,
+                    caso["pregunta"],
+                    caso["entrada"],
+                    caso["nodo"],
+                    catalogo=catalogo,
+                    oido=caso.get("oido"),  # el vecino cortó el mensaje (ledger de entrega)
                 )
             except Exception as e:  # noqa: BLE001
                 fallos.append(f"ERROR {caso['entrada'][:40]!r}: {e}")
@@ -140,6 +145,9 @@ async def evaluar_clasificacion(llm: Any, casos: list[dict[str, Any]], reps: int
                 continue
             tiempos.append((perf_counter() - t0) * 1000)
             total += 1
+            # Como `clasificar_problema`: sin categoría o fuera del catálogo es no_clasificable
+            if r.get("categoria") not in catalogo:
+                r["categoria"] = CATEGORIA_NO_CLASIFICABLE
             if r.get("categoria") == caso["categoria"]:
                 cat_ok += 1
             else:
@@ -185,7 +193,9 @@ def _crear_llm(nombre: str, url_ollama: str) -> Any:
             env.get("BC_VERTEX_PROYECTO", ""),
             nombre[7:],
             ubicacion=env.get("BC_VERTEX_UBICACION", "eu"),
-            ruta_credenciales=str(AQUI.parent / ruta) if (ruta := env.get("BC_VERTEX_CREDENCIALES")) else "",
+            ruta_credenciales=str(AQUI.parent / ruta)
+            if (ruta := env.get("BC_VERTEX_CREDENCIALES"))
+            else "",
             timeout_s=60,
         )
     if nombre.startswith("cf:"):

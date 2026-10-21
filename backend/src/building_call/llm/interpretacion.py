@@ -18,8 +18,9 @@ from pydantic import BaseModel, Field
 
 from building_call.domain.configuracion import URGENCIAS
 from building_call.llm.base import ModeloLenguaje
+from building_call.llm.prompts import catalogo_descrito
 
-VERSION_INTERPRETACION = "interpretacion-v4"
+VERSION_INTERPRETACION = "interpretacion-v6"
 
 Intencion = Literal[
     "continuar",  # responde a lo preguntado o aporta datos
@@ -97,13 +98,13 @@ Claves:
 - intencion: continuar (responde o aporta datos; es el valor por defecto, puedes omitirla) | repetir (pide repetir, no ha entendido) | corregir (rectifica un dato anterior: "no, era el cuarto", "me he equivocado") | humano (quiere hablar con una persona) | colgar (se despide o quiere terminar) | fuera_ambito (pide algo ajeno a incidencias de la finca: cuotas, juntas, otros vecinos) | pregunta (pregunta al asistente sin aportar datos: "¿esto se graba?", "¿cuánto tardan?").
 - confirma: true/false solo si responde a una pregunta de sí/no ("eso es", "correcto" = true; "no", "no es..." = false).
 - direccion: calle y número de la finca, tal cual los dice.
-- portal, piso, puerta: si menciona la vivienda. Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número.
+- portal, piso, puerta: si menciona la vivienda. Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número. Si corrige la vivienda, da siempre el piso y la puerta buenos completos, aunque solo cambie uno.
 - nombre: nombre con el que se presenta, sin frases.
-- problema: la incidencia o solicitud en máximo 12 palabras, con sus palabras y conservando SIEMPRE dónde ocurre si lo dice (planta, zona, portal): "luz del pasillo del segundo no funciona", no "luz no funciona".
+- problema: solo si cuenta qué pasa (una avería o una solicitud). Una frase cortada sin sentido, una dirección o una vivienda no son un problema. La incidencia o solicitud en máximo 12 palabras, con sus palabras y conservando SIEMPRE dónde ocurre si lo dice (planta, zona, portal): "luz del pasillo del segundo no funciona", no "luz no funciona".
 - pregunta: la pregunta que hace al asistente, si la hace."""
 
 _SISTEMA_CLASIFICAR = """
-- categoria: categoría de la incidencia si describe una, exactamente una de: {catalogo}. La decide el elemento que falla, nunca el sitio donde está ni lo que hay al lado: "el enchufe que hay junto al ascensor no va" es electricidad; "grieta en la pared de los buzones" es albanileria. Si no dice qué elemento falla ("está parado", "no funciona", "se ha roto") o no encaja claramente, "no_clasificable".
+- categoria: categoría de la incidencia si describe una, exactamente una de: {catalogo}. La decide el elemento que falla, nunca el sitio donde está ni lo que hay al lado: "el enchufe que hay junto al ascensor no va" es electricidad; "grieta en la pared de los buzones" es albanileria. Si no nombra el elemento que falla, "no_clasificable": no lo deduzcas del verbo aunque suela ir con uno ("se ha parado", "no va", "se ha roto", "hace ruido" no dicen qué). Si lo que falla no tiene categoría propia en el catálogo (gas, incendio, plagas…), "no_clasificable": nunca la más parecida.
 - urgencia: urgencia si describe una incidencia: baja (molestia sin riesgo ni daño: bombilla fundida, goteo leve) | media (afecta al uso normal: sin luz en zonas comunes, puerta que no cierra) | alta (daño en curso o servicio esencial interrumpido: inundación, ascensor parado, sin agua, cascotes cayendo) | emergencia (riesgo inmediato para personas: alguien atrapado, olor a gas, incendio)."""
 
 FORMATO = """
@@ -113,7 +114,11 @@ Formato: un objeto JSON en UNA sola línea, sin espacios ni saltos, incluyendo S
 
 def sistema_interpretacion(catalogo: list[str] | None = None) -> str:
     if catalogo:
-        return SISTEMA_BASE + _SISTEMA_CLASIFICAR.format(catalogo=", ".join(catalogo)) + FORMATO
+        return (
+            SISTEMA_BASE
+            + _SISTEMA_CLASIFICAR.format(catalogo=catalogo_descrito(catalogo))
+            + FORMATO
+        )
     return SISTEMA_BASE + FORMATO
 
 
@@ -161,12 +166,14 @@ async def interpretar(
     entrada: str,
     nodo: str,
     catalogo: list[str] | None = None,
+    oido: str | None = None,
 ) -> Interpretacion:
-    """Una llamada al modelo. `catalogo` añade la clasificación de la incidencia a la misma llamada."""
-    usuario = (
-        f'Pregunta del asistente: "{ultima_pregunta or "(inicio)"}"\n'
-        f'Respuesta del vecino: """{entrada}"""'
-    )
+    """Una llamada al modelo. `catalogo` añade la clasificación de la incidencia a la misma llamada.
+    `oido`: lo que llegó a sonar del último mensaje, solo si el vecino lo cortó (ledger)."""
+    usuario = f'Pregunta del asistente: "{ultima_pregunta or "(inicio)"}"\n'
+    if oido is not None:
+        usuario += f'El vecino interrumpió al asistente; solo llegó a oír: "{oido}"\n'
+    usuario += f'Respuesta del vecino: """{entrada}"""'
     inicio = perf_counter()
     datos = await llm.extraer(
         sistema_interpretacion(catalogo), usuario, _esquema(catalogo), instruccion_formato=""

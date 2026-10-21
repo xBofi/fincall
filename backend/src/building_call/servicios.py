@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from building_call.domain.entidades import Llamada
 from building_call.graph.estado import EstadoLlamada, estado_inicial
+from building_call.graph.ledger import avisos_no_oidos, evaluar, trocear
 from building_call.graph.nodos import Dependencias
 from building_call.graph.registro import obtener_grafo
 from building_call.llm.redaccion import redactar
@@ -42,6 +43,25 @@ def _merece_redaccion(estado: EstadoLlamada, entrada: str | None) -> bool:
     if tiempos.get("origen_interpretacion") != "llm":
         return False
     return len(" ".join(estado.get("mensajes_bot", []))) <= 260
+
+
+def _anteponer_avisos(nuevo: EstadoLlamada, avisos: list[str]) -> list[str]:
+    """Los avisos que el vecino cortó en el turno anterior van delante de la respuesta, una vez.
+    Devuelve los que se han antepuesto."""
+    dicho = " ".join(nuevo.get("mensajes_bot", []))
+    faltan = [a for a in avisos if a not in dicho]
+    if not faltan or not nuevo.get("mensajes_bot"):
+        return []
+    primero = nuevo["mensajes_bot"][0]
+    con_avisos = " ".join([*faltan, primero])
+    nuevo["mensajes_bot"] = [con_avisos, *nuevo["mensajes_bot"][1:]]
+    historial = list(nuevo.get("historial", []))
+    for i in range(len(historial) - 1, -1, -1):
+        if historial[i]["rol"] == "bot" and historial[i]["texto"] == primero:
+            historial[i] = {"rol": "bot", "texto": con_avisos}
+            break
+    nuevo["historial"] = historial
+    return faltan
 
 
 class GestorLlamadas:
@@ -130,6 +150,7 @@ class GestorLlamadas:
             "grafo": nombre_grafo,
             "turno": turno,
             "tiempos_turno": {},
+            "avisos_turno": [],
         }
         t0 = perf_counter()
         nuevo: EstadoLlamada = await self._grafo(nombre_grafo).ainvoke(preparado)
@@ -175,8 +196,14 @@ class GestorLlamadas:
                 origen_interpretacion=tiempos.get("origen_interpretacion", "ninguna"),
             )
         )
+        avisos = list(nuevo.get("avisos_turno", []))
+        if entrada is not None:
+            avisos += _anteponer_avisos(nuevo, avisos_no_oidos(estado.get("entrega_ultima")))
         if nuevo.get("mensajes_bot"):
             nuevo["ultimo_mensaje_bot"] = " ".join(nuevo["mensajes_bot"])
+            nuevo["piezas_bot"] = [
+                dict(p) for p in trocear(" ".join(nuevo["mensajes_bot"]), avisos)
+            ]
             nuevo["entrega_ultima"] = None  # el navegador informará de lo que llegó a sonar
         tiempos.update(grafo_ms=grafo_ms, servidor_ms=servidor_ms, turno=turno)
         if stt_ms is not None:
@@ -257,10 +284,23 @@ class GestorLlamadas:
         estado = self.obtener(llamada_id)
         if turno != estado.get("turno", 0):
             return estado  # entrega de un turno ya superado: no altera el estado actual
+        mensaje = estado.get("ultimo_mensaje_bot") or ""
+        corte: int | None
+        if estado_entrega == "completada":
+            corte = len(mensaje)
+        elif estado_entrega == "no_reproducida":
+            corte = 0
+        else:
+            # Sin texto no hay medida (Twilio corta y anota un 0,5 fijo): sin piezas evaluadas
+            # el turno siguiente se comporta como antes del ledger, en vez de decidir sobre una
+            # posición inventada
+            corte = len(texto) if texto is not None else None
+        piezas = evaluar(estado.get("piezas_bot", []), corte) if corte is not None else []  # type: ignore[arg-type]
         estado["entrega_ultima"] = {
             "estado": estado_entrega,
             "ratio": max(0.0, min(1.0, ratio)),
             "texto_entregado": texto,
+            "piezas": [dict(p) for p in piezas],
         }
         self._guardar_estado(estado)
         return estado

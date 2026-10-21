@@ -30,7 +30,9 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import Incidencia, Llamada, Vivienda
 from building_call.graph.estado import EstadoLlamada, Traza
+from building_call.graph.ledger import confirmacion_no_valida, texto_oido_si_cortado
 from building_call.graph.manifiesto import verificar_transicion
+from building_call.graph.plantillas import CATALOGO as CATALOGO_PLANTILLAS
 from building_call.graph.plantillas import render
 from building_call.llm.base import ModeloLenguaje
 from building_call.llm.interpretacion import (
@@ -432,6 +434,8 @@ def _anotar_plantilla(estado: EstadoLlamada, nodo: str, texto: Any, extra: dict[
     plantilla_id = getattr(texto, "plantilla_id", None)
     if plantilla_id is None:
         return
+    if CATALOGO_PLANTILLAS[plantilla_id].aviso:
+        extra["avisos_turno"] = [*estado.get("avisos_turno", []), str(texto)]
     base = extra.get("traza", estado.get("traza", []))
     extra["traza"] = [
         *base,
@@ -538,8 +542,11 @@ _NODOS_IDENTIFICACION = frozenset({"identificar_finca", "identificar_vivienda"})
 
 def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[str, str]:
     pend = dict(estado.get("pendientes", {}))
+    # Sin categoría del catálogo tampoco vale: el modelo puede omitirla en vez de decir
+    # no_clasificable (2026-10-21)
     problema_dudoso = (
-        interp.categoria == "no_clasificable" and estado.get("nodo_actual") in _NODOS_IDENTIFICACION
+        interp.categoria in (None, CATEGORIA_NO_CLASIFICABLE)
+        and estado.get("nodo_actual") in _NODOS_IDENTIFICACION
     )
     for campo in ("direccion", "portal", "piso", "puerta", "nombre", "problema"):
         valor = getattr(interp, campo)
@@ -687,7 +694,12 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             except Exception:  # noqa: BLE001 - la especulación falló: interpretación normal
                 logger.warning("Especulación fallida en %s; se interpreta de nuevo", nodo)
         interp = await interpretar(
-            deps.llm, estado.get("ultima_pregunta"), entrada, nodo, catalogo=_catalogo(estado)
+            deps.llm,
+            estado.get("ultima_pregunta"),
+            entrada,
+            nodo,
+            catalogo=_catalogo(estado),
+            oido=texto_oido_si_cortado(estado.get("entrega_ultima")),
         )
         return interp, _tiempos(
             estado, interpretacion_ms=interp.llm_ms, llm_llamadas=1, origen_interpretacion="llm"
@@ -803,6 +815,29 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             return Interpretacion(origen="determinista"), historial, {}, salida_relleno
         interp, tiempos = await _interpretar(estado, entrada, nodo, si_no=si_no)
         extra = {"tiempos_turno": tiempos, "interpretacion": _vista_interp(interp)}
+        no_oyo_lo_que_confirma = interp.confirma is not None and confirmacion_no_valida(
+            estado.get("entrega_ultima")
+        )
+        if no_oyo_lo_que_confirma and interp.campos_presentes():
+            # "Sí, sí, y además…" sobre un resumen que no oyó: los datos valen, el sí no. El
+            # aviso de lo oído en el prompt no basta, Gemini lo confirmaba igual (2026-10-21)
+            interp = interp.model_copy(update={"confirma": None})
+            extra["interpretacion"] = _vista_interp(interp)
+        elif no_oyo_lo_que_confirma:
+            # Un sí/no suelto a algo que no oyó (cortó el resumen o la pregunta): se repite
+            completo = _sin_coletilla_repeticion(
+                estado.get("ultimo_mensaje_bot") or estado.get("ultima_pregunta") or ""
+            )
+            salida_rep = _preguntar(
+                estado,
+                nodo,
+                render("global.no_oido", mensaje=completo),
+                historial=historial,
+                traza=_con_traza(estado, nodo, "confirmacion_sin_oir", entrada),
+                **extra,
+            )
+            salida_rep["ultima_pregunta"] = estado.get("ultima_pregunta")
+            return interp, historial, extra, salida_rep
         salida = _intencion_global(estado, nodo, interp, historial, extra)
         return interp, historial, extra, salida
 

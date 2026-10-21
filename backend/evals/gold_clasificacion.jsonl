@@ -20,3 +20,23 @@
 {"solicitud": "El ascensor tarda mucho en venir", "categoria": "ascensor", "urgencias": ["baja", "media"]}
 {"solicitud": "Los botones del ascensor no se iluminan pero el ascensor funciona", "categoria": "ascensor", "urgencias": ["baja", "media"]}
 {"solicitud": "Se ha fundido la bombilla del rellano, la que está enfrente del ascensor", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "El portero automático no funciona, no se oye cuando llaman", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "Se ha parado otra vez", "categoria": "no_clasificable", "urgencias": ["baja", "media", "alta"]}
+{"solicitud": "Hay pintadas en la fachada del edificio", "categoria": "pintura", "urgencias": ["baja"]}
+{"solicitud": "Los setos del jardín comunitario invaden la acera", "categoria": "jardineria", "urgencias": ["baja", "media"]}
+{"solicitud": "La tubería que pasa junto al cuarto de contadores de la luz gotea", "categoria": "fontaneria", "urgencias": ["baja", "media", "alta"]}
+{"solicitud": "Hay mucha basura acumulada junto al ascensor", "categoria": "limpieza", "urgencias": ["baja", "media"]}
+{"solicitud": "El ascensor del portal dos no se mueve y tiene las puertas abiertas", "categoria": "ascensor", "urgencias": ["media", "alta"]}
+{"solicitud": "Se ha soltado una baldosa del portal y alguien puede tropezar", "categoria": "albanileria", "urgencias": ["media", "alta"]}
+{"solicitud": "Quiero saber cuándo es la próxima junta de vecinos", "categoria": "administrativo", "urgencias": ["baja"]}
+{"solicitud": "La cerradura del trastero comunitario está rota", "categoria": "cerrajeria", "urgencias": ["baja", "media"]}
+{"solicitud": "Ya no funciona, otra vez lo mismo", "categoria": "no_clasificable", "urgencias": ["baja", "media", "alta"]}
+{"solicitud": "El timbre de mi puerta no suena", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "Sale agua por debajo de la puerta del cuarto de basuras", "categoria": "fontaneria", "urgencias": ["media", "alta"]}
+{"solicitud": "Hay muchas cucarachas en el portal por la noche", "categoria": "no_clasificable", "urgencias": ["media", "baja", "alta"]}
+{"solicitud": "La puerta del portal no cierra y se queda abierta", "categoria": "cerrajeria", "urgencias": ["media", "alta"]}
+{"solicitud": "Hay una mancha de humedad en el techo del rellano del tercero", "categoria": "albanileria", "urgencias": ["baja", "media"]}
+{"solicitud": "El ascensor va dando tirones al subir", "categoria": "ascensor", "urgencias": ["media", "alta"]}
+{"solicitud": "El mando del garaje no abre la puerta", "categoria": "cerrajeria", "urgencias": ["baja", "media"]}
+{"solicitud": "Necesito un certificado de estar al corriente de pago", "categoria": "administrativo", "urgencias": ["baja"]}
+{"solicitud": "Se ha caído una rama grande del árbol del patio", "categoria": "jardineria", "urgencias": ["media", "alta"]}

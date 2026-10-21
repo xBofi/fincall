@@ -31,6 +31,7 @@ from building_call.flujo_api import crear_router_flujo
 from building_call.grabacion import GrabadorConversacion
 from building_call.graph import plantillas
 from building_call.graph.estado import EstadoLlamada
+from building_call.graph.ledger import texto_oido_si_cortado
 from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
 from building_call.graph.registro import REGISTRO
 from building_call.llm.carrera import ModeloCarrera
@@ -551,6 +552,7 @@ def crear_app(
                     parcial,
                     estado_actual.get("nodo_actual", ""),
                     catalogo=catalogo_para(estado_actual),
+                    oido=texto_oido_si_cortado(estado_actual.get("entrega_ultima")),
                 )
             )
 
