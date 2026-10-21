@@ -60,7 +60,7 @@ class CasoInvalido(ValueError):
 
 def _valor_valido(clave: str, valor: Any) -> bool:
     if valor is None or valor == "*":
-        return clave != "confirma" or valor is None
+        return True
     if clave == "confirma":
         return isinstance(valor, bool)
     if isinstance(valor, bool) or not isinstance(valor, str) or not valor.strip():
@@ -81,7 +81,7 @@ def validar_esperado(esperado: dict[str, Any], banco: Banco) -> None:
             raise CasoInvalido(f"Valor no válido para {clave}: {valor!r}")
     if banco == "clasificacion":
         if not isinstance(esperado.get("categoria"), str) or esperado["categoria"] == "*":
-            raise CasoInvalido("Un caso de clasificación necesita la categoría")
+            raise CasoInvalido("Un caso de clasificación necesita una sola categoría")
         urgencias = esperado.get("urgencia")
         urgencias = urgencias if isinstance(urgencias, list) else [urgencias]
         if not all(u in URGENCIAS for u in urgencias):

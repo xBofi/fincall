@@ -176,6 +176,8 @@ export function MarcarCaso({ llamadaId, turno, pregunta, previo, onCerrar, onGua
 
       <Segmented<BancoPruebas>
         block
+        // Al corregir no se cambia de banco: crearía otro caso en vez de corregir este
+        disabled={Boolean(previo)}
         value={banco}
         onChange={setBanco}
         options={[
@@ -208,7 +210,7 @@ export function MarcarCaso({ llamadaId, turno, pregunta, previo, onCerrar, onGua
             </>
           )}
           <Form.Item label="Categoría" required={banco === 'clasificacion'}>
-            <Select mode="multiple" allowClear value={listas.categoria} onChange={lista('categoria')} options={opcionesDe(opciones?.categorias ?? [], banco === 'interpretacion')} placeholder="No se comprueba" />
+            <Select mode="multiple" maxCount={banco === 'clasificacion' ? 1 : undefined} allowClear value={listas.categoria} onChange={lista('categoria')} options={opcionesDe(opciones?.categorias ?? [], banco === 'interpretacion')} placeholder="No se comprueba" />
           </Form.Item>
           <Form.Item label="Urgencia" required={banco === 'clasificacion'}>
             <Select mode="multiple" allowClear value={listas.urgencia} onChange={lista('urgencia')} options={opcionesDe(opciones?.urgencias ?? [], banco === 'interpretacion')} placeholder="No se comprueba" />

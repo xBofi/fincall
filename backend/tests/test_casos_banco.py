@@ -131,6 +131,9 @@ async def test_volver_a_marcar_el_mismo_turno_lo_corrige(
         ({**CASO, "esperado": {"confirma": "quizá"}}, 422),
         ({**CASO, "esperado": {"telefono": "600"}}, 422),
         ({**CASO, "banco": "clasificacion", "esperado": {"categoria": "fontaneria"}}, 422),
+        # Como en el banco: "*" vale cualquiera también para confirma, y null es sin dato
+        ({**CASO, "esperado": {"confirma": "*"}}, 201),
+        ({**CASO, "esperado": {"confirma": [True, None]}}, 201),
     ],
 )
 async def test_valida_lo_que_se_marca(

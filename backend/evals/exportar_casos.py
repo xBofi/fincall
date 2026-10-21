@@ -135,7 +135,11 @@ async def _casos_de_la_base() -> list[dict[str, Any]]:
         )
     from building_call.repos.postgres import RepositorioPostgres
 
-    return await RepositorioPostgres(settings.database_url).listar_casos_banco()
+    repo = RepositorioPostgres(settings.database_url)
+    try:
+        return await repo.listar_casos_banco()
+    finally:
+        await repo.engine.dispose()
 
 
 def main(argv: list[str] | None = None) -> None:
