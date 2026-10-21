@@ -298,7 +298,6 @@ async def test_faq_sin_signos_de_interrogacion(gestor: GestorLlamadas, llm: Any)
     estado = await _conversar(gestor, ["Esta llamada se está grabando."])
     assert "se registra" in estado["mensajes_bot"][-1]
     assert estado["intentos_finca"] == 0
-    assert llm.llamadas == []
 
 
 async def test_pregunta_de_detalle_antes_del_resumen(gestor_detalle: GestorLlamadas) -> None:
@@ -399,7 +398,9 @@ async def test_repetir_dos_veces_no_acumula_la_coletilla(gestor: GestorLlamadas)
     assert "vivienda" in estado["mensajes_bot"][-1]
 
 
-async def test_si_suelto_ante_la_direccion_no_llama_al_llm(gestor: GestorLlamadas, llm: Any) -> None:
+async def test_si_suelto_ante_la_direccion_no_llama_al_llm(
+    gestor: GestorLlamadas, llm: Any
+) -> None:
     # Con Gemini, "Sí." ante "¿en qué finca?" tardaba 1,4 s en decir que no era una dirección
     estado = await _conversar(gestor, ["Sí."])
     assert llm.llamadas == []
@@ -414,3 +415,73 @@ async def test_saludo_avisa_de_la_ia_y_de_la_grabacion(gestor: GestorLlamadas) -
     assert "grabada" in saludo
     # Repetir la pregunta no vuelve a leer el aviso entero
     assert estado["ultima_pregunta"].startswith("¿En qué finca")
+
+
+# ------------------------------------------------- enrutamiento: las palabras sueltas no deciden
+# Detectores por subcadena secuestraban incidencias reales (2026-10-21): "cuando" o "tarda" se
+# respondían como pregunta frecuente, "repite" como petición de repetir y "espere" como muletilla.
+
+
+async def test_incidencias_con_palabras_de_faq_se_registran_como_incidencia(
+    gestor: GestorLlamadas,
+) -> None:
+    casos = {
+        "El ascensor tarda mucho en venir": "ascensor",
+        "La luz de la escalera se apaga cuando subo": "electricidad",
+        "Pierde agua el registro del portal": "fontaneria",
+    }
+    for frase, categoria in casos.items():
+        estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", frase])
+        assert estado["nodo_actual"] == "confirmar_resumen", frase
+        assert estado["solicitud"] == frase
+        assert estado["categoria"] == categoria
+
+
+async def test_repite_dentro_de_una_averia_no_es_pedir_que_repita(gestor: GestorLlamadas) -> None:
+    frase = "Se repite el ruido de la caldera"
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", frase])
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert estado["solicitud"] == frase
+
+
+async def test_espere_dentro_de_una_averia_no_es_muletilla(gestor: GestorLlamadas) -> None:
+    frase = "Espere, que el ascensor no va"
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", frase])
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert estado["categoria"] == "ascensor"
+
+
+def test_detectores_solo_aceptan_la_frase_con_muletillas() -> None:
+    from building_call.graph.nodos import _es_relleno, _es_saludo, _no_lo_oyo
+
+    assert _no_lo_oyo("¿Cómo? No le he oído bien", {})
+    assert _no_lo_oyo("Perdone, ¿me lo repite?", {})
+    assert not _no_lo_oyo("Se repite el ruido", {})
+    assert not _no_lo_oyo("Como dice el portero, no hay luz", {})
+    assert _es_relleno("Ah, vale, espéreme.")
+    assert _es_relleno("Un momento, por favor")
+    assert not _es_relleno("Espere que el ascensor no va")
+    assert _es_saludo("Hola, buenas tardes")
+    assert not _es_saludo("Hola, el ascensor no va")
+
+
+async def test_faq_la_interpreta_el_modelo_y_se_responde(gestor: GestorLlamadas, llm: Any) -> None:
+    estado = await _conversar(gestor, ["¿Esta llamada se está grabando?"])
+    assert "se registra" in estado["mensajes_bot"][-1]
+    assert estado["intentos_finca"] == 0
+    assert len(llm.llamadas) == 1
+
+
+async def test_averia_sin_elemento_pide_que_falla_y_reclasifica(
+    gestor_detalle: GestorLlamadas,
+) -> None:
+    gestor = gestor_detalle
+    estado = await _conversar(gestor, ["Calle Mayor 12", "sí", "1 A", "Está parado"])
+    assert estado["categoria"] == "no_clasificable"
+    assert estado["nodo_actual"] == "pedir_detalle"
+    assert "qué es lo que" in estado["mensajes_bot"][-1].lower()
+    estado = await gestor.mensaje(
+        estado["llamada_id"], "El ascensor, entre el segundo y el tercero"
+    )
+    assert estado["nodo_actual"] == "confirmar_resumen"
+    assert estado["categoria"] == "ascensor"

@@ -2,33 +2,17 @@
   {
     "modelo": "vertex:gemini-3.5-flash-lite",
     "interpretacion": {
-      "exactitud": 0.9807692307692307,
-      "n": 52,
-      "p50_ms": 626,
-      "p95_ms": 722
+      "exactitud": 0.974025974025974,
+      "n": 77,
+      "p50_ms": 735,
+      "p95_ms": 1384
     },
     "clasificacion": {
-      "categoria": 0.9375,
+      "categoria": 0.9545454545454546,
       "urgencia": 1.0,
-      "n": 16,
-      "p50_ms": 669.0695001743734,
-      "p95_ms": 717.4356002360582
-    }
-  },
-  {
-    "modelo": "vertex:gemini-3.1-flash-lite",
-    "interpretacion": {
-      "exactitud": 1.0,
-      "n": 52,
-      "p50_ms": 814,
-      "p95_ms": 4766
-    },
-    "clasificacion": {
-      "categoria": 0.9375,
-      "urgencia": 1.0,
-      "n": 16,
-      "p50_ms": 869.5033001713455,
-      "p95_ms": 971.7930997721851
+      "n": 22,
+      "p50_ms": 734.2211999930441,
+      "p95_ms": 1018.8991999893915
     }
   }
 ]

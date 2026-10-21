@@ -14,3 +14,9 @@
 {"solicitud": "El ascensor hace un ruido raro pero funciona", "categoria": "ascensor", "urgencias": ["baja", "media"]}
 {"solicitud": "Salta el diferencial de la comunidad cada dos por tres y nos quedamos sin luz en el garaje", "categoria": "electricidad", "urgencias": ["media", "alta"]}
 {"solicitud": "El interfono de mi piso no suena cuando llaman", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "El interruptor de la luz que está al lado del ascensor no funciona", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "Junto a la puerta del ascensor hay una mancha de humedad en la pared", "categoria": "albanileria", "urgencias": ["baja", "media"]}
+{"solicitud": "Está parado", "categoria": "no_clasificable", "urgencias": ["baja", "media", "alta"]}
+{"solicitud": "El ascensor tarda mucho en venir", "categoria": "ascensor", "urgencias": ["baja", "media"]}
+{"solicitud": "Los botones del ascensor no se iluminan pero el ascensor funciona", "categoria": "ascensor", "urgencias": ["baja", "media"]}
+{"solicitud": "Se ha fundido la bombilla del rellano, la que está enfrente del ascensor", "categoria": "electricidad", "urgencias": ["baja", "media"]}

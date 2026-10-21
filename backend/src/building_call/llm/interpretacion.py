@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from building_call.domain.configuracion import URGENCIAS
 from building_call.llm.base import ModeloLenguaje
 
-VERSION_INTERPRETACION = "interpretacion-v3"
+VERSION_INTERPRETACION = "interpretacion-v4"
 
 Intencion = Literal[
     "continuar",  # responde a lo preguntado o aporta datos
@@ -103,7 +103,7 @@ Claves:
 - pregunta: la pregunta que hace al asistente, si la hace."""
 
 _SISTEMA_CLASIFICAR = """
-- categoria: categoría de la incidencia si describe una, exactamente una de: {catalogo}. Si no encaja claramente, "no_clasificable".
+- categoria: categoría de la incidencia si describe una, exactamente una de: {catalogo}. La decide el elemento que falla, nunca el sitio donde está ni lo que hay al lado: "el enchufe que hay junto al ascensor no va" es electricidad; "grieta en la pared de los buzones" es albanileria. Si no dice qué elemento falla ("está parado", "no funciona", "se ha roto") o no encaja claramente, "no_clasificable".
 - urgencia: urgencia si describe una incidencia: baja (molestia sin riesgo ni daño: bombilla fundida, goteo leve) | media (afecta al uso normal: sin luz en zonas comunes, puerta que no cierra) | alta (daño en curso o servicio esencial interrumpido: inundación, ascensor parado, sin agua, cascotes cayendo) | emergencia (riesgo inmediato para personas: alguien atrapado, olor a gas, incendio)."""
 
 FORMATO = """

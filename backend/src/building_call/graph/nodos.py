@@ -327,12 +327,34 @@ _NO_OIDO = (
 )
 
 
+# Palabras que pueden acompañar a una frase hecha sin cambiar su sentido. Todo lo demás es
+# contenido: "se repite el ruido" o "espere, que el ascensor no va" no son frases hechas.
+_MULETILLAS = frozenset(
+    "ah ay eh oh pues vale bueno mire oiga oye perdone perdona perdon disculpe hola buenas "
+    "como que bien por favor si no lo le me te usted senor senora es".split()
+)
+
+
+def _solo_frase_hecha(texto: str, frases: tuple[str, ...]) -> bool:
+    """La frase aparece entera y el resto son muletillas. Sustituye a la búsqueda por subcadena,
+    que secuestraba incidencias reales ("tarda", "cuando", "repite") (2026-10-21)."""
+    palabras = _normalizar_basico(texto).split()
+    if not palabras or any(p.isdigit() for p in palabras):
+        return False
+    for frase in frases:
+        f = frase.split()
+        for i in range(len(palabras) - len(f) + 1):
+            if palabras[i : i + len(f)] == f:
+                resto = palabras[:i] + palabras[i + len(f) :]
+                if all(p in _MULETILLAS for p in resto):
+                    return True
+    return False
+
+
 def _no_lo_oyo(texto: str, estado: EstadoLlamada) -> bool:
     """Pide repetir, o saluda/pregunta si hay alguien tras un mensaje que no llegó a sonar entero."""
     t = _normalizar_basico(texto)
-    if any(ch.isdigit() for ch in t) or len(t.split()) > 7:
-        return False
-    if any(f in t for f in _NO_OIDO):
+    if _solo_frase_hecha(texto, _NO_OIDO):
         return True
     entrega = estado.get("entrega_ultima") or {}
     no_entregado = entrega.get("estado") in ("interrumpida", "no_reproducida") or (
@@ -359,10 +381,7 @@ _RELLENO = (
 
 def _es_relleno(texto: str) -> bool:
     """'Ah, vale, espéreme': el vecino pide tiempo. Ni dato ni fallo: se espera."""
-    t = _normalizar_basico(texto)
-    if any(ch.isdigit() for ch in t) or len(t.split()) > 6:
-        return False
-    return any(r in t for r in _RELLENO)
+    return _solo_frase_hecha(texto, _RELLENO)
 
 
 _SALUDOS = (
@@ -379,10 +398,7 @@ _SALUDOS = (
 
 def _es_saludo(texto: str) -> bool:
     """Solo saludo/muletilla, sin datos: no debe contar como intento fallido."""
-    t = _normalizar_basico(texto)
-    if any(ch.isdigit() for ch in t) or len(t.split()) > 5:
-        return False
-    return any(s in t for s in _SALUDOS)
+    return _solo_frase_hecha(texto, _SALUDOS)
 
 
 # --------------------------------------------------------------------------- utilidades de estado
@@ -583,6 +599,8 @@ _PREGUNTAS_DETALLE: dict[str, str] = {
     "albanileria": "¿Dónde exactamente está el daño y qué tamaño tiene, aproximadamente?",
     "pintura": "¿Qué zona hay que pintar exactamente y qué le pasa: humedad, desconchones, pintadas?",
     "_": "¿Puede darme algún detalle más: dónde exactamente y desde cuándo ocurre?",
+    # Sin saber qué falla ("está parado") no se adivina la categoría: se pregunta
+    CATEGORIA_NO_CLASIFICABLE: "¿Qué es lo que falla exactamente y dónde está?",
 }
 
 
@@ -621,15 +639,6 @@ def _responder_pregunta(texto: str) -> str:
     return "Solo puedo gestionar incidencias y solicitudes de su finca. "
 
 
-def _es_pregunta_faq(texto: str) -> bool:
-    """Pregunta al asistente reconocible sin LLM: interrogación + palabra clave y sin datos."""
-    n = _normalizar_basico(texto)
-    # El STT no siempre pone signos de interrogación: basta la palabra clave y que no haya datos
-    if any(ch.isdigit() for ch in n) or len(n.split()) > 8:
-        return False
-    return any(c in n for claves, _ in _FAQ for c in claves)
-
-
 def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     """Devuelve {nombre_nodo: función async} para registrarlos en un grafo."""
 
@@ -642,9 +651,6 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             if r is not None and len(entrada.split()) <= 4:
                 interp = Interpretacion(confirma=r, origen="determinista")
                 return interp, _tiempos(estado, origen_interpretacion="determinista")
-        if _es_pregunta_faq(entrada):
-            interp = Interpretacion(intencion="pregunta", pregunta=entrada, origen="determinista")
-            return interp, _tiempos(estado, origen_interpretacion="determinista")
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
         # a que termine): solapa el LLM con la detección de fin de turno del STT.
         clave = clave_especulacion(entrada)
@@ -1458,6 +1464,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         resumen = estado.get("resumen") or ""
         if interp.problema and interp.problema.lower() not in resumen.lower():
             resumen = f"{resumen}; {interp.problema}" if resumen else interp.problema
+        reclasificar: dict[str, Any] = {}
+        if detalle and estado.get("categoria") == CATEGORIA_NO_CLASIFICABLE:
+            # El detalle suele nombrar lo que falla: se clasifica de nuevo con la solicitud entera
+            reclasificar = {"categoria": None, "urgencia": None, "urgencia_declarada": None}
         return _avanzar(
             estado,
             "siguiente_paso",
@@ -1465,6 +1475,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             solicitud=solicitud,
             resumen=resumen,
             detalle_pedido=True,
+            **reclasificar,
             traza=_con_traza(estado, nodo, "detalle", detalle[:60]),
             **extra,
         )

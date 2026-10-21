@@ -54,6 +54,8 @@ def _p(valores: list[float], q: float) -> float:
 
 
 def _coincide(clave: str, esperado: Any, obtenido: Any) -> bool:
+    if isinstance(esperado, list):  # cualquiera de los valores vale (null = sin dato)
+        return any(_coincide(clave, e, obtenido) for e in esperado)
     if esperado == "*":
         return obtenido not in (None, "")
     if esperado is None:
@@ -86,7 +88,15 @@ async def evaluar_interpretacion(
     for caso in casos:
         for _ in range(reps):
             try:
-                r = await interpretar(llm, caso["pregunta"], caso["entrada"], caso["nodo"])
+                # Con "catalogo" el turno también clasifica, como en el grafo (una sola llamada)
+                catalogo = (
+                    [*DEFAULTS.catalogo_categorias, CATEGORIA_NO_CLASIFICABLE]
+                    if caso.get("catalogo")
+                    else None
+                )
+                r = await interpretar(
+                    llm, caso["pregunta"], caso["entrada"], caso["nodo"], catalogo=catalogo
+                )
             except Exception as e:  # noqa: BLE001
                 fallos.append(f"ERROR {caso['entrada'][:40]!r}: {e}")
                 total += len(caso["esperado"])

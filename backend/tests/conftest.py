@@ -128,6 +128,8 @@ class LLMFalso:
             "puerta del",
             "roto",
             "rota",
+            "ruido",
+            "parado",
         )
         if any(p in u for p in palabras_problema) and "problema" not in salida:
             salida["problema"] = texto
