@@ -22,7 +22,7 @@ from typing import Any, Literal, Self
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from building_call.acceso import Acceso
 from building_call.domain.configuracion import (
@@ -241,6 +241,7 @@ def crear_router_catalogo(
         admin = await negocio.obtener_administrador(f.administrador_id)
         viviendas = await negocio.viviendas_de(f.id)
         cfg, cfg_id = await negocio.configuracion_efectiva(f.id)
+        capa_f, _ = await catalogo.configuracion_de("finca", f.id)
         return {
             "id": f.id,
             "direccion": f.direccion,
@@ -258,6 +259,8 @@ def crear_router_catalogo(
             # comporta distinto de otra
             "configuracion_efectiva": cfg.model_dump(),
             "configuracion_id": cfg_id,
+            # La finca fija sus propios profesionales: lo que se asigne al administrador no le llega
+            "asignacion_propia": bool(capa_f and capa_f.especialista_por_categoria is not None),
         }
 
     async def _vista_administrador(admin: Administrador) -> dict[str, Any]:
@@ -637,6 +640,27 @@ def crear_router_catalogo(
 
     # ------------------------------------------------------------ quién atiende cada categoría
 
+    async def _fincas_coherentes(admin_id: str, nueva: ConfiguracionParcial) -> None:
+        """Cada finca hereda la capa nueva: ninguna puede quedar con una configuración que el
+        asistente no sepa resolver (p. ej. una finca que acota su catálogo de categorías)."""
+        rotas = []
+        for f in await negocio.listar_fincas():
+            if f.administrador_id != admin_id:
+                continue
+            capa_f, _ = await catalogo.configuracion_de("finca", f.id)
+            try:
+                resolver(nueva, capa_f)
+            except ValidationError:
+                rotas.append(f.direccion)
+        if rotas:
+            raise HTTPException(
+                409,
+                "No se ha guardado: "
+                + ", ".join(f"«{d}»" for d in rotas)
+                + " no tiene esa categoría en su catálogo y el asistente no podría atender "
+                "sus llamadas.",
+            )
+
     @r.put("/administradores/{admin_id}/categorias/{categoria}")
     async def asignar_categoria(
         admin_id: str, categoria: str, cuerpo: Asignacion, actor: Usuario = Depends(editor)
@@ -658,6 +682,7 @@ def crear_router_catalogo(
             mapa[categoria] = cuerpo.especialista_id
         if anterior != cuerpo.especialista_id:
             nueva = capa.model_copy(update={"especialista_por_categoria": mapa})
+            await _fincas_coherentes(admin_id, nueva)
             version = await catalogo.guardar_configuracion("administrador", admin_id, nueva)
             await auditar(
                 actor,

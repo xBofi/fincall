@@ -332,7 +332,7 @@ export function EdicionCatalogo({ edicion, catalogo, onCerrar, onHecho, onBorrar
               name="categoria_principal"
               label="Oficio"
               rules={[{ required: true, message: 'Elige el oficio' }]}
-              extra="Informativo. Quién atiende cada avería se decide en la ficha de cada finca."
+              extra="Informativo. Quién atiende cada avería se elige en «Quién atiende cada avería» de la ficha de la finca, y vale para todas las fincas del administrador."
             >
               <Select
                 disabled={!categorias.length}

@@ -390,6 +390,8 @@ export interface FincaDetalle extends Omit<FincaResumen, 'viviendas'> {
   equipos: EquipoCatalogo[]
   configuracion_efectiva: Record<string, unknown>
   configuracion_id: string | null
+  /** La finca fija sus propios profesionales: lo que se asigne al administrador no le llega. */
+  asignacion_propia?: boolean
 }
 
 export interface EspecialistaCatalogo {

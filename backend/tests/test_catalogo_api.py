@@ -436,3 +436,40 @@ async def test_los_administradores_traen_su_asignacion(cliente: AsyncClient) -> 
     demo = next(a for a in admins if a["id"] == "adm-demo")
     assert demo["especialista_por_categoria"]["fontaneria"] == "esp-fontanero"
     assert "pintura" in demo["catalogo_categorias"]
+
+
+async def test_asignar_no_rompe_una_finca_con_catalogo_propio(cliente: AsyncClient) -> None:
+    """Una finca que acota su catálogo heredaría una categoría que no conoce: el asistente
+    no podría resolver su configuración. Se rechaza antes de guardar."""
+    repo: RepositorioMemoria = cliente.repo  # type: ignore[attr-defined]
+    version, capa = repo.config_finca["finca-alameda-5"]
+    acotado = ["fontaneria", "electricidad", "ascensor", "cerrajeria"]
+    repo.config_finca["finca-alameda-5"] = (
+        version,
+        capa.model_copy(update={"catalogo_categorias": acotado}),
+    )
+    esp = (await cliente.post(f"{BASE}/especialistas", json=NUEVO_ESP)).json()
+    antes = repo.config_administrador["adm-demo"]
+
+    r = await cliente.put(
+        f"{BASE}/administradores/adm-demo/categorias/pintura", json={"especialista_id": esp["id"]}
+    )
+    assert r.status_code == 409, r.text
+    assert "Avenida de la Alameda 5" in r.json()["detail"]
+    assert repo.config_administrador["adm-demo"] is antes
+    assert (await cliente.get(f"{BASE}/fincas/finca-alameda-5")).status_code == 200
+
+
+async def test_la_finca_dice_si_fija_sus_propios_profesionales(cliente: AsyncClient) -> None:
+    """Si la capa de la finca fija quién atiende cada categoría, lo del administrador no le
+    llega: la consola lo enseña en lugar de ofrecer un selector que no haría nada."""
+    repo: RepositorioMemoria = cliente.repo  # type: ignore[attr-defined]
+    version, capa = repo.config_finca["finca-alameda-5"]
+    repo.config_finca["finca-alameda-5"] = (
+        version,
+        capa.model_copy(update={"especialista_por_categoria": {"fontaneria": "esp-fontanero"}}),
+    )
+    propia = (await cliente.get(f"{BASE}/fincas/finca-alameda-5")).json()
+    heredada = (await cliente.get(f"{BASE}/fincas/finca-mayor-12")).json()
+    assert propia["asignacion_propia"] is True
+    assert heredada["asignacion_propia"] is False

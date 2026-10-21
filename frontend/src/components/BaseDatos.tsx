@@ -296,11 +296,17 @@ function TarjetaFinca({
               <span>Quién atiende cada avería</span>
               {marcar && <UsaAsistente que="avisa a este profesional cuando es una reparación" />}
             </h4>
-            {editor && (
-              <p className="bd-ayuda">
-                Se guarda para todas las fincas de {finca.administrador}, como una versión nueva de su configuración.
-              </p>
-            )}
+            {editor &&
+              (finca.asignacion_propia ? (
+                <p className="bd-ayuda">
+                  Esta finca fija sus propios profesionales en su configuración: lo que se asigne a{' '}
+                  {finca.administrador} no le llega.
+                </p>
+              ) : (
+                <p className="bd-ayuda">
+                  Se guarda para todas las fincas de {finca.administrador}, como una versión nueva de su configuración.
+                </p>
+              ))}
             <ul className="bd-filas">
               {categoriasDe(finca).map((c) => {
                 const p = porCategoria[c] ? profesionalPorId[porCategoria[c]] : undefined
@@ -308,7 +314,7 @@ function TarjetaFinca({
                 return (
                   <li key={c} className={activa ? 'is-match' : ''}>
                     <span className="bd-fila-clave">{categoria(c)}</span>
-                    {editor ? (
+                    {editor && !finca.asignacion_propia ? (
                       <span className="bd-fila-valor">
                         <Select
                           size="small"
