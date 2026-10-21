@@ -128,6 +128,12 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
     try {
       const j = JSON.parse(texto) as { detail?: unknown }
       if (typeof j.detail === 'string') detalle = j.detail
+      // Errores de validación de FastAPI: una lista de {loc, msg}; se enseñan los mensajes
+      else if (Array.isArray(j.detail))
+        detalle = j.detail
+          .map((d: { msg?: string }) => (d.msg ?? '').replace(/^Value error, /, ''))
+          .filter(Boolean)
+          .join(' · ')
     } catch {
       // cuerpo no JSON: se usa el texto tal cual
     }
@@ -396,8 +402,71 @@ export interface EspecialistaCatalogo {
   destino: string
 }
 
+export interface AdministradorCatalogo {
+  id: string
+  nombre: string
+  fincas: { id: string; direccion: string }[]
+  catalogo_categorias: string[]
+  especialista_por_categoria: Record<string, string>
+  configuracion_id: string | null
+}
+
+export interface DatosFinca {
+  direccion: string
+  correo: string
+  telefono_oficial: string
+}
+
+export interface DatosVivienda {
+  portal: string | null
+  piso: string
+  puerta: string
+}
+
+export type DatosEquipo = Omit<EquipoCatalogo, 'id' | 'descripcion'>
+
+export interface DatosEspecialista {
+  nombre: string
+  categoria_principal: string
+  canal_contacto: 'correo' | 'llamada'
+  destino: string
+}
+
+export interface BorradoEspecialista {
+  borrado: string
+  categorias_desasignadas: string[]
+  equipos_sin_mantenedor: string[]
+}
+
+const ruta = (...partes: string[]) => `/api/catalogos/${partes.map(encodeURIComponent).join('/')}`
+
 export const catalogos = {
   fincas: () => pedir<FincaResumen[]>('/api/catalogos/fincas'),
   finca: (id: string) => pedir<FincaDetalle>(`/api/catalogos/fincas/${encodeURIComponent(id)}`),
   especialistas: () => pedir<EspecialistaCatalogo[]>('/api/catalogos/especialistas'),
+  administradores: () => pedir<AdministradorCatalogo[]>('/api/catalogos/administradores'),
+
+  crearFinca: (datos: DatosFinca & { administrador_id: string }) => pedir<FincaDetalle>(ruta('fincas'), json(datos)),
+  editarFinca: (id: string, datos: DatosFinca) => pedir<FincaDetalle>(ruta('fincas', id), json(datos, 'PUT')),
+  borrarFinca: (id: string) => pedir<unknown>(ruta('fincas', id), { method: 'DELETE' }),
+
+  crearVivienda: (finca: string, datos: DatosVivienda) => pedir<ViviendaCatalogo>(ruta('fincas', finca, 'viviendas'), json(datos)),
+  editarVivienda: (finca: string, id: string, datos: DatosVivienda) =>
+    pedir<ViviendaCatalogo>(ruta('fincas', finca, 'viviendas', id), json(datos, 'PUT')),
+  borrarVivienda: (finca: string, id: string) => pedir<unknown>(ruta('fincas', finca, 'viviendas', id), { method: 'DELETE' }),
+
+  crearEquipo: (finca: string, datos: DatosEquipo) => pedir<EquipoCatalogo>(ruta('fincas', finca, 'equipos'), json(datos)),
+  editarEquipo: (finca: string, id: string, datos: DatosEquipo) =>
+    pedir<EquipoCatalogo>(ruta('fincas', finca, 'equipos', id), json(datos, 'PUT')),
+  borrarEquipo: (finca: string, id: string) => pedir<unknown>(ruta('fincas', finca, 'equipos', id), { method: 'DELETE' }),
+
+  crearEspecialista: (datos: DatosEspecialista & { administrador_id: string }) =>
+    pedir<EspecialistaCatalogo>(ruta('especialistas'), json(datos)),
+  editarEspecialista: (id: string, datos: DatosEspecialista) =>
+    pedir<EspecialistaCatalogo>(ruta('especialistas', id), json(datos, 'PUT')),
+  borrarEspecialista: (id: string, forzar = false) =>
+    pedir<BorradoEspecialista>(`${ruta('especialistas', id)}${forzar ? '?forzar=true' : ''}`, { method: 'DELETE' }),
+
+  asignarCategoria: (admin: string, categoria: string, especialista_id: string | null) =>
+    pedir<AdministradorCatalogo>(ruta('administradores', admin, 'categorias', categoria), json({ especialista_id }, 'PUT')),
 }

@@ -327,13 +327,19 @@ def crear_router_catalogo(
 
     async def _sin_historial(campo: Any, valor: str, que: str) -> None:
         refs = await catalogo.contar_referencias(campo, valor)
-        if refs["llamadas"] or refs["incidencias"]:
+        partes = [
+            _plural(n, singular, plural)
+            for n, singular, plural in (
+                (refs["llamadas"], "llamada", "llamadas"),
+                (refs["incidencias"], "incidencia", "incidencias"),
+            )
+            if n
+        ]
+        if partes:
             raise HTTPException(
                 409,
-                f"No se puede borrar {que}: tiene "
-                f"{_plural(refs['llamadas'], 'llamada', 'llamadas')} y "
-                f"{_plural(refs['incidencias'], 'incidencia', 'incidencias')} registradas, y "
-                "borrarla dejaría ese historial sin su referencia.",
+                f"No se puede borrar {que}: tiene {' y '.join(partes)} en el historial, que "
+                "se quedaría sin saber a qué se refería.",
             )
 
     async def _sincronizar_contacto(f: Finca) -> str | None:
