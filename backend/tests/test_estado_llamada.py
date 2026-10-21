@@ -6,6 +6,7 @@ la llamada y el segundo, nuevo y sin nada en memoria, la continúa.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import UTC, datetime
 from time import perf_counter
@@ -155,6 +156,59 @@ async def test_el_almacen_en_memoria_cuesta_microsegundos() -> None:
     assert media_ms < 0.5, f"{media_ms:.3f} ms por turno"
 
 
+@pytest.mark.parametrize("serializar", [False, True], ids=["referencias", "json"])
+async def test_un_estado_de_un_turno_anterior_no_pisa_al_nuevo(serializar: bool) -> None:
+    """Gana la escritura del turno más reciente, no la última en llegar (y una llamada terminada
+    no vuelve a estar en curso). Así se comporta también el upsert de PostgreSQL."""
+    almacen = AlmacenEstadoMemoria(serializar=serializar)
+    nuevo: Any = {"llamada_id": "llam-1", "turno": 2, "finalizada": False}
+    assert await almacen.guardar(nuevo, 1.0) is True
+    assert await almacen.guardar({**nuevo, "turno": 1, "viejo": True}, 2.0) is False
+    assert await almacen.guardar({**nuevo, "finalizada": True}, 3.0) is True
+    assert await almacen.guardar({**nuevo, "entrega_ultima": {}}, 4.0) is False
+    guardado = await almacen.obtener("llam-1")
+    assert guardado is not None
+    assert (guardado["turno"], guardado["finalizada"]) == (2, True)
+
+
+class AlmacenLento(AlmacenEstadoMemoria):
+    """Como PostgreSQL: leer cede el control y otro turno puede escribir mientras tanto."""
+
+    def __init__(self) -> None:
+        super().__init__(serializar=True)
+        self.leido = asyncio.Event()
+        self.seguir = asyncio.Event()
+        self.pausar = False
+
+    async def obtener(self, llamada_id: str) -> Any:
+        estado = await super().obtener(llamada_id)
+        if self.pausar:
+            self.pausar = False
+            self.leido.set()
+            await self.seguir.wait()
+        return estado
+
+
+async def test_una_entrega_tardia_no_deshace_el_turno_siguiente() -> None:
+    """La entrega del turno N lee el estado, y antes de escribirlo el turno N+1 ya se guardó:
+    la entrega no puede devolver la llamada al turno N."""
+    almacen = AlmacenLento()
+    gestor = GestorLlamadas(Dependencias(repo=_repo(), llm=LLMFalso()), almacen=almacen)
+    estado = await gestor.iniciar()
+    llamada_id = estado["llamada_id"]
+    almacen.pausar = True
+    entrega = asyncio.create_task(
+        gestor.registrar_entrega(llamada_id, 0, "interrumpida", 0.5, "Hola")
+    )
+    await almacen.leido.wait()
+    siguiente = await gestor.mensaje(llamada_id, TURNOS[0])
+    almacen.seguir.set()
+    devuelto = await entrega
+    assert devuelto["turno"] == siguiente["turno"] == 1
+    assert (await gestor.obtener(llamada_id))["turno"] == 1
+    assert gestor.obtener_local(llamada_id)["turno"] == 1
+
+
 # ------------------------------------------------------------------------------- PostgreSQL
 
 
@@ -181,6 +235,9 @@ def test_guardar_es_un_upsert_que_sube_la_version() -> None:
     assert "INSERT INTO estados_llamada" in sql
     assert "ON CONFLICT (llamada_id) DO UPDATE" in sql
     assert "version = (estados_llamada.version + " in sql
+    # Un estado de un turno anterior (o que reabre una llamada terminada) no pisa al guardado
+    assert "WHERE excluded.turno >= estados_llamada.turno" in sql
+    assert "RETURNING estados_llamada.llamada_id" in sql
 
 
 def test_purgar_borra_con_la_misma_politica_y_devuelve_los_ids() -> None:
@@ -211,7 +268,8 @@ async def test_integracion_postgres_guardar_leer_y_purgar() -> None:  # pragma: 
     estado: Any = {"llamada_id": "llam-test-integracion", "turno": 2, "finalizada": True}
     try:
         await almacen.guardar(estado, 0.0)
-        await almacen.guardar({**estado, "turno": 3}, 1.0)
+        assert await almacen.guardar({**estado, "turno": 3}, 1.0) is True
+        assert await almacen.guardar({**estado, "turno": 1}, 2.0) is False
         assert (await almacen.obtener("llam-test-integracion"))["turno"] == 3  # type: ignore[index]
         assert "llam-test-integracion" in await almacen.purgar(10_000.0, 900, 7200)
         assert await almacen.obtener("llam-test-integracion") is None

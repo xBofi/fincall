@@ -7,6 +7,10 @@ de la API y la puede continuar otra instancia; el de memoria es el de desarrollo
 La retención es la misma en los dos: un estado se borra cuando lleva `retencion_finalizada_s` sin
 tocarse y la llamada terminó, o `retencion_abandonada_s` sin tocarse en cualquier caso. Los
 instantes (`ahora`) son segundos de reloj de pared (`time.time()`): se comparan entre procesos.
+
+Leer y escribir no son atómicos (entre medias otro turno, otra petición u otra instancia puede
+guardar), así que `guardar` no pisa un estado más nuevo: se ignora si trae un turno anterior al
+guardado o si reabre una llamada ya terminada, y devuelve si se guardó.
 """
 
 from __future__ import annotations
@@ -15,10 +19,10 @@ import json
 from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
-from sqlalchemy import and_, delete, or_, select
-from sqlalchemy.dialects.postgresql import Insert, insert
+from sqlalchemy import and_, delete, not_, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.sql.dml import ReturningDelete
+from sqlalchemy.sql.dml import ReturningDelete, ReturningInsert
 
 from building_call.graph.estado import EstadoLlamada
 from building_call.repos.modelos_sql import EstadoLlamadaSQL
@@ -28,7 +32,9 @@ class AlmacenEstadoLlamada(Protocol):
     intervalo_purga_s: float
     """Cada cuánto como mínimo merece la pena purgar (0 = en cada escritura)."""
 
-    async def guardar(self, estado: EstadoLlamada, ahora: float) -> None: ...
+    async def guardar(self, estado: EstadoLlamada, ahora: float) -> bool:
+        """Guarda el estado salvo que pise uno más nuevo (ver arriba). Devuelve si lo guardó."""
+        ...
 
     async def obtener(self, llamada_id: str) -> EstadoLlamada | None: ...
 
@@ -52,14 +58,22 @@ class AlmacenEstadoMemoria:
     def __init__(self, serializar: bool = False) -> None:
         self.serializar = serializar
         self._estados: dict[str, Any] = {}
+        self._turnos: dict[str, int] = {}
         self._finalizadas: dict[str, bool] = {}
         self._ultimo_uso: dict[str, float] = {}
 
-    async def guardar(self, estado: EstadoLlamada, ahora: float) -> None:
+    async def guardar(self, estado: EstadoLlamada, ahora: float) -> bool:
         llamada_id = estado["llamada_id"]
+        turno, finalizada = int(estado.get("turno", 0)), bool(estado.get("finalizada"))
+        if llamada_id in self._estados and (
+            turno < self._turnos[llamada_id] or (self._finalizada(llamada_id) and not finalizada)
+        ):
+            return False
         self._estados[llamada_id] = json.dumps(estado) if self.serializar else estado
-        self._finalizadas[llamada_id] = bool(estado.get("finalizada"))
+        self._turnos[llamada_id] = turno
+        self._finalizadas[llamada_id] = finalizada
         self._ultimo_uso[llamada_id] = ahora
+        return True
 
     async def obtener(self, llamada_id: str) -> EstadoLlamada | None:
         guardado = self._estados.get(llamada_id)
@@ -69,6 +83,7 @@ class AlmacenEstadoMemoria:
 
     async def descartar(self, llamada_id: str) -> None:
         self._estados.pop(llamada_id, None)
+        self._turnos.pop(llamada_id, None)
         self._finalizadas.pop(llamada_id, None)
         self._ultimo_uso.pop(llamada_id, None)
 
@@ -98,8 +113,9 @@ def _instante(ahora: float) -> datetime:
     return datetime.fromtimestamp(ahora, UTC)
 
 
-def sentencia_guardar(estado: EstadoLlamada, ahora: float) -> Insert:
-    """Upsert de la fila de la llamada: la versión sube en cada escritura."""
+def sentencia_guardar(estado: EstadoLlamada, ahora: float) -> ReturningInsert[tuple[str]]:
+    """Upsert de la fila de la llamada: la versión sube en cada escritura. No pisa un estado más
+    nuevo (turno posterior, o llamada ya terminada); devuelve la fila solo si escribió."""
     tabla = EstadoLlamadaSQL
     valores = {
         "llamada_id": estado["llamada_id"],
@@ -110,8 +126,13 @@ def sentencia_guardar(estado: EstadoLlamada, ahora: float) -> Insert:
         "actualizada_en": _instante(ahora),
     }
     sentencia = insert(tabla).values(**valores)
+    excluido = sentencia.excluded
     return sentencia.on_conflict_do_update(
         index_elements=[tabla.llamada_id],
+        where=and_(
+            excluido.turno >= tabla.turno,
+            or_(excluido.finalizada.is_(True), not_(tabla.finalizada)),
+        ),
         set_={
             "estado": sentencia.excluded.estado,
             "turno": sentencia.excluded.turno,
@@ -119,7 +140,7 @@ def sentencia_guardar(estado: EstadoLlamada, ahora: float) -> Insert:
             "actualizada_en": sentencia.excluded.actualizada_en,
             "version": tabla.version + 1,
         },
-    )
+    ).returning(tabla.llamada_id)
 
 
 def sentencia_purgar(
@@ -152,10 +173,11 @@ class AlmacenEstadoPostgres:
     def __init__(self, sesiones: async_sessionmaker[AsyncSession]) -> None:
         self.sesiones = sesiones
 
-    async def guardar(self, estado: EstadoLlamada, ahora: float) -> None:
+    async def guardar(self, estado: EstadoLlamada, ahora: float) -> bool:
         async with self.sesiones() as s:
-            await s.execute(sentencia_guardar(estado, ahora))
+            fila = (await s.execute(sentencia_guardar(estado, ahora))).scalar_one_or_none()
             await s.commit()
+        return fila is not None
 
     async def obtener(self, llamada_id: str) -> EstadoLlamada | None:
         tabla = EstadoLlamadaSQL

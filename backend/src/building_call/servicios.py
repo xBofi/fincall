@@ -106,13 +106,23 @@ class GestorLlamadas:
         self._ultima_purga = float("-inf")
         self._reloj = reloj
 
-    async def _guardar_estado(self, estado: EstadoLlamada) -> None:
+    async def _guardar_estado(self, estado: EstadoLlamada) -> bool:
+        """Devuelve False si no se guardó porque en el almacén ya había un estado más nuevo
+        (otro turno o una entrega que llegó a la vez, quizá en otra instancia)."""
         ahora = self._reloj()
-        await self.almacen.guardar(estado, ahora)
-        self._recordar(estado, ahora)
+        guardado = await self.almacen.guardar(estado, ahora)
+        if guardado:
+            self._recordar(estado, ahora)
+        else:
+            logger.warning(
+                "Estado de la llamada %s (turno %s) descartado: ya había uno más nuevo",
+                estado["llamada_id"],
+                estado.get("turno"),
+            )
         if ahora - self._ultima_purga >= self.almacen.intervalo_purga_s:
             self._ultima_purga = ahora
             await self._purgar(ahora)
+        return guardado
 
     def _recordar(self, estado: EstadoLlamada, ahora: float) -> None:
         self._locales[estado["llamada_id"]] = estado
@@ -348,7 +358,9 @@ class GestorLlamadas:
                 "piezas": [dict(p) for p in piezas],
             },
         }
-        await self._guardar_estado(estado)
+        if not await self._guardar_estado(estado):
+            # Entre leer y escribir avanzó la llamada: la entrega ya no aplica
+            return await self.obtener(llamada_id)
         return estado
 
     async def obtener(self, llamada_id: str) -> EstadoLlamada:
