@@ -357,9 +357,21 @@ class RepositorioPostgres:
             i = await s.get(IncidenciaSQL, incidencia_id)
             return Incidencia.model_validate(i, from_attributes=True) if i else None
 
-    async def registrar_historial_incidencia(self, entrada: EntradaHistorialIncidencia) -> None:
+    async def aplicar_accion_incidencia(
+        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    ) -> bool:
         async with self.sesiones() as s, s.begin():
+            # Bloquea la fila: dos decisiones a la vez sobre la misma incidencia se serializan
+            actual = await s.get(IncidenciaSQL, antes.id, with_for_update=True)
+            if actual is None or (actual.estado, actual.especialista_id) != (
+                antes.estado,
+                antes.especialista_id,
+            ):
+                return False
+            actual.estado = despues.estado
+            actual.especialista_id = despues.especialista_id
             s.add(IncidenciaHistorialSQL(**entrada.model_dump()))
+            return True
 
     async def listar_historial_incidencia(
         self, incidencia_id: str

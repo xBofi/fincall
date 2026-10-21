@@ -348,6 +348,8 @@ function Acciones({ d, onCambio }: { d: DetalleIncidencia; onCambio: (id: string
       await onCambio(inc.id)
     } catch (e) {
       message.error(mensajeError(e))
+      // Si otro usuario actuó mientras tanto (409), se ve ya su decisión
+      await onCambio(inc.id)
     } finally {
       setOcupado(false)
     }

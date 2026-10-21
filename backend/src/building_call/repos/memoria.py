@@ -224,11 +224,18 @@ class RepositorioMemoria:
     async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None:
         return self.incidencias.get(incidencia_id)
 
-    async def registrar_historial_incidencia(self, entrada: EntradaHistorialIncidencia) -> None:
-        # Como la clave foránea de Postgres
-        if entrada.incidencia_id not in self.incidencias:
-            raise KeyError(f"historial de una incidencia inexistente: {entrada.incidencia_id}")
+    async def aplicar_accion_incidencia(
+        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    ) -> bool:
+        actual = self.incidencias.get(antes.id)
+        if actual is None or (actual.estado, actual.especialista_id) != (
+            antes.estado,
+            antes.especialista_id,
+        ):
+            return False
+        self.incidencias[despues.id] = despues
         self.incidencia_historial.append(entrada)
+        return True
 
     async def listar_historial_incidencia(
         self, incidencia_id: str

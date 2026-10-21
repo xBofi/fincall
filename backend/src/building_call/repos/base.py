@@ -44,7 +44,13 @@ class Repositorio(Protocol):
 
     async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None: ...
 
-    async def registrar_historial_incidencia(self, entrada: EntradaHistorialIncidencia) -> None: ...
+    async def aplicar_accion_incidencia(
+        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    ) -> bool:
+        """Guarda `despues` y su entrada de historial a la vez (todo o nada). Si la incidencia ya
+        no está como `antes` (estado o especialista), alguien actuó mientras tanto: no toca nada
+        y devuelve False."""
+        ...
 
     async def listar_historial_incidencia(
         self, incidencia_id: str

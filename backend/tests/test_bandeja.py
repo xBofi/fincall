@@ -317,3 +317,34 @@ async def test_nota_no_cambia_el_estado(cliente: AsyncClient, repo: RepositorioM
     assert h.accion == "nota" and h.nota == "Llamo al seguro mañana"
     assert h.estado_anterior == h.estado_nuevo == "pendiente"
     assert any(a["accion"] == "nota_incidencia" for a in await repo.listar_auditoria())
+
+
+# ---------------------------------------------------------------------------------- concurrencia
+
+
+async def test_dos_decisiones_a_la_vez_la_segunda_recibe_409(
+    cliente: AsyncClient, repo: RepositorioMemoria, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dos administradores abren la misma incidencia pendiente; mientras el segundo decide, el
+    primero ya la ha asignado. La segunda decisión no pisa la primera ni deja historial."""
+    await _entrar(cliente, repo, "administrador")
+    vista_antigua = repo.incidencias["inc-portero"]
+    r = await cliente.post(
+        "/api/bandeja/incidencias/inc-portero/asignar", json={"especialista_id": "esp-porteros"}
+    )
+    assert r.status_code == 200
+
+    async def obtener_antigua(incidencia_id: str) -> Incidencia | None:
+        return vista_antigua if incidencia_id == "inc-portero" else None
+
+    monkeypatch.setattr(repo, "obtener_incidencia", obtener_antigua)
+    base = "/api/bandeja/incidencias/inc-portero"
+    r = await cliente.post(f"{base}/asignar", json={"especialista_id": "esp-fontanero"})
+    assert r.status_code == 409
+    assert (await cliente.post(f"{base}/estado", json={"estado": "en_curso"})).status_code == 409
+    assert repo.incidencias["inc-portero"].especialista_id == "esp-porteros"
+    assert repo.incidencias["inc-portero"].estado == "asignada"
+    assert [h.accion for h in await repo.listar_historial_incidencia("inc-portero")] == ["asignar"]
+    acciones = [a["accion"] for a in await repo.listar_auditoria()]
+    assert acciones.count("asignar_incidencia") == 1
+    assert "cambiar_estado_incidencia" not in acciones

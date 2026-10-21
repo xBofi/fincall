@@ -112,9 +112,10 @@ def crear_router_bandeja(
             detalle=detalle,
             cambiado_en=datetime.now(UTC),
         )
-        if despues is not antes:
-            await repo.guardar_incidencia(despues)
-        await repo.registrar_historial_incidencia(entrada)
+        # Incidencia e historial en la misma transacción; si otro usuario actuó mientras tanto,
+        # no se pisa su decisión
+        if not await repo.aplicar_accion_incidencia(antes, despues, entrada):
+            raise HTTPException(409, "La incidencia ha cambiado mientras tanto: vuelve a cargarla")
         await operativo.registrar_auditoria(
             usuario.id,
             {
