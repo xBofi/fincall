@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from building_call.graph.nodos import Dependencias
+from building_call.graph.nodos import Dependencias, _indicacion_seguridad
 from building_call.repos.memoria import RepositorioMemoria
 from building_call.servicios import GestorLlamadas, _merece_redaccion
 
@@ -203,3 +203,27 @@ async def test_activado_si_corrige_la_finca_se_vuelve_a_identificar_sin_perder_l
     assert estado["urgencia"] is None
     assert estado["urgencia_declarada"] == "emergencia"
     assert estado["solicitud"]  # lo que contó no se pierde
+
+
+async def test_activado_sin_telefono_en_la_finca_usa_el_del_contacto(
+    gestor: GestorLlamadas, repo: RepositorioMemoria
+) -> None:
+    _activar(repo)
+    finca = repo.fincas["finca-mayor-12"]
+    repo.fincas["finca-mayor-12"] = finca.model_copy(update={"telefono_oficial": ""})
+    estado = await _conversar(gestor, [*INICIO, "Huele a gas en el rellano", "sí"])
+    assert estado["canal_aviso"] == "llamada"
+    assert estado["destino_aviso"] == "+34910000001"  # contacto de la configuración
+
+
+@pytest.mark.parametrize(
+    ("texto", "plantilla"),
+    [
+        ("Huele a quemado en el cuarto de contadores", "atender_emergencia.seguridad_fuego"),
+        ("Se está incendiando el contenedor", "atender_emergencia.seguridad_fuego"),
+        ("Hay una fuga de gas", "atender_emergencia.seguridad_gas"),
+        ("Una señora atrapada en el ascensor", "atender_emergencia.seguridad_general"),
+    ],
+)
+def test_indicacion_de_seguridad_por_palabras_clave(texto: str, plantilla: str) -> None:
+    assert _indicacion_seguridad(texto).plantilla_id == plantilla  # type: ignore[attr-defined]

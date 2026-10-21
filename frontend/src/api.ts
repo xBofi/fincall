@@ -21,6 +21,8 @@ export interface DatosLlamada {
   urgencia_declarada: string | null
   resumen: string | null
   confirmado: boolean | null
+  /** Emergencia con tratamiento activado: indicación de seguridad dada y respuesta recogida */
+  emergencia_atendida?: boolean | null
   especialista_id: string | null
   especialista_nombre: string | null
   /** reparacion | reposicion | siniestro | convivencia | privativo */

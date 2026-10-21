@@ -470,7 +470,7 @@ def _sugerencia_emergencia(estado: EstadoLlamada) -> str | None:
     if estado.get("urgencia") != "emergencia":
         return sugerencia
     nota = (
-        "EMERGENCIA: avisar por teléfono al teléfono oficial de la finca y al coordinador. "
+        "EMERGENCIA: llamar al teléfono oficial de la finca y avisar al coordinador. "
         "Avisos simulados: el asistente todavía no llama ni envía nada."
     )
     return f"{nota} {sugerencia}" if sugerencia else nota
@@ -725,7 +725,20 @@ _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
 # Indicación de seguridad de una emergencia según lo que cuenta el vecino. Por palabras clave:
 # es un camino determinista (0 ms) y el texto de seguridad nunca lo decide el modelo.
 _PALABRAS_GAS = frozenset({"gas", "butano", "propano"})
-_PALABRAS_FUEGO = frozenset({"fuego", "humo", "incendio", "llamas", "ardiendo", "quemando"})
+_PALABRAS_FUEGO = frozenset(
+    {
+        "fuego",
+        "humo",
+        "humareda",
+        "incendio",
+        "incendiando",
+        "incendiado",
+        "llamas",
+        "ardiendo",
+        "quemando",
+        "quemado",
+    }
+)
 
 
 def _indicacion_seguridad(texto: str) -> str:
@@ -2064,9 +2077,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             # no hay contacto con el mundo real; quedan pendientes en la traza y en la incidencia
             finca = await deps.repo.obtener_finca(estado["finca_id"])  # type: ignore[arg-type]
             telefono = (
-                finca.telefono_oficial
-                if finca
-                else (cfg.contacto.telefono_oficial if cfg.contacto else "administrador")
+                (finca.telefono_oficial if finca else "")
+                or (cfg.contacto.telefono_oficial if cfg.contacto else "")
+                or "administrador"
             )
             coordinador = cfg.contacto.correo if cfg.contacto else "coordinador"
             return _avanzar(
