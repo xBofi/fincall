@@ -1,27 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd'
-import { KeyOutlined, PlusOutlined, UserDeleteOutlined } from '@ant-design/icons'
-import { ApiError, usuarios as apiUsuarios, type Rol, type UsuarioConsola } from '../api'
-
-const ROLES: { value: Rol; label: string; ayuda: string }[] = [
-  { value: 'owner', label: 'Propietario', ayuda: 'Todo, incluida la gestión de usuarios' },
-  { value: 'administrador', label: 'Administrador', ayuda: 'Expedientes, grabaciones y auditoría' },
-  { value: 'calidad', label: 'Calidad', ayuda: 'Expedientes y grabaciones' },
-]
+import { Button, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd'
+import { UserDeleteOutlined } from '@ant-design/icons'
+import { usuarios as apiUsuarios, type EstadoAccesoUsuario, type Rol, type UsuarioConsola } from '../api'
+import { PROVEEDOR, ROLES, detalle } from './rolesUsuario'
 
 const COLOR_ROL: Record<Rol, string> = { owner: 'geekblue', administrador: 'cyan', calidad: 'green' }
 
-function detalle(e: unknown): string {
-  return e instanceof ApiError ? e.detalle : String(e)
+const ESTADO: Record<EstadoAccesoUsuario, { texto: string; color: string }> = {
+  concedido: { texto: 'con acceso', color: 'green' },
+  solicitado: { texto: 'solicita acceso', color: 'gold' },
+  sin_solicitar: { texto: 'no ha solicitado', color: 'default' },
+  denegado: { texto: 'denegado', color: 'red' },
 }
 
-/** Alta, rol, activación, restablecimiento y baja de usuarios. Solo owner. */
+/** Quién puede entrar en la consola: rol, activación y baja. Solo owner. */
 export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
   const [filas, setFilas] = useState<UsuarioConsola[]>([])
   const [cargando, setCargando] = useState(true)
-  const [altaAbierta, setAltaAbierta] = useState(false)
-  const [temporal, setTemporal] = useState<{ usuario: string; contrasena: string } | null>(null)
-  const [formAlta] = Form.useForm<{ nombre_usuario: string; nombre?: string; rol: Rol }>()
 
   const cargar = useCallback(async () => {
     try {
@@ -47,22 +42,6 @@ export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
     }
   }
 
-  const crear = async () => {
-    const v = await formAlta.validateFields()
-    await accion(async () => {
-      const creado = await apiUsuarios.crear(v)
-      setAltaAbierta(false)
-      formAlta.resetFields()
-      if (creado.contrasena_temporal) setTemporal({ usuario: creado.nombre_usuario, contrasena: creado.contrasena_temporal })
-    })
-  }
-
-  const restablecer = (u: UsuarioConsola) =>
-    accion(async () => {
-      const r = await apiUsuarios.restablecer(u.id)
-      setTemporal({ usuario: r.nombre_usuario, contrasena: r.contrasena_temporal })
-    })
-
   return (
     <section className="ops-users" aria-label="Gestión de usuarios">
       <div className="ops-panel-heading">
@@ -70,13 +49,10 @@ export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
           <p className="ops-eyebrow">Acceso a la consola</p>
           <h2>Usuarios</h2>
         </div>
-        <Button type="primary" className="ops-primary" icon={<PlusOutlined />} onClick={() => setAltaAbierta(true)}>
-          Nuevo usuario
-        </Button>
       </div>
       <p className="ops-queue-note" style={{ marginTop: 8 }}>
-        Las altas y los restablecimientos generan una contraseña temporal que se muestra una sola vez: entrégala en mano.
-        El usuario deberá cambiarla en su primer acceso. Desactivar o eliminar cierra sus sesiones al instante.
+        Se entra con Google o Microsoft. Quien entra por primera vez aparece aquí y en Solicitudes; desactivar o eliminar
+        cierra sus sesiones al instante.
       </p>
 
       <Table<UsuarioConsola>
@@ -88,23 +64,34 @@ export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
         style={{ marginTop: 16 }}
         columns={[
           {
-            title: 'Usuario',
+            title: 'Persona',
             dataIndex: 'nombre_usuario',
             render: (v: string, u) => (
               <span>
-                <b>{v}</b>
+                <b>{u.nombre ?? v}</b>
                 {u.id === yo.id && <Tag style={{ marginLeft: 8 }}>tú</Tag>}
-                {u.nombre && <div><Typography.Text type="secondary">{u.nombre}</Typography.Text></div>}
+                <div>
+                  <Typography.Text type="secondary">
+                    {u.email ?? v}
+                    {u.proveedor ? ` · ${PROVEEDOR[u.proveedor] ?? u.proveedor}` : ' · cuenta antigua, no puede entrar'}
+                  </Typography.Text>
+                </div>
               </span>
             ),
+          },
+          {
+            title: 'Acceso',
+            dataIndex: 'estado_acceso',
+            width: 150,
+            render: (estado: EstadoAccesoUsuario) => <Tag color={ESTADO[estado].color}>{ESTADO[estado].texto}</Tag>,
           },
           {
             title: 'Rol',
             dataIndex: 'rol',
             width: 190,
             render: (rol: Rol, u) =>
-              u.id === yo.id ? (
-                <Tag color={COLOR_ROL[rol]}>{rol}</Tag>
+              u.id === yo.id || u.estado_acceso !== 'concedido' ? (
+                <Tag color={COLOR_ROL[rol]}>{ROLES.find((r) => r.value === rol)?.label ?? rol}</Tag>
               ) : (
                 <Select<Rol>
                   size="small"
@@ -129,94 +116,28 @@ export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
             ),
           },
           {
-            title: 'Estado',
-            width: 200,
-            render: (_, u) => (u.debe_cambiar_contrasena ? <Tag color="gold">contraseña temporal</Tag> : <Tag color="green">operativo</Tag>),
-          },
-          {
             title: '',
-            width: 240,
+            width: 130,
             render: (_, u) => (
               <Space>
                 <Popconfirm
-                  title={`Restablecer la contraseña de ${u.nombre_usuario}`}
-                  description="Se generará una temporal y se cerrarán sus sesiones."
-                  okText="Restablecer"
-                  cancelText="Cancelar"
-                  onConfirm={() => void restablecer(u)}
-                >
-                  <Button size="small" icon={<KeyOutlined />}>Restablecer</Button>
-                </Popconfirm>
-                <Popconfirm
-                  title={`Eliminar a ${u.nombre_usuario}`}
-                  description="La baja es definitiva. Su rastro en la auditoría se conserva."
+                  title={`Eliminar a ${u.nombre ?? u.nombre_usuario}`}
+                  description="Si vuelve a entrar con su cuenta, aparecerá como una persona nueva."
                   okText="Eliminar"
                   okButtonProps={{ danger: true }}
                   cancelText="Cancelar"
                   disabled={u.id === yo.id}
                   onConfirm={() => void accion(() => apiUsuarios.eliminar(u.id), 'Usuario eliminado')}
                 >
-                  <Button size="small" danger icon={<UserDeleteOutlined />} disabled={u.id === yo.id}>Eliminar</Button>
+                  <Button size="small" danger icon={<UserDeleteOutlined />} disabled={u.id === yo.id}>
+                    Eliminar
+                  </Button>
                 </Popconfirm>
               </Space>
             ),
           },
         ]}
       />
-
-      <Modal
-        open={altaAbierta}
-        title="Nuevo usuario"
-        okText="Crear"
-        cancelText="Cancelar"
-        onOk={() => void crear()}
-        onCancel={() => setAltaAbierta(false)}
-        destroyOnHidden
-      >
-        <Form form={formAlta} layout="vertical" requiredMark={false} initialValues={{ rol: 'calidad' }}>
-          <Form.Item
-            name="nombre_usuario"
-            label="Nombre de usuario"
-            normalize={(v: string) => v?.toLowerCase()}
-            rules={[
-              { required: true, message: 'Obligatorio' },
-              { pattern: /^[a-z0-9][a-z0-9._-]{1,63}$/, message: 'Minúsculas, números, punto, guion o guion bajo' },
-            ]}
-          >
-            <Input autoComplete="off" placeholder="p. ej. marta.garcia" />
-          </Form.Item>
-          <Form.Item name="nombre" label="Nombre para mostrar (opcional)">
-            <Input autoComplete="off" />
-          </Form.Item>
-          <Form.Item name="rol" label="Rol" rules={[{ required: true }]}>
-            <Select options={ROLES.map((r) => ({ value: r.value, label: `${r.label} · ${r.ayuda}` }))} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        open={temporal !== null}
-        title="Contraseña temporal"
-        okText="Ya la he anotado"
-        cancelButtonProps={{ style: { display: 'none' } }}
-        onOk={() => setTemporal(null)}
-        onCancel={() => setTemporal(null)}
-      >
-        {temporal && (
-          <>
-            <Alert
-              type="warning"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message="Solo se muestra una vez. Entrégala al usuario por un canal seguro; deberá cambiarla al entrar."
-            />
-            <p>Usuario: <b>{temporal.usuario}</b></p>
-            <Typography.Paragraph copyable className="ops-mono" style={{ fontSize: '1.1rem' }}>
-              {temporal.contrasena}
-            </Typography.Paragraph>
-          </>
-        )}
-      </Modal>
     </section>
   )
 }

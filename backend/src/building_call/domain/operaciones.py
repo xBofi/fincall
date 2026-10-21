@@ -15,21 +15,41 @@ class Rol(StrEnum):
     calidad = "calidad"
 
 
+class EstadoAcceso(StrEnum):
+    """Quien entra con Google o Microsoft no usa la consola hasta que el owner se lo concede."""
+
+    sin_solicitar = "sin_solicitar"
+    solicitado = "solicitado"
+    concedido = "concedido"
+    denegado = "denegado"
+
+
 class Usuario(BaseModel):
-    """Usuario interno de la consola. La contraseña solo existe como hash (scrypt)."""
+    """Persona de la consola. Entra con Google o Microsoft: se la reconoce por (proveedor,
+    sujeto). Los campos de contraseña son de las cuentas locales antiguas, que ya no entran."""
 
     id: str
     nombre_usuario: str
     nombre: str | None = None
     rol: Rol
     activo: bool = True
-    hash_contrasena: str
+    email: str | None = None
+    proveedor: str | None = None
+    sujeto: str | None = None
+    estado_acceso: EstadoAcceso = EstadoAcceso.concedido
+    solicitado_en: datetime | None = None
+    hash_contrasena: str | None = None
     debe_cambiar_contrasena: bool = False
     creado_en: datetime | None = None
 
+    def puede_entrar(self) -> bool:
+        return self.activo and self.estado_acceso is EstadoAcceso.concedido
+
     def publico(self) -> dict[str, Any]:
-        """Representación segura para la API: nunca incluye el hash."""
-        return self.model_dump(mode="json", exclude={"hash_contrasena"})
+        """Representación segura para la API: sin hash ni identificador del proveedor."""
+        return self.model_dump(
+            mode="json", exclude={"hash_contrasena", "sujeto", "debe_cambiar_contrasena"}
+        )
 
 
 class PistaAudio(BaseModel):

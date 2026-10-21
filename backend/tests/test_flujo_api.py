@@ -5,49 +5,36 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import SECRETO_DE_PRUEBA
+from conftest import SECRETO_DE_PRUEBA, sesion_de_prueba
 from httpx import ASGITransport, AsyncClient
 
-from building_call.acceso import Acceso
 from building_call.api.main import crear_app
 from building_call.graph import plantillas as pl
 from building_call.graph.manifiesto import MANIFIESTO
 from building_call.graph.nodos import Dependencias
 from building_call.repos.memoria import RepositorioMemoria
-from building_call.settings import Settings
 from building_call.settings import settings as settings_globales
-
-CLAVE_ADMIN = "clave-nueva-segura"
 
 
 @pytest.fixture
 async def cliente(deps: Dependencias, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings_globales, "audio_dir", str(tmp_path / "audio"))
     monkeypatch.setattr(settings_globales, "sesion_secreto", SECRETO_DE_PRUEBA)
-    await Acceso(deps.repo, Settings(_env_file=None)).asegurar_admin_inicial()  # type: ignore[arg-type]
     app = crear_app(deps, fabrica_streaming=None)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as c:
+        c.repo = deps.repo  # type: ignore[attr-defined]
         yield c
     pl.cargar({})
 
 
 async def _owner(c: AsyncClient) -> None:
-    assert (
-        await c.post("/api/auth/login", json={"usuario": "admin", "contrasena": "admin"})
-    ).status_code == 200
-    assert (
-        await c.post("/api/auth/contrasena", json={"actual": "admin", "nueva": CLAVE_ADMIN})
-    ).status_code == 200
+    c.cookies.set("bc_sesion", sesion_de_prueba(c.repo, "owner"))  # type: ignore[attr-defined]
 
 
 async def _como(c: AsyncClient, rol: str) -> AsyncClient:
-    """Crea un usuario con ese rol y devuelve un cliente ya dentro con él."""
-    alta = await c.post("/api/usuarios", json={"nombre_usuario": f"u{rol}", "rol": rol})
-    assert alta.status_code == 201
-    temporal = alta.json()["contrasena_temporal"]
+    """Devuelve un cliente ya dentro con ese rol."""
     otro = AsyncClient(transport=c._transport, base_url="http://localhost")
-    await otro.post("/api/auth/login", json={"usuario": f"u{rol}", "contrasena": temporal})
-    await otro.post("/api/auth/contrasena", json={"actual": temporal, "nueva": "otra-clave-larga"})
+    otro.cookies.set("bc_sesion", sesion_de_prueba(c.repo, rol))  # type: ignore[attr-defined]
     return otro
 
 
@@ -246,3 +233,11 @@ async def test_la_traza_dice_de_que_plantilla_y_version_salio_cada_frase(
     trazas = [t for t in otra["traza"] if t["accion"] == "plantilla"]
     assert trazas[0]["detalle"] == "identificar_finca.saludo v1"
     assert "Buenas, soy el asistente" in otra["mensajes_bot"][0]
+
+
+async def test_la_ficha_de_la_finca_lista_sus_equipos(cliente: AsyncClient) -> None:
+    await _owner(cliente)
+    finca = (await cliente.get("/api/catalogos/fincas/finca-mayor-12")).json()
+    portero = next(e for e in finca["equipos"] if e["id"] == "eq-mayor12-portero")
+    assert portero["mantenedor_id"] == "esp-porteros" and portero["contrato"] == "PL-2024-118"
+    assert portero["descripcion"] == "portero automático Fermax Citymax (portal)"

@@ -42,7 +42,7 @@ async def _conversar(cliente: AsyncClient, turnos: list[str]) -> str:
 
 async def _sesion(cliente: AsyncClient, repo: RepositorioMemoria, rol: Rol) -> None:
     """Abre una sesión como haría el login, sin pasar por la contraseña."""
-    acceso = Acceso(repo, Settings(_env_file=None, sesion_secreto="s", sesion_horas=1))
+    acceso = Acceso(repo, Settings(_env_file=None, sesion_secreto="s", sesion_dias=1))
     usuario = Usuario(
         id=f"usr-{rol}", nombre_usuario=str(rol), rol=rol, activo=True, hash_contrasena="x"
     )
@@ -68,7 +68,7 @@ async def test_sin_sesion_las_apis_operativas_responden_401(cliente: AsyncClient
     assert (await cliente.get("/api/operaciones/resumen")).status_code == 401
     assert (await cliente.get("/api/operaciones/llamadas")).status_code == 401
     estado = (await cliente.get("/api/auth/estado")).json()
-    assert estado["autenticado"] is False and estado["modo"] == "local"
+    assert estado["autenticado"] is False and estado["modo"] == "oidc"
     assert (await cliente.get("/api/auth/me")).status_code == 401
 
 
