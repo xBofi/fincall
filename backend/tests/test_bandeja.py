@@ -237,6 +237,7 @@ async def test_asignar_deja_el_aviso_pendiente_de_envio(
     # El detalle ya muestra el historial
     d = (await cliente.get("/api/bandeja/incidencias/inc-portero")).json()
     assert d["historial"][0]["accion"] == "asignar"
+    assert d["historial"][0]["usuario_nombre"] == "administrador"
     assert d["especialista"]["nombre"] == "Porteros Levante"
     # Ya no está pendiente del administrador
     filas = (await cliente.get("/api/bandeja/incidencias?pendientes_administrador=true")).json()

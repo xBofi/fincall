@@ -242,9 +242,16 @@ def crear_router_bandeja(
             "especialista": asignado.model_dump(mode="json") if asignado else None,
             "especialistas": [e.model_dump(mode="json") for e in especialistas.values()],
             "historial": [
-                h.model_dump(mode="json") for h in await repo.listar_historial_incidencia(inc.id)
+                {**h.model_dump(mode="json"), "usuario_nombre": await _nombre(h.usuario_id)}
+                for h in await repo.listar_historial_incidencia(inc.id)
             ],
         }
+
+    async def _nombre(usuario_id: str | None) -> str | None:
+        if usuario_id is None:
+            return None
+        u = await operativo.obtener_usuario(usuario_id)
+        return (u.nombre or u.nombre_usuario) if u else None
 
     @r.post("/incidencias/{incidencia_id}/asignar")
     async def asignar(
