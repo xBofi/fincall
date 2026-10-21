@@ -24,6 +24,7 @@ from building_call.domain.entidades import (
     Vivienda,
 )
 from building_call.domain.operaciones import Usuario
+from building_call.repos.estado_llamada import AlmacenEstadoPostgres
 from building_call.repos.modelos_sql import (
     AdministradorSQL,
     AuditoriaEventoSQL,
@@ -53,6 +54,8 @@ class RepositorioPostgres:
             database_url, pool_pre_ping=True, pool_size=10, max_overflow=20
         )
         self.sesiones = async_sessionmaker(self.engine, expire_on_commit=False)
+        # Estado vivo de las llamadas en curso: sobrevive a un reinicio de la API
+        self.estado_llamadas = AlmacenEstadoPostgres(self.sesiones)
 
     async def _ultima_configuracion(
         self, s: AsyncSession, ambito: str, ambito_id: str

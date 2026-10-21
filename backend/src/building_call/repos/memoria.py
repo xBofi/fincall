@@ -24,6 +24,7 @@ from building_call.domain.entidades import (
     Vivienda,
 )
 from building_call.domain.operaciones import Usuario
+from building_call.repos.estado_llamada import AlmacenEstadoMemoria
 from building_call.repos.operativo import SesionAcceso
 
 
@@ -45,6 +46,8 @@ def _viviendas(
 
 class RepositorioMemoria:
     def __init__(self) -> None:
+        # Estado vivo de las llamadas en curso (lo usa `GestorLlamadas`)
+        self.estado_llamadas = AlmacenEstadoMemoria()
         self.administradores = {
             "adm-demo": Administrador(id="adm-demo", nombre="Administraciones Demo SL"),
         }

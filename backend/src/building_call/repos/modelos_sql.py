@@ -210,6 +210,22 @@ class IncidenciaSQL(Base):
     sugerencia: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class EstadoLlamadaSQL(Base):
+    """Estado vivo de una llamada en curso (el `EstadoLlamada` del grafo, tal cual, en JSONB).
+
+    Una fila por llamada, sobrescrita en cada turno: permite que la llamada sobreviva a un
+    reinicio de la API y que varias instancias la atiendan. El expediente (`llamadas`) es lo que
+    queda; esto se purga al poco de terminar la llamada."""
+
+    __tablename__ = "estados_llamada"
+    llamada_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    estado: Mapped[dict[str, Any]] = mapped_column(JsonDoc)
+    turno: Mapped[int] = mapped_column(Integer, default=0)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    finalizada: Mapped[bool] = mapped_column(Boolean, default=False)
+    actualizada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class IncidenciaHistorialSQL(Base):
     __tablename__ = "incidencia_historial"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)

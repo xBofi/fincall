@@ -136,27 +136,27 @@ async def test_puente_saluda_responde_y_cuelga(gestor: GestorLlamadas) -> None:
     # Saludo sintetizado y enviado en μ-law con marca del turno 0
     assert len(tts.textos) == 1 and canal.marcas == ["turno-0"]
     assert canal.enviados and all(len(t) == 160 for t in canal.enviados)
-    assert gestor.obtener(llamada_id)["telefono_llamante"] == "+34600000000"
+    assert (await gestor.obtener(llamada_id))["telefono_llamante"] == "+34600000000"
 
     # El vecino habla: el audio llega al STT convertido a 16 kHz
     await puente.recibir_ulaw(audio.pcm16_a_ulaw(_tono(8000, 20)))
     assert abs(len(stt.audio) - 640) <= 4  # 20 ms a 16 kHz (ratecv redondea)
 
     await puente.marca_reproducida("turno-0")
-    assert gestor.obtener(llamada_id)["entrega_ultima"]["estado"] == "completada"
+    assert (await gestor.obtener(llamada_id))["entrega_ultima"]["estado"] == "completada"
 
     # Turno final del STT → grafo → nueva locución
     await stt.cola.put(EventoTurno("final", "Calle Mayor 12"))
     await _esperar(lambda: len(tts.textos) == 2)
     assert canal.marcas[-1] == "turno-1"
-    assert gestor.obtener(llamada_id)["turno"] == 1
+    assert (await gestor.obtener(llamada_id))["turno"] == 1
     metricas = gestor.metricas.turnos(llamada_id)
     assert metricas and metricas[-1].stt_cliente == "telefono"
 
     # Barge-in: parcial de ≥2 palabras mientras suena el bot → clear y entrega interrumpida
     await stt.cola.put(EventoTurno("parcial", "sí claro"))
     await _esperar(lambda: canal.limpiezas == 1)
-    assert gestor.obtener(llamada_id)["entrega_ultima"]["estado"] == "interrumpida"
+    assert (await gestor.obtener(llamada_id))["entrega_ultima"]["estado"] == "interrumpida"
 
     # Conversación hasta el final: al reproducirse la despedida se cuelga
     for texto in ["sí", "3 B", "Gotea el grifo", "sí"]:
@@ -336,7 +336,7 @@ async def test_puente_pide_repetir_si_un_turno_falla(deps: Dependencias) -> None
     assert not puente.finalizada and not canal.colgado
     # El siguiente turno funciona con normalidad
     await stt.cola.put(EventoTurno("final", "Calle Mayor 12"))
-    await _esperar(lambda: gestor.obtener(llamada_id)["turno"] == 1)
+    await _esperar(lambda: gestor.obtener_local(llamada_id)["turno"] == 1)
     await puente.cerrar()
 
 
@@ -367,5 +367,5 @@ async def test_puente_se_disculpa_si_el_stt_se_corta(gestor: GestorLlamadas) -> 
     await stt.cola.put(None)  # AssemblyAI cierra el stream sin que nadie haya colgado
     await _esperar(lambda: puente.finalizada)
     assert len(tts.textos) == 2
-    assert gestor.obtener(llamada_id)["finalizada"]
+    assert (await gestor.obtener(llamada_id))["finalizada"]
     await puente.cerrar()

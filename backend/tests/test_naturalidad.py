@@ -330,7 +330,9 @@ async def test_repetir_devuelve_el_mensaje_completo_y_hola_tras_mensaje_no_oido(
     resumen = estado["mensajes_bot"][-1]
     assert resumen.startswith("Le resumo")
     # El navegador informa de que el mensaje se cortó al 20 %
-    gestor.registrar_entrega(estado["llamada_id"], estado["turno"], "interrumpida", 0.2, "Le re")
+    await gestor.registrar_entrega(
+        estado["llamada_id"], estado["turno"], "interrumpida", 0.2, "Le re"
+    )
     n = len(llm.llamadas)
     estado = await gestor.mensaje(estado["llamada_id"], "¿Hola? ¿Estás ahí?")
     assert len(llm.llamadas) == n  # determinista

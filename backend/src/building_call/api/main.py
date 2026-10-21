@@ -439,7 +439,7 @@ def crear_app(
         if clave in propias:
             return
         try:
-            estado_actual = gestor.obtener(llamada_id)
+            estado_actual = gestor.obtener_local(llamada_id)
         except LlamadaNoEncontrada:
             return
         deps.descartar_especulaciones(llamada_id)
@@ -500,7 +500,7 @@ def crear_app(
             raise HTTPException(502, f"Error de transcripción: {e}") from e
         if not transcripcion.texto:
             try:
-                estado = gestor.obtener(llamada_id)
+                estado = await gestor.obtener(llamada_id)
             except LlamadaNoEncontrada as e:
                 raise HTTPException(404, "Llamada no encontrada") from e
             return {
@@ -540,7 +540,7 @@ def crear_app(
             await ws.close(code=1011)
             return
         try:
-            estado_inicial = gestor.obtener(llamada_id)
+            estado_inicial = await gestor.obtener(llamada_id)
         except LlamadaNoEncontrada:
             await ws.send_json({"type": "error", "mensaje": "Llamada no encontrada"})
             await ws.close(code=1008)
@@ -642,7 +642,7 @@ def crear_app(
                                 (marca_bot, str(orden.get("texto_entregado") or texto_bot))
                             )
                             marca_bot = None
-                        gestor.registrar_entrega(
+                        await gestor.registrar_entrega(
                             llamada_id,
                             int(orden.get("turno", 0)),
                             str(orden.get("estado", "completada")),
@@ -702,7 +702,7 @@ def crear_app(
     @app.post("/api/llamadas/{llamada_id}/entrega", dependencies=llamada_protegida)
     async def entrega(llamada_id: str, cuerpo: Entrega) -> dict[str, Any]:
         try:
-            estado = gestor.registrar_entrega(
+            estado = await gestor.registrar_entrega(
                 llamada_id, cuerpo.turno, cuerpo.estado, cuerpo.ratio, cuerpo.texto_entregado
             )
         except LlamadaNoEncontrada as e:
@@ -744,7 +744,7 @@ def crear_app(
     @app.get("/api/llamadas/{llamada_id}", dependencies=llamada_protegida)
     async def obtener(llamada_id: str) -> dict[str, Any]:
         try:
-            return _vista(gestor.obtener(llamada_id))
+            return _vista(await gestor.obtener(llamada_id))
         except LlamadaNoEncontrada as e:
             raise HTTPException(404, "Llamada no encontrada") from e
 

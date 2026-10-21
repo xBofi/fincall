@@ -223,12 +223,12 @@ async def test_llamadas_terminadas_o_abandonadas_salen_de_memoria(deps: Dependen
     ahora[0] = GestorLlamadas.RETENCION_FINALIZADA_S + 1
     await gestor.iniciar()  # cualquier turno barre lo caducado
     with pytest.raises(LlamadaNoEncontrada):
-        gestor.obtener(terminada["llamada_id"])
-    assert gestor.obtener(viva["llamada_id"])  # sigue activa: se conserva
+        await gestor.obtener(terminada["llamada_id"])
+    assert await gestor.obtener(viva["llamada_id"])  # sigue activa: se conserva
     ahora[0] += GestorLlamadas.RETENCION_ABANDONADA_S + 1
     await gestor.iniciar()
     with pytest.raises(LlamadaNoEncontrada):
-        gestor.obtener(viva["llamada_id"])
+        await gestor.obtener(viva["llamada_id"])
 
 
 def test_metricas_no_crecen_sin_limite() -> None:

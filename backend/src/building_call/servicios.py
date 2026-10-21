@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from time import monotonic, perf_counter
+from time import perf_counter, time
 from typing import Any
 from uuid import uuid4
 
@@ -15,6 +16,9 @@ from building_call.graph.nodos import Dependencias
 from building_call.graph.registro import obtener_grafo
 from building_call.llm.redaccion import redactar
 from building_call.metricas import RegistroMetricas, TiemposTurno
+from building_call.repos.estado_llamada import AlmacenEstadoLlamada, AlmacenEstadoMemoria
+
+logger = logging.getLogger(__name__)
 
 
 class LlamadaNoEncontrada(KeyError):
@@ -76,31 +80,70 @@ class GestorLlamadas:
         grafo_por_defecto: str = "estandar",
         metricas: RegistroMetricas | None = None,
         redactor: Any | None = None,
-        reloj: Callable[[], float] = monotonic,
+        reloj: Callable[[], float] = time,
+        almacen: AlmacenEstadoLlamada | None = None,
     ) -> None:
         """`redactor`: modelo que reformula las respuestas del grafo (paráfrasis controlada).
-        None = plantillas tal cual."""
+        None = plantillas tal cual.
+
+        `almacen`: dónde vive el estado de las llamadas en curso. Por defecto, el del repositorio
+        (`repo.estado_llamadas`: PostgreSQL en el modo real, así una llamada sobrevive a un
+        reinicio y la puede continuar otra instancia); si el repositorio no trae, uno en memoria.
+        `reloj`: segundos de reloj de pared; el almacén los compara entre procesos."""
         self.deps = deps
         self.redactor = redactor
         self.grafo_por_defecto = grafo_por_defecto
         self.metricas = metricas or RegistroMetricas()
+        self.almacen: AlmacenEstadoLlamada = (
+            almacen or getattr(deps.repo, "estado_llamadas", None) or AlmacenEstadoMemoria()
+        )
         self._grafos: dict[str, Any] = {}
-        self._estados: dict[str, EstadoLlamada] = {}
+        # Copia local del último estado conocido de cada llamada de este proceso, para lo que no
+        # puede esperar a la base (la especulación sobre parciales del STT, síncrona). Los turnos
+        # siempre parten de lo que hay en el almacén.
+        self._locales: dict[str, EstadoLlamada] = {}
         self._ultimo_uso: dict[str, float] = {}
+        self._ultima_purga = float("-inf")
         self._reloj = reloj
 
-    def _guardar_estado(self, estado: EstadoLlamada) -> None:
+    async def _guardar_estado(self, estado: EstadoLlamada) -> None:
         ahora = self._reloj()
-        self._estados[estado["llamada_id"]] = estado
+        await self.almacen.guardar(estado, ahora)
+        self._recordar(estado, ahora)
+        if ahora - self._ultima_purga >= self.almacen.intervalo_purga_s:
+            self._ultima_purga = ahora
+            await self._purgar(ahora)
+
+    def _recordar(self, estado: EstadoLlamada, ahora: float) -> None:
+        self._locales[estado["llamada_id"]] = estado
         self._ultimo_uso[estado["llamada_id"]] = ahora
-        for llamada_id, uso in list(self._ultimo_uso.items()):
+
+    def _olvidar(self, llamada_id: str) -> None:
+        self._locales.pop(llamada_id, None)
+        self._ultimo_uso.pop(llamada_id, None)
+        self.deps.descartar_especulaciones(llamada_id)
+
+    async def _purgar(self, ahora: float) -> None:
+        """Misma retención en el almacén y en la copia local (que puede tener llamadas que ya
+        purgó otra instancia)."""
+        try:
+            caducadas = set(
+                await self.almacen.purgar(
+                    ahora, self.RETENCION_FINALIZADA_S, self.RETENCION_ABANDONADA_S
+                )
+            )
+        except Exception:  # noqa: BLE001 - una purga fallida no rompe el turno; ya se reintentará
+            logger.exception("No se pudo purgar el estado de las llamadas caducadas")
+            caducadas = set()
+        for llamada_id, uso in self._ultimo_uso.items():
             inactiva = ahora - uso
             if inactiva > self.RETENCION_ABANDONADA_S or (
                 inactiva > self.RETENCION_FINALIZADA_S
-                and self._estados[llamada_id].get("finalizada")
+                and self._locales[llamada_id].get("finalizada")
             ):
-                del self._estados[llamada_id], self._ultimo_uso[llamada_id]
-                self.deps.descartar_especulaciones(llamada_id)
+                caducadas.add(llamada_id)
+        for llamada_id in caducadas:
+            self._olvidar(llamada_id)
 
     def _grafo(self, nombre: str) -> Any:
         if nombre not in self._grafos:
@@ -209,7 +252,7 @@ class GestorLlamadas:
         if stt_ms is not None:
             tiempos["stt_ms"] = stt_ms
         nuevo["tiempos_turno"] = tiempos
-        self._guardar_estado(nuevo)
+        await self._guardar_estado(nuevo)
         await self._guardar_operacion(nuevo)
         await self._guardar_trazabilidad(estado, nuevo, entrada, tiempos)
         return nuevo
@@ -257,7 +300,7 @@ class GestorLlamadas:
     async def mensaje(
         self, llamada_id: str, texto: str, stt_ms: int | None = None
     ) -> EstadoLlamada:
-        estado = self.obtener(llamada_id)
+        estado = await self.obtener(llamada_id)
         if estado.get("finalizada"):
             return estado
         return await self._ejecutar(estado, texto, stt_ms)
@@ -265,7 +308,7 @@ class GestorLlamadas:
     async def cerrar_por_fallo(self, llamada_id: str, motivo: str) -> EstadoLlamada:
         """El asistente no puede seguir (LLM, STT o TTS caídos): se cierra la llamada y queda
         derivada al administrador y marcada para revisar, en vez de quedarse "activa"."""
-        estado = self.obtener(llamada_id)
+        estado = await self.obtener(llamada_id)
         if not estado.get("finalizada"):
             estado = {
                 **estado,
@@ -273,15 +316,15 @@ class GestorLlamadas:
                 "resultado": "derivada_administrador",
                 "motivo_revision": motivo,
             }
-            self._guardar_estado(estado)
+            await self._guardar_estado(estado)
             await self._guardar_operacion(estado)
         return estado
 
-    def registrar_entrega(
+    async def registrar_entrega(
         self, llamada_id: str, turno: int, estado_entrega: str, ratio: float, texto: str | None
     ) -> EstadoLlamada:
         """Ledger de salida: qué parte del último mensaje llegó a reproducirse al vecino."""
-        estado = self.obtener(llamada_id)
+        estado = await self.obtener(llamada_id)
         if turno != estado.get("turno", 0):
             return estado  # entrega de un turno ya superado: no altera el estado actual
         mensaje = estado.get("ultimo_mensaje_bot") or ""
@@ -296,17 +339,32 @@ class GestorLlamadas:
             # posición inventada
             corte = len(texto) if texto is not None else None
         piezas = evaluar(estado.get("piezas_bot", []), corte) if corte is not None else []  # type: ignore[arg-type]
-        estado["entrega_ultima"] = {
-            "estado": estado_entrega,
-            "ratio": max(0.0, min(1.0, ratio)),
-            "texto_entregado": texto,
-            "piezas": [dict(p) for p in piezas],
+        estado = {
+            **estado,
+            "entrega_ultima": {
+                "estado": estado_entrega,
+                "ratio": max(0.0, min(1.0, ratio)),
+                "texto_entregado": texto,
+                "piezas": [dict(p) for p in piezas],
+            },
         }
-        self._guardar_estado(estado)
+        await self._guardar_estado(estado)
         return estado
 
-    def obtener(self, llamada_id: str) -> EstadoLlamada:
+    async def obtener(self, llamada_id: str) -> EstadoLlamada:
+        """Estado actual de la llamada según el almacén (lo comparten reinicios e instancias)."""
+        estado = await self.almacen.obtener(llamada_id)
+        if estado is None:
+            if llamada_id in self._locales:
+                self._olvidar(llamada_id)
+            raise LlamadaNoEncontrada(llamada_id)
+        self._recordar(estado, self._ultimo_uso.get(llamada_id, self._reloj()))
+        return estado
+
+    def obtener_local(self, llamada_id: str) -> EstadoLlamada:
+        """Último estado que este proceso ha visto, sin ir al almacén. Solo para lo que no puede
+        esperar ni bloquear (la especulación sobre parciales del STT); los turnos usan `obtener`."""
         try:
-            return self._estados[llamada_id]
+            return self._locales[llamada_id]
         except KeyError as e:
             raise LlamadaNoEncontrada(llamada_id) from e

@@ -137,7 +137,7 @@ class PuenteLlamada:
         turno = int(nombre.split("-", 1)[1])
         if self.turno_sonando == turno:
             self.turno_sonando = None
-            self.gestor.registrar_entrega(self.llamada_id, turno, "completada", 1.0, None)
+            await self.gestor.registrar_entrega(self.llamada_id, turno, "completada", 1.0, None)
         if self.finalizada:
             await self.canal.colgar()
 
@@ -149,7 +149,7 @@ class PuenteLlamada:
             return
         turno, self.turno_sonando = self.turno_sonando, None
         await self.canal.limpiar()
-        self.gestor.registrar_entrega(self.llamada_id, turno, "interrumpida", 0.5, None)
+        await self.gestor.registrar_entrega(self.llamada_id, turno, "interrumpida", 0.5, None)
 
     async def _decir(self, estado: dict[str, Any]) -> None:
         texto = " ".join(estado.get("mensajes_bot") or []).strip()
@@ -212,7 +212,7 @@ class PuenteLlamada:
                 self._fallos_seguidos,
             )
             if self._fallos_seguidos < FALLOS_SEGUIDOS_MAX:
-                actual = self.gestor.obtener(self.llamada_id)
+                actual = await self.gestor.obtener(self.llamada_id)
                 await self._decir(
                     {"mensajes_bot": [FRASE_REPETIR], "turno": actual.get("turno", 0)}
                 )
