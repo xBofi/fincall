@@ -65,6 +65,20 @@ services:
       db:
         condition: service_healthy
 
+  # Servidor de medios de LiveKit, autoalojado (spec 2026-10-21). En modo --dev usa las claves
+  # devkey / secret: BC_LIVEKIT_API_KEY=devkey, BC_LIVEKIT_API_SECRET=secret. Solo para local.
+  #   docker compose --profile voz up -d livekit
+  #   cd backend; uv run --extra voz building-call-agente dev
+  livekit:
+    image: livekit/livekit-server:v1.13.8
+    profiles: ["voz"]
+    container_name: building-call-livekit
+    command: ["--dev", "--bind", "0.0.0.0", "--node-ip", "127.0.0.1"]
+    ports:
+      - "127.0.0.1:7880:7880" # señalización (ws)
+      - "127.0.0.1:7881:7881" # ICE por TCP
+      - "127.0.0.1:7882:7882/udp" # medios (UDP)
+
   web:
     build: ./frontend
     container_name: building-call-web

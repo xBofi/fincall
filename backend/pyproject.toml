@@ -11,6 +11,7 @@ dependencies = [
     "google-auth[requests]>=2.61.0",
     "httpx>=0.28.1",
     "langgraph>=1.2.11",
+    "livekit-api==1.2.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
     "sqlalchemy[asyncio]>=2.0.52",
@@ -19,9 +20,16 @@ dependencies = [
 [project.optional-dependencies]
 # TTS de servidor para telefonía (Piper local). Instalar con: uv sync --extra tts
 tts = ["piper-tts>=1.7.0"]
+voz = [
+    "livekit-agents==1.8.5",
+    "livekit-plugins-assemblyai==1.8.5",
+    "livekit-plugins-elevenlabs==1.8.5",
+    "livekit-plugins-silero==1.8.5",
+]
 
 [project.scripts]
 building-call = "building_call.api.main:run"
+building-call-agente = "building_call.voz.agente:main"
 
 [build-system]
 requires = ["uv_build>=0.11.15,<0.12.0"]

@@ -44,6 +44,9 @@ def test_trocear_separa_por_frases_y_marca_la_importancia() -> None:
     piezas = trocear("Perfecto. " + SALUDO, avisos)
     assert [p["importancia"] for p in piezas] == ["cortesia", "aviso", "aviso", "pregunta"]
     assert piezas[3]["texto"] == "¿En qué finca se encuentra?"
+    # Lo que sigue a la última pregunta es parte de ella
+    sigue = trocear("¿Es correcta esa finca? Responda sí o no, por favor.", [])
+    assert [p["importancia"] for p in sigue] == ["pregunta", "pregunta"]
     texto = "Perfecto. " + SALUDO
     assert all(texto[p["inicio"] : p["fin"]] == p["texto"] for p in piezas)
 

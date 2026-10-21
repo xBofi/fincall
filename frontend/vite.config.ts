@@ -19,6 +19,8 @@ export default defineConfig({
     proxy: {
       // Mismo origen para la API y el WebSocket de voz: así no hace falta CORS ni tocar la cookie
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, ws: true },
+      // Señalización de LiveKit por el mismo origen (BC_LIVEKIT_URL_CONSOLA=/): un solo túnel
+      '/rtc': { target: 'http://127.0.0.1:7880', changeOrigin: true, ws: true },
     },
   },
 })

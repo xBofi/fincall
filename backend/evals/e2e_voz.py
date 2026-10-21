@@ -17,6 +17,7 @@ import asyncio
 import audioop
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -38,7 +39,6 @@ ESCENARIOS: list[dict[str, Any]] = [
             "Calle Mayor doce",
             "sí",
             "tercero B",
-            "Marta López",
             "Hay una fuga de agua en el baño",
             "sale con fuerza, del techo",
             "sí",
@@ -171,8 +171,45 @@ def _pcm_sin_silencio_final(ruta: Path) -> tuple[bytes, int]:
     return pcm[:i], rate
 
 
+def sesion_consola() -> httpx.Client:
+    """La API exige sesión de consola. Con BC_BANCO_CONTRASENA entra como `admin` y, si es el
+    primer acceso (instancia de pruebas en memoria), fija esa contraseña."""
+    contrasena = os.environ.get("BC_BANCO_CONTRASENA", "")
+    cliente = httpx.Client(base_url=BASE, timeout=30)
+    if not contrasena:
+        return cliente
+    for intento in (contrasena, "admin"):
+        r = cliente.post("/api/auth/login", json={"usuario": "admin", "contrasena": intento})
+        if r.status_code == 200:
+            if intento != contrasena:
+                cliente.post("/api/auth/contrasena", json={"actual": intento, "nueva": contrasena})
+            return cliente
+    raise SystemExit("No se pudo entrar en la consola con BC_BANCO_CONTRASENA")
+
+
+def _primer_audio_ms(http: httpx.Client, texto: str) -> int | None:
+    """Lo que tarda la voz del servidor en dar su primer audio (como la consola con ElevenLabs)."""
+    t0 = time.time()
+    primero: int | None = None
+    try:
+        with http.stream("POST", "/api/voz-bot", json={"texto": texto[:800]}) as r:
+            if r.status_code != 200:
+                return None
+            # Se consume entero: cortar el audio a medias deja la voz del servidor ocupada y la
+            # petición siguiente espera ~2 s (medido 2026-10-21)
+            for _ in r.iter_bytes():
+                if primero is None:
+                    primero = int((time.time() - t0) * 1000)
+    except httpx.HTTPError:
+        return None
+    return primero
+
+
+HTTP = sesion_consola()
+
+
 async def ejecutar(escenario: dict[str, Any], verboso: bool) -> dict[str, Any]:
-    llamada = httpx.post(f"{BASE}/api/llamadas", json={"telefono_llamante": "+34600000000"}).json()
+    llamada = HTTP.post("/api/llamadas", json={"telefono_llamante": "+34600000000"}).json()
     lid = llamada["llamada_id"]
     rutas = [sintetizar(t) for t in escenario["turnos"]]
     _, rate = _pcm_sin_silencio_final(rutas[0])
@@ -181,8 +218,11 @@ async def ejecutar(escenario: dict[str, Any], verboso: bool) -> dict[str, Any]:
     ultimo: dict[str, Any] = llamada
     if verboso:
         print(f"    BOT: {' '.join(llamada['mensajes_bot'])}")
+    cookie = "; ".join(f"{k}={v}" for k, v in HTTP.cookies.items())
     async with websockets.connect(
-        f"ws://localhost:8000/api/llamadas/{lid}/voz?sample_rate={rate}", open_timeout=30
+        f"ws://localhost:8000/api/llamadas/{lid}/voz?sample_rate={rate}",
+        open_timeout=30,
+        additional_headers={"Cookie": cookie} if cookie else None,
     ) as ws:
         await ws.recv()  # listo
         chunk = int(rate * 0.1) * 2
@@ -214,6 +254,11 @@ async def ejecutar(escenario: dict[str, Any], verboso: bool) -> dict[str, Any]:
                     "motivo": f"sin respuesta a {texto!r}",
                 }
             latencias.append(int((time.time() - t_fin) * 1000))
+            # Hasta que suena: se suma el primer audio de la voz del servidor (la de producción)
+            if os.environ.get("BC_BANCO_CON_VOZ") and respuesta["mensajes_bot"]:
+                voz_ms = _primer_audio_ms(HTTP, " ".join(respuesta["mensajes_bot"]))
+                if voz_ms is not None:
+                    latencias[-1] += voz_ms
             transcripciones.append(final)
             ultimo = respuesta
             if verboso:

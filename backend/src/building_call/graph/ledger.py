@@ -52,6 +52,13 @@ def trocear(texto: str, avisos: list[str]) -> list[Pieza]:
         piezas.append(
             Pieza(texto=frase, importancia=importancia, inicio=inicio, fin=inicio + len(frase))
         )
+    # Lo que va detrás de la última pregunta dice cómo contestarla ("Dígame la calle y el
+    # número", "Responda sí o no"): es parte de la pregunta
+    ultima = max((i for i, p in enumerate(piezas) if p["importancia"] == "pregunta"), default=None)
+    if ultima is not None:
+        for p in piezas[ultima + 1 :]:
+            if p["importancia"] == "dato":
+                p["importancia"] = "pregunta"
     return piezas
 
 
@@ -70,6 +77,21 @@ def evaluar(piezas: list[Pieza], corte: int) -> list[PiezaEntregada]:
             estado = "oida" if fraccion >= UMBRAL_OIDA else "no_oida"
         evaluadas.append(PiezaEntregada(**p, estado=estado, texto_oido=oido))
     return evaluadas
+
+
+def corte_por_palabras(texto: str, oido: str) -> int:
+    """Carácter de `texto` hasta el que llega `oido`, contando palabras.
+
+    LiveKit devuelve las palabras sincronizadas con el audio, que no siempre conservan la
+    puntuación ni los espacios del texto original: se cuenta cuántas sonaron y se corta el texto
+    tras esa misma palabra."""
+    n = len(re.findall(r"\w+", oido))
+    if n == 0:
+        return 0
+    palabras = list(re.finditer(r"\w+", texto))
+    if n >= len(palabras):
+        return len(texto)
+    return palabras[n - 1].end()
 
 
 def _no_oidas(entrega: dict[str, Any] | None, importancia: Importancia) -> list[dict[str, Any]]:
