@@ -1,12 +1,11 @@
-"""API del flujo del asistente: grafo, plantillas editables, prompts y catálogos.
+"""API del flujo del asistente: grafo, plantillas editables y prompts.
 
-Tres capas, con permisos distintos a propósito:
+Dos capas, con permisos distintos a propósito:
 
 - **Plantillas** (lo que el bot dice): las edita `owner`. Cada guardado se valida y se audita.
 - **Prompts de sistema**: solo lectura. Declaran claves JSON y enums que el código valida;
   editarlos degrada exactitud y latencia en silencio (ver `graph/plantillas.py`).
-- **Catálogos** (administradores, fincas, profesionales): lectura para cualquier usuario de la
-  consola, escritura para `owner`.
+- **Catálogos** (administradores, fincas, profesionales, equipos): en `catalogo_api.py`.
 """
 
 from __future__ import annotations
@@ -241,107 +240,5 @@ def crear_router_flujo(
             "problemas": pl.validar(plantilla_id, cuerpo.texto),
             "hechos_obligatorios": sorted(hechos_obligatorios(cuerpo.texto)),
         }
-
-    # -------------------------------------------------------------------------------- catálogos
-
-    @r.get("/catalogos/administradores")
-    async def administradores(_: Usuario = Depends(revisor)) -> list[dict[str, Any]]:
-        """Los administradores se derivan de las fincas: no hay listado propio en el repositorio."""
-        fincas = await negocio.listar_fincas()
-        salida = []
-        for admin_id in dict.fromkeys(f.administrador_id for f in fincas):
-            admin = await negocio.obtener_administrador(admin_id)
-            especialistas = await negocio.especialistas_de(admin_id)
-            salida.append(
-                {
-                    "id": admin_id,
-                    "nombre": admin.nombre if admin else admin_id,
-                    "fincas": [
-                        {"id": f.id, "direccion": f.direccion}
-                        for f in fincas
-                        if f.administrador_id == admin_id
-                    ],
-                    "especialistas": [
-                        {
-                            "id": e.id,
-                            "nombre": e.nombre,
-                            "categoria_principal": e.categoria_principal,
-                            "canal_contacto": e.canal_contacto,
-                            "destino": e.destino,
-                        }
-                        for e in especialistas
-                    ],
-                }
-            )
-        return salida
-
-    @r.get("/catalogos/fincas")
-    async def fincas(_: Usuario = Depends(revisor)) -> list[dict[str, Any]]:
-        salida = []
-        for f in await negocio.listar_fincas():
-            admin = await negocio.obtener_administrador(f.administrador_id)
-            viviendas = await negocio.viviendas_de(f.id)
-            salida.append(
-                {
-                    "id": f.id,
-                    "direccion": f.direccion,
-                    "administrador_id": f.administrador_id,
-                    "administrador": admin.nombre if admin else f.administrador_id,
-                    "correo": f.correo,
-                    "telefono_oficial": f.telefono_oficial,
-                    "viviendas": len(viviendas),
-                }
-            )
-        return salida
-
-    @r.get("/catalogos/fincas/{finca_id}")
-    async def finca(finca_id: str, _: Usuario = Depends(revisor)) -> dict[str, Any]:
-        f = await negocio.obtener_finca(finca_id)
-        if f is None:
-            raise HTTPException(404, "Finca desconocida")
-        admin = await negocio.obtener_administrador(f.administrador_id)
-        viviendas = await negocio.viviendas_de(finca_id)
-        cfg, cfg_id = await negocio.configuracion_efectiva(finca_id)
-        return {
-            "id": f.id,
-            "direccion": f.direccion,
-            "administrador_id": f.administrador_id,
-            "administrador": admin.nombre if admin else f.administrador_id,
-            "correo": f.correo,
-            "telefono_oficial": f.telefono_oficial,
-            "viviendas": [
-                {"id": v.id, "portal": v.portal, "piso": v.piso, "puerta": v.puerta}
-                for v in viviendas
-            ],
-            # Equipos con quien los mantiene: se avisa a su mantenedor antes que al especialista
-            "equipos": [
-                {**e.model_dump(mode="json"), "descripcion": e.descripcion()}
-                for e in await negocio.equipos_de(finca_id)
-            ],
-            # Las tres capas ya resueltas: la forma más rápida de entender por qué una finca se
-            # comporta distinto de otra
-            "configuracion_efectiva": cfg.model_dump(),
-            "configuracion_id": cfg_id,
-        }
-
-    @r.get("/catalogos/especialistas")
-    async def especialistas(_: Usuario = Depends(revisor)) -> list[dict[str, Any]]:
-        fincas = await negocio.listar_fincas()
-        salida = []
-        for admin_id in dict.fromkeys(f.administrador_id for f in fincas):
-            admin = await negocio.obtener_administrador(admin_id)
-            for e in await negocio.especialistas_de(admin_id):
-                salida.append(
-                    {
-                        "id": e.id,
-                        "nombre": e.nombre,
-                        "administrador_id": admin_id,
-                        "administrador": admin.nombre if admin else admin_id,
-                        "categoria_principal": e.categoria_principal,
-                        "canal_contacto": e.canal_contacto,
-                        "destino": e.destino,
-                    }
-                )
-        return salida
 
     return r

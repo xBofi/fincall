@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from building_call.domain.configuracion import (
     ConfiguracionEfectiva,
@@ -24,6 +25,7 @@ from building_call.domain.entidades import (
     Vivienda,
 )
 from building_call.domain.operaciones import Usuario
+from building_call.repos.catalogo import Ambito, CampoReferencia
 from building_call.repos.operativo import SesionAcceso
 
 
@@ -165,6 +167,8 @@ class RepositorioMemoria:
                 },
             ),
         }
+        # Id de la versión vigente de cada capa de administrador (como en `configuraciones`)
+        self.config_administrador_id: dict[str, str] = {"adm-demo": "cfg-adm-demo-v1"}
         # Versión de configuración por finca: (id_version, documento)
         self.config_finca: dict[str, tuple[str, ConfiguracionParcial]] = {
             "finca-mayor-12": (
@@ -183,6 +187,8 @@ class RepositorioMemoria:
         }
         self.llamadas: dict[str, Llamada] = {}
         self.incidencias: dict[str, Incidencia] = {}
+        # Versiones de configuración que la consola ha ido creando: nunca se pisa una anterior
+        self.historial_configuracion: list[dict[str, Any]] = []
 
     async def listar_fincas(self) -> list[Finca]:
         return list(self.fincas.values())
@@ -218,6 +224,84 @@ class RepositorioMemoria:
 
     async def listar_incidencias(self) -> list[Incidencia]:
         return list(self.incidencias.values())
+
+    # --------------------------------------------------------------- catálogo (escritura)
+
+    async def listar_administradores(self) -> list[Administrador]:
+        return list(self.administradores.values())
+
+    async def obtener_especialista(self, especialista_id: str) -> Especialista | None:
+        return self.especialistas.get(especialista_id)
+
+    async def guardar_finca(self, finca: Finca) -> None:
+        self.fincas[finca.id] = finca
+
+    async def eliminar_finca(self, finca_id: str) -> None:
+        self.fincas.pop(finca_id, None)
+        self.viviendas.pop(finca_id, None)
+        self.equipos.pop(finca_id, None)
+        self.config_finca.pop(finca_id, None)
+
+    async def guardar_vivienda(self, vivienda: Vivienda) -> None:
+        lista = self.viviendas.setdefault(vivienda.finca_id, [])
+        lista[:] = [v for v in lista if v.id != vivienda.id] + [vivienda]
+
+    async def eliminar_vivienda(self, vivienda_id: str) -> None:
+        for lista in self.viviendas.values():
+            lista[:] = [v for v in lista if v.id != vivienda_id]
+
+    async def guardar_especialista(self, especialista: Especialista) -> None:
+        self.especialistas[especialista.id] = especialista
+
+    async def eliminar_especialista(self, especialista_id: str) -> None:
+        self.especialistas.pop(especialista_id, None)
+
+    async def guardar_equipo(self, equipo: Equipo) -> None:
+        lista = self.equipos.setdefault(equipo.finca_id, [])
+        if any(e.id == equipo.id for e in lista):
+            lista[:] = [equipo if e.id == equipo.id else e for e in lista]
+        else:
+            lista.append(equipo)
+
+    async def eliminar_equipo(self, equipo_id: str) -> None:
+        for lista in self.equipos.values():
+            lista[:] = [e for e in lista if e.id != equipo_id]
+
+    async def configuracion_de(
+        self, ambito: Ambito, ambito_id: str
+    ) -> tuple[ConfiguracionParcial | None, str | None]:
+        if ambito == "administrador":
+            return (
+                self.config_administrador.get(ambito_id),
+                self.config_administrador_id.get(ambito_id),
+            )
+        version_id, capa = self.config_finca.get(ambito_id, (None, None))
+        return capa, version_id
+
+    async def guardar_configuracion(
+        self, ambito: Ambito, ambito_id: str, capa: ConfiguracionParcial
+    ) -> str:
+        version_id = f"cfg-{uuid4().hex[:16]}"
+        if ambito == "administrador":
+            self.config_administrador[ambito_id] = capa
+            self.config_administrador_id[ambito_id] = version_id
+        else:
+            self.config_finca[ambito_id] = (version_id, capa)
+        self.historial_configuracion.append(
+            {
+                "id": version_id,
+                "ambito": ambito,
+                "ambito_id": ambito_id,
+                "documento": capa.model_dump(exclude_none=True),
+                "valido_desde": datetime.now(UTC).isoformat(),
+            }
+        )
+        return version_id
+
+    async def contar_referencias(self, campo: CampoReferencia, valor: str) -> dict[str, int]:
+        llamadas = sum(1 for ll in self.llamadas.values() if getattr(ll, campo, None) == valor)
+        incidencias = sum(1 for i in self.incidencias.values() if getattr(i, campo, None) == valor)
+        return {"llamadas": llamadas, "incidencias": incidencias}
 
     # ------------------------------------------------------------- operativo (acceso y trazabilidad)
 

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from building_call.domain.configuracion import (
@@ -24,6 +24,7 @@ from building_call.domain.entidades import (
     Vivienda,
 )
 from building_call.domain.operaciones import Usuario
+from building_call.repos.catalogo import Ambito, CampoReferencia
 from building_call.repos.modelos_sql import (
     AdministradorSQL,
     AuditoriaEventoSQL,
@@ -122,6 +123,99 @@ class RepositorioPostgres:
     async def guardar_incidencia(self, incidencia: Incidencia) -> None:
         async with self.sesiones() as s, s.begin():
             await s.merge(IncidenciaSQL(**incidencia.model_dump()))
+
+    # --------------------------------------------------------------- catálogo (escritura)
+
+    async def listar_administradores(self) -> list[Administrador]:
+        async with self.sesiones() as s:
+            filas = (await s.execute(select(AdministradorSQL))).scalars()
+            return [Administrador.model_validate(a, from_attributes=True) for a in filas]
+
+    async def obtener_especialista(self, especialista_id: str) -> Especialista | None:
+        async with self.sesiones() as s:
+            e = await s.get(EspecialistaSQL, especialista_id)
+            return Especialista.model_validate(e, from_attributes=True) if e else None
+
+    async def guardar_finca(self, finca: Finca) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.merge(FincaSQL(**finca.model_dump()))
+
+    async def eliminar_finca(self, finca_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(delete(EquipoSQL).where(EquipoSQL.finca_id == finca_id))
+            await s.execute(delete(ViviendaSQL).where(ViviendaSQL.finca_id == finca_id))
+            await s.execute(
+                delete(ConfiguracionSQL).where(
+                    ConfiguracionSQL.ambito == "finca", ConfiguracionSQL.ambito_id == finca_id
+                )
+            )
+            await s.execute(delete(FincaSQL).where(FincaSQL.id == finca_id))
+
+    async def guardar_vivienda(self, vivienda: Vivienda) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.merge(ViviendaSQL(**vivienda.model_dump()))
+
+    async def eliminar_vivienda(self, vivienda_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(delete(ViviendaSQL).where(ViviendaSQL.id == vivienda_id))
+
+    async def guardar_especialista(self, especialista: Especialista) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.merge(EspecialistaSQL(**especialista.model_dump()))
+
+    async def eliminar_especialista(self, especialista_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(delete(EspecialistaSQL).where(EspecialistaSQL.id == especialista_id))
+
+    async def guardar_equipo(self, equipo: Equipo) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.merge(EquipoSQL(**equipo.model_dump()))
+
+    async def eliminar_equipo(self, equipo_id: str) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(delete(EquipoSQL).where(EquipoSQL.id == equipo_id))
+
+    async def configuracion_de(
+        self, ambito: Ambito, ambito_id: str
+    ) -> tuple[ConfiguracionParcial | None, str | None]:
+        async with self.sesiones() as s:
+            fila = await self._ultima_configuracion(s, ambito, ambito_id)
+            if fila is None:
+                return None, None
+            return ConfiguracionParcial.model_validate(fila.documento), fila.id
+
+    async def guardar_configuracion(
+        self, ambito: Ambito, ambito_id: str, capa: ConfiguracionParcial
+    ) -> str:
+        version_id = f"cfg-{uuid4().hex[:16]}"
+        async with self.sesiones() as s, s.begin():
+            s.add(
+                ConfiguracionSQL(
+                    id=version_id,
+                    ambito=ambito,
+                    ambito_id=ambito_id,
+                    documento=capa.model_dump(exclude_none=True),
+                    # Explícito: `now()` es el inicio de la transacción y dos versiones
+                    # seguidas empatarían al buscar la vigente
+                    valido_desde=datetime.now(UTC),
+                )
+            )
+        return version_id
+
+    async def contar_referencias(self, campo: CampoReferencia, valor: str) -> dict[str, int]:
+        async with self.sesiones() as s:
+            llamadas = 0
+            columna_llamada = getattr(LlamadaSQL, campo, None)
+            if columna_llamada is not None:
+                q = select(func.count()).select_from(LlamadaSQL).where(columna_llamada == valor)
+                llamadas = (await s.execute(q)).scalar_one()
+            q = (
+                select(func.count())
+                .select_from(IncidenciaSQL)
+                .where(getattr(IncidenciaSQL, campo) == valor)
+            )
+            incidencias = (await s.execute(q)).scalar_one()
+        return {"llamadas": int(llamadas), "incidencias": int(incidencias)}
 
     # ------------------------------------------------------------- operativo (acceso y trazabilidad)
 
