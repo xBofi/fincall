@@ -245,3 +245,32 @@ class PlantillaVersionSQL(Base):
     texto: Mapped[str] = mapped_column(Text)
     autor: Mapped[str | None] = mapped_column(String(64), nullable=True)
     creada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CasoBancoSQL(Base):
+    """Turno real del vecino que calidad marca como caso del banco de pruebas, con lo que el
+    asistente debería haber entendido. Sin teléfono ni nombre del vecino."""
+
+    __tablename__ = "casos_banco"
+    __table_args__ = (
+        UniqueConstraint("llamada_id", "turno", "banco", name="uq_casos_banco_turno"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    llamada_id: Mapped[str] = mapped_column(ForeignKey("llamadas.id"), index=True)
+    turno: Mapped[int] = mapped_column(Integer)
+    banco: Mapped[str] = mapped_column(String(32))
+    nodo: Mapped[str] = mapped_column(String(128))
+    pregunta: Mapped[str | None] = mapped_column(Text, nullable=True)
+    oido: Mapped[str | None] = mapped_column(Text, nullable=True)
+    entrada: Mapped[str] = mapped_column(Text)
+    catalogo: Mapped[bool] = mapped_column(Boolean, default=True)
+    equipos: Mapped[list[Any] | None] = mapped_column(JsonDoc, nullable=True)
+    esperado: Mapped[dict[str, Any]] = mapped_column(JsonDoc)
+    nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    autor_id: Mapped[str | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    actualizado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

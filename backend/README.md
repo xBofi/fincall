@@ -31,6 +31,16 @@ de Ollama cuelga la petición. Comparar modelos y formatos de prompt:
 uv run python evals/comparar_modelos.py --modelos qwen3.5:4b,qwen3:1.7b --verboso
 ```
 
+Casos reales al banco: en el Historial de la consola, calidad (o administrador/owner) marca un
+turno del vecino como "caso para el banco" con lo que el bot debería haber entendido. Se pasan a
+`evals/gold_*.jsonl` sin duplicar (solo el texto del turno y la pregunta del bot, nunca teléfono
+ni nombre del vecino):
+
+```powershell
+uv run python evals/exportar_casos.py --simular        # desde la base de datos configurada
+uv run python evals/exportar_casos.py --entrada casos.json   # JSON de GET /api/operaciones/casos
+```
+
 Métricas de latencia por etapa: `GET /api/metricas`. El navegador envía `respuesta_ms` (fin de
 voz del vecino → inicio de voz del bot) a `POST /api/llamadas/{id}/metricas`. Umbrales en
 `metricas.py`. Spec: `docs/superpowers/specs/2026-08-28-voice-pipeline-latency-design.md`.

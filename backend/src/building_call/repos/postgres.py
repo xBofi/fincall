@@ -27,6 +27,7 @@ from building_call.domain.operaciones import Usuario
 from building_call.repos.modelos_sql import (
     AdministradorSQL,
     AuditoriaEventoSQL,
+    CasoBancoSQL,
     ConfiguracionSQL,
     EquipoSQL,
     EspecialistaSQL,
@@ -411,3 +412,57 @@ class RepositorioPostgres:
             }
             for f in filas
         ]
+
+    # ----------------------------------------------------------------- casos del banco de pruebas
+
+    _CAMPOS_CASO = (
+        "id", "llamada_id", "turno", "banco", "nodo", "pregunta", "oido", "entrada", "catalogo",
+        "equipos", "esperado", "nota", "autor_id",
+    )  # fmt: skip
+
+    def _caso_dict(self, f: CasoBancoSQL) -> dict[str, Any]:
+        return {
+            **{c: getattr(f, c) for c in self._CAMPOS_CASO},
+            "creado_en": f.creado_en.isoformat() if f.creado_en else None,
+            "actualizado_en": f.actualizado_en.isoformat() if f.actualizado_en else None,
+        }
+
+    async def guardar_caso_banco(self, caso: dict[str, Any]) -> dict[str, Any]:
+        datos = {c: caso.get(c) for c in self._CAMPOS_CASO if c != "id"}
+        async with self.sesiones() as s, s.begin():
+            previo = (
+                await s.execute(
+                    select(CasoBancoSQL).where(
+                        CasoBancoSQL.llamada_id == caso["llamada_id"],
+                        CasoBancoSQL.turno == caso["turno"],
+                        CasoBancoSQL.banco == caso["banco"],
+                    )
+                )
+            ).scalar_one_or_none()
+            if previo is None:
+                fila = CasoBancoSQL(id=f"cb-{uuid4().hex[:16]}", **datos)
+                s.add(fila)
+            else:
+                fila = previo
+                for c, v in datos.items():
+                    setattr(fila, c, v)
+                fila.actualizado_en = datetime.now(UTC)
+            await s.flush()
+            await s.refresh(fila)
+            return self._caso_dict(fila)
+
+    async def listar_casos_banco(self, llamada_id: str | None = None) -> list[dict[str, Any]]:
+        q = select(CasoBancoSQL).order_by(CasoBancoSQL.creado_en, CasoBancoSQL.id)
+        if llamada_id is not None:
+            q = q.where(CasoBancoSQL.llamada_id == llamada_id)
+        async with self.sesiones() as s:
+            return [self._caso_dict(f) for f in (await s.execute(q)).scalars()]
+
+    async def eliminar_caso_banco(self, caso_id: str) -> dict[str, Any] | None:
+        async with self.sesiones() as s, s.begin():
+            fila = await s.get(CasoBancoSQL, caso_id)
+            if fila is None:
+                return None
+            caso = self._caso_dict(fila)
+            await s.delete(fila)
+            return caso

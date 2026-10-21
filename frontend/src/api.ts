@@ -241,10 +241,60 @@ export interface Expediente {
   respuesta_ms_p50: number | null
 }
 
+/** Lo que el asistente debería haber entendido: un valor, "*" (cualquiera), null (sin dato) o alternativas. */
+export type ValorEsperado = string | boolean | null | (string | boolean | null)[]
+
+export type BancoPruebas = 'interpretacion' | 'clasificacion'
+
+/** Turno real del vecino marcado por calidad como caso del banco de pruebas. */
+export interface CasoBanco {
+  id: string
+  llamada_id: string
+  turno: number
+  banco: BancoPruebas
+  nodo: string
+  pregunta: string | null
+  oido: string | null
+  entrada: string
+  catalogo: boolean
+  equipos: [string, string][] | null
+  esperado: Record<string, ValorEsperado>
+  nota: string | null
+  autor_id: string | null
+  creado_en: string
+  actualizado_en: string
+}
+
+export interface NuevoCasoBanco {
+  turno: number
+  banco: BancoPruebas
+  esperado: Record<string, ValorEsperado>
+  nota?: string | null
+  oido?: string | null
+  pregunta?: string | null
+}
+
+export interface OpcionesCaso {
+  claves: string[]
+  intenciones: string[]
+  urgencias: string[]
+  actuaciones: string[]
+  categorias: string[]
+}
+
 export interface DetalleExpediente {
   llamada: Expediente & { transcripcion: Turno[] }
-  turnos: { turno: number; vecino: string | null; asistente: string[]; nodo_inicial: string; nodo_final: string; tiempos: TiemposServidor }[]
+  turnos: {
+    turno: number
+    vecino: string | null
+    asistente: string[]
+    nodo_inicial: string
+    nodo_final: string
+    tiempos: TiemposServidor
+    interpretacion?: Record<string, unknown> | null
+  }[]
   decisiones: { turno: number; nodo: string; accion: string; detalle: string }[]
+  casos?: CasoBanco[]
   metricas: Record<string, unknown>[]
   pistas: { id: string; canal: string; duracion_ms: number | null; expira_en: string; disponible: boolean; url: string | null }[]
 }
@@ -253,6 +303,10 @@ export const operaciones = {
   resumen: () => pedir<ResumenOperaciones>('/api/operaciones/resumen'),
   llamadas: (estado?: string) => pedir<Expediente[]>(`/api/operaciones/llamadas${estado ? `?estado=${estado}` : ''}`),
   detalle: (id: string) => pedir<DetalleExpediente>(`/api/operaciones/llamadas/${id}`),
+  opcionesCaso: () => pedir<OpcionesCaso>('/api/operaciones/casos/opciones'),
+  marcarCaso: (llamadaId: string, caso: NuevoCasoBanco) =>
+    pedir<CasoBanco>(`/api/operaciones/llamadas/${llamadaId}/casos`, json(caso)),
+  desmarcarCaso: (casoId: string) => pedir<void>(`/api/operaciones/casos/${casoId}`, { method: 'DELETE' }),
 }
 
 export const api = {

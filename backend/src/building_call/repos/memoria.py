@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from building_call.domain.configuracion import (
     ConfiguracionEfectiva,
@@ -231,6 +232,7 @@ class RepositorioMemoria:
             self.auditoria: list[dict[str, Any]] = []
             self.plantillas: dict[str, dict[str, Any]] = {}
             self.plantilla_historial: list[dict[str, Any]] = []
+            self.casos_banco: dict[str, dict[str, Any]] = {}
 
     async def guardar_usuario(self, usuario: Usuario) -> None:
         self._operativo()
@@ -384,3 +386,38 @@ class RepositorioMemoria:
     async def historial_plantilla(self, plantilla_id: str) -> list[dict[str, Any]]:
         self._operativo()
         return [h for h in reversed(self.plantilla_historial) if h["plantilla_id"] == plantilla_id]
+
+    # ----------------------------------------------------------------- casos del banco de pruebas
+
+    async def guardar_caso_banco(self, caso: dict[str, Any]) -> dict[str, Any]:
+        self._operativo()
+        ahora = datetime.now(UTC).isoformat()
+        clave = (caso["llamada_id"], caso["turno"], caso["banco"])
+        previo = next(
+            (
+                c
+                for c in self.casos_banco.values()
+                if (c["llamada_id"], c["turno"], c["banco"]) == clave
+            ),
+            None,
+        )
+        guardado = {
+            **caso,
+            "id": previo["id"] if previo else f"cb-{uuid4().hex[:16]}",
+            "creado_en": previo["creado_en"] if previo else ahora,
+            "actualizado_en": ahora,
+        }
+        self.casos_banco[guardado["id"]] = guardado
+        return dict(guardado)
+
+    async def listar_casos_banco(self, llamada_id: str | None = None) -> list[dict[str, Any]]:
+        self._operativo()
+        return [
+            dict(c)
+            for c in sorted(self.casos_banco.values(), key=lambda c: (c["creado_en"], c["id"]))
+            if llamada_id is None or c["llamada_id"] == llamada_id
+        ]
+
+    async def eliminar_caso_banco(self, caso_id: str) -> dict[str, Any] | None:
+        self._operativo()
+        return self.casos_banco.pop(caso_id, None)
