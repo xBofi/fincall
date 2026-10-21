@@ -220,6 +220,12 @@ class IncidenciaHistorialSQL(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     nota: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Desde la bandeja del administrador (0010): quién actuó, qué hizo y con qué datos
+    accion: Mapped[str] = mapped_column(String(32), default="cambiar_estado")
+    usuario_id: Mapped[str | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    detalle: Mapped[dict[str, Any]] = mapped_column(JsonDoc, default=dict)
 
 
 class PlantillaSQL(Base):

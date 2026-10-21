@@ -16,6 +16,7 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import (
     Administrador,
+    EntradaHistorialIncidencia,
     Equipo,
     Especialista,
     Finca,
@@ -183,6 +184,7 @@ class RepositorioMemoria:
         }
         self.llamadas: dict[str, Llamada] = {}
         self.incidencias: dict[str, Incidencia] = {}
+        self.incidencia_historial: list[EntradaHistorialIncidencia] = []
 
     async def listar_fincas(self) -> list[Finca]:
         return list(self.fincas.values())
@@ -218,6 +220,20 @@ class RepositorioMemoria:
 
     async def listar_incidencias(self) -> list[Incidencia]:
         return list(self.incidencias.values())
+
+    async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None:
+        return self.incidencias.get(incidencia_id)
+
+    async def registrar_historial_incidencia(self, entrada: EntradaHistorialIncidencia) -> None:
+        # Como la clave foránea de Postgres
+        if entrada.incidencia_id not in self.incidencias:
+            raise KeyError(f"historial de una incidencia inexistente: {entrada.incidencia_id}")
+        self.incidencia_historial.append(entrada)
+
+    async def listar_historial_incidencia(
+        self, incidencia_id: str
+    ) -> list[EntradaHistorialIncidencia]:
+        return [h for h in self.incidencia_historial if h.incidencia_id == incidencia_id]
 
     # ------------------------------------------------------------- operativo (acceso y trazabilidad)
 
