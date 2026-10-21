@@ -464,6 +464,18 @@ def _sugerencia(
     return " ".join(partes) or None
 
 
+def _sugerencia_emergencia(estado: EstadoLlamada) -> str | None:
+    """La incidencia de una emergencia lleva delante que los avisos están pendientes."""
+    sugerencia = estado.get("sugerencia")
+    if estado.get("urgencia") != "emergencia":
+        return sugerencia
+    nota = (
+        "EMERGENCIA: avisar por teléfono al teléfono oficial de la finca y al coordinador. "
+        "Avisos simulados: el asistente todavía no llama ni envía nada."
+    )
+    return f"{nota} {sugerencia}" if sugerencia else nota
+
+
 # --------------------------------------------------------------------------- utilidades de estado
 
 
@@ -708,6 +720,21 @@ _FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
     ),
     (("coste", "cuesta", "pagar", "precio"), "Esta llamada no tiene coste adicional para usted. "),
 )
+
+
+# Indicación de seguridad de una emergencia según lo que cuenta el vecino. Por palabras clave:
+# es un camino determinista (0 ms) y el texto de seguridad nunca lo decide el modelo.
+_PALABRAS_GAS = frozenset({"gas", "butano", "propano"})
+_PALABRAS_FUEGO = frozenset({"fuego", "humo", "incendio", "llamas", "ardiendo", "quemando"})
+
+
+def _indicacion_seguridad(texto: str) -> str:
+    palabras = set(_normalizar_basico(texto).split())
+    if palabras & _PALABRAS_GAS:
+        return render("atender_emergencia.seguridad_gas")
+    if palabras & _PALABRAS_FUEGO:
+        return render("atender_emergencia.seguridad_fuego")
+    return render("atender_emergencia.seguridad_general")
 
 
 def _responder_pregunta(texto: str) -> str:
@@ -1079,6 +1106,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             destino = "clasificar_problema"
         elif not estado.get("urgencia"):
             destino = "determinar_urgencia"
+        elif estado.get("urgencia") == "emergencia":
+            # Solo llega aquí con `emergencias_activas` (si no, `determinar_urgencia` la deja en
+            # alta): ni detalle técnico ni resumen largo, primero la indicación de seguridad
+            destino = "validar_datos" if estado.get("emergencia_atendida") else "atender_emergencia"
         elif (
             not estado.get("detalle_pedido")
             and _config(estado).pedir_detalle
@@ -1773,6 +1804,83 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             **extra,
         )
 
+    async def atender_emergencia(estado: EstadoLlamada) -> dict[str, Any]:
+        """Emergencia con el tratamiento especial activado (bóveda, Confirmado por Andreu).
+
+        Primero la indicación de seguridad y una confirmación mínima (finca y emergencia). Un
+        "no" sin más la deja en urgencia alta y el flujo sigue normal; cualquier otra respuesta
+        la registra: ante la duda, una emergencia no se pierde en un bucle de repreguntas."""
+        nodo = "atender_emergencia"
+        entrada = estado.get("entrada_usuario")
+        if entrada is None:
+            seguridad = _indicacion_seguridad(
+                f"{estado.get('solicitud') or ''} {estado.get('resumen') or ''}"
+            )
+            return _preguntar(
+                estado,
+                nodo,
+                render(
+                    "atender_emergencia.aviso",
+                    seguridad=seguridad.strip(),
+                    direccion=estado.get("finca_direccion") or "su finca",
+                ),
+                traza=_con_traza(
+                    estado,
+                    nodo,
+                    "plantilla",
+                    f"{getattr(seguridad, 'plantilla_id', '')} v{getattr(seguridad, 'version', 0)}",
+                ),
+            )
+        interp, historial, extra, salida = await _turno(estado, nodo, si_no=True)
+        if salida:
+            return salida
+        if (
+            interp.direccion
+            and interp.confirma is not True
+            and await _coincide_finca(interp.direccion)
+        ):
+            # "No, es en la Alameda 5": otra finca. La urgencia se recalcula con su configuración
+            return _avanzar(
+                estado,
+                "siguiente_paso",
+                historial=historial,
+                finca_id=None,
+                finca_direccion=None,
+                vivienda_id=None,
+                vivienda_etiqueta=None,
+                urgencia=None,
+                pendientes={**estado.get("pendientes", {}), "direccion": interp.direccion},
+                traza=_con_traza(estado, nodo, "correccion", "direccion"),
+                **extra,
+            )
+        if interp.confirma is False:
+            return _avanzar(
+                estado,
+                "siguiente_paso",
+                historial=historial,
+                urgencia="alta",
+                traza=_con_traza(estado, nodo, "emergencia_descartada", entrada[:60]),
+                **extra,
+            )
+        solicitud = estado.get("solicitud") or ""
+        if not (_respuesta_si_no(entrada) is not None and len(entrada.split()) <= 3):
+            solicitud = f"{solicitud} Detalle: {entrada.strip()}"
+        return _avanzar(
+            estado,
+            "siguiente_paso",
+            historial=historial,
+            solicitud=solicitud,
+            emergencia_atendida=True,
+            confirmado=True if interp.confirma else estado.get("confirmado"),
+            traza=_con_traza(
+                estado,
+                nodo,
+                "emergencia_confirmada" if interp.confirma else "emergencia_sin_confirmacion",
+                entrada[:60],
+            ),
+            **extra,
+        )
+
     # ------------------------------------------------------------------ nodos de trabajo y cierre
 
     async def validar_datos(estado: EstadoLlamada) -> dict[str, Any]:
@@ -1936,7 +2044,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             creada_en=datetime.now(UTC),
             equipo_id=estado.get("equipo_id"),
             actuacion=estado.get("actuacion") or "reparacion",  # type: ignore[arg-type]
-            sugerencia=estado.get("sugerencia"),
+            sugerencia=_sugerencia_emergencia(estado),
         )
         await deps.repo.guardar_llamada(_llamada_desde(estado, "incidencia_creada"))
         await deps.repo.guardar_incidencia(incidencia)
@@ -1951,6 +2059,30 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
     async def avisar_canal(estado: EstadoLlamada) -> dict[str, Any]:
         nodo = "avisar_canal"
         cfg = _config(estado)
+        if estado.get("urgencia") == "emergencia":
+            # Llamada al teléfono oficial de la finca y correo al coordinador. SIMULADOS: todavía
+            # no hay contacto con el mundo real; quedan pendientes en la traza y en la incidencia
+            finca = await deps.repo.obtener_finca(estado["finca_id"])  # type: ignore[arg-type]
+            telefono = (
+                finca.telefono_oficial
+                if finca
+                else (cfg.contacto.telefono_oficial if cfg.contacto else "administrador")
+            )
+            coordinador = cfg.contacto.correo if cfg.contacto else "coordinador"
+            return _avanzar(
+                estado,
+                "fin",
+                render("avisar_canal.cierre_emergencia"),
+                finalizada=True,
+                canal_aviso="llamada",
+                destino_aviso=telefono,
+                traza=_con_traza(
+                    estado,
+                    nodo,
+                    "aviso_emergencia_simulado",
+                    f"llamada pendiente -> {telefono}; correo pendiente -> {coordinador}",
+                ),
+            )
         regla = cfg.regla_para(estado["urgencia"])  # type: ignore[arg-type]
         canal = regla.canal if regla else "ticket"
         destino_regla = regla.destino if regla else "especialista"
@@ -2008,6 +2140,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         "clasificar_problema": clasificar_problema,
         "pedir_detalle": pedir_detalle,
         "determinar_urgencia": determinar_urgencia,
+        "atender_emergencia": atender_emergencia,
         "confirmar_resumen": confirmar_resumen,
         "validar_datos": validar_datos,
         "no_clasificable": no_clasificable,

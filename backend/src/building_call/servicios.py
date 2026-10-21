@@ -39,6 +39,10 @@ def _merece_redaccion(estado: EstadoLlamada, entrada: str | None) -> bool:
     y el mensaje no es un cierre largo lleno de hechos (ahí la plantilla ya es completa)."""
     if entrada is None or estado.get("finalizada"):
         return False
+    if estado.get("nodo_actual") == "atender_emergencia":
+        # La indicación de seguridad se dice tal cual: la comprobación de hechos de la redacción
+        # solo vigila números y nombres, y podría perderse «no encienda luces»
+        return False
     tiempos = estado.get("tiempos_turno", {})
     if tiempos.get("origen_interpretacion") != "llm":
         return False

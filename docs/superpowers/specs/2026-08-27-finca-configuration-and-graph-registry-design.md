@@ -43,7 +43,7 @@ Initial fields (the real set of variations between fincas is **Pendiente**):
 | `reglas_aviso` | administrador, finca sobrescribe | Urgencia → canal (`correo`, `llamada`, `ticket`) → destino |
 | `contacto` | finca | Correo y teléfono oficial de la finca |
 | `intentos_finca`, `intentos_vivienda` | defaults (3, 3) | Reintentos de identificación |
-| `emergencias_activas` | defaults (`false`) | Las emergencias se tratan como `alta` mientras sea `false` |
+| `emergencias_activas` | defaults (`false`) | Las emergencias se tratan como `alta` mientras sea `false`. Con `true` (2026-10-22): nodo `atender_emergencia` con indicación de seguridad (112; gas: no encender luces ni aparatos, salir y ventilar), confirmación mínima (finca y emergencia), sin detalle ni resumen largo; incidencia `emergencia` y aviso por llamada al teléfono oficial de la finca + correo al coordinador **simulados** |
 
 ### PostgreSQL from day one — Confirmado
 

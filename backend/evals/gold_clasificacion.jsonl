@@ -40,3 +40,7 @@
 {"solicitud": "El mando del garaje no abre la puerta", "categoria": "cerrajeria", "urgencias": ["baja", "media"]}
 {"solicitud": "Necesito un certificado de estar al corriente de pago", "categoria": "administrativo", "urgencias": ["baja"]}
 {"solicitud": "Se ha caído una rama grande del árbol del patio", "categoria": "jardineria", "urgencias": ["media", "alta"]}
+{"solicitud": "Sale humo del cuarto de contadores de la luz", "categoria": ["electricidad", "no_clasificable"], "urgencias": ["emergencia"]}
+{"solicitud": "Hay un incendio en el garaje comunitario", "categoria": "no_clasificable", "urgencias": ["emergencia"]}
+{"solicitud": "Huele mucho a gas en el portal, creo que hay una fuga", "categoria": ["no_clasificable", "fontaneria"], "urgencias": ["emergencia"]}
+{"solicitud": "Un niño se ha quedado atrapado en el ascensor", "categoria": "ascensor", "urgencias": ["emergencia", "alta"]}

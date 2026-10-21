@@ -55,7 +55,7 @@ _INTENCIONES_GLOBALES = (
 
 _DETERMINISTAS_TURNO = (
     "no se ha oído (se repite el mensaje completo)",
-    "relleno (\"un momento\", \"a ver...\")",
+    'relleno ("un momento", "a ver...")',
 )
 
 
@@ -84,6 +84,10 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
             Arista("recoger_solicitud", "falta saber qué le ocurre"),
             Arista("clasificar_problema", "hay solicitud pero no categoría"),
             Arista("determinar_urgencia", "hay categoría pero no urgencia"),
+            Arista(
+                "atender_emergencia",
+                "urgencia efectiva `emergencia` (tratamiento activado) sin confirmar todavía",
+            ),
             Arista("pedir_detalle", "la configuración pide un detalle y la incidencia lo merece"),
             Arista("confirmar_resumen", "están los datos y falta que el vecino confirme"),
             Arista("validar_datos", "el vecino ya ha confirmado el resumen"),
@@ -134,7 +138,7 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
         tipo="pregunta",
         usa_llm=True,
         caminos_deterministas=(
-            "\"3º B\" y variantes por expresión regular",
+            '"3º B" y variantes por expresión regular',
             *_DETERMINISTAS_TURNO,
         ),
         destinos=(
@@ -215,11 +219,38 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
         titulo="Determinar urgencia",
         resumen=(
             "Convierte la urgencia declarada en la efectiva según la configuración. Mientras las "
-            "emergencias estén desactivadas, `emergencia` se trata como `alta`."
+            "emergencias estén desactivadas (`emergencias_activas`), `emergencia` se trata como "
+            "`alta`; activadas, `siguiente_paso` la lleva a `atender_emergencia`."
         ),
         tipo="decision",
         usa_llm=False,
         destinos=(Arista("siguiente_paso", "urgencia efectiva fijada"),),
+    ),
+    "atender_emergencia": NodoManifiesto(
+        id="atender_emergencia",
+        etapa=5,
+        titulo="Atender emergencia",
+        resumen=(
+            "Solo con `emergencias_activas`. Da primero una indicación de seguridad (112; con gas, "
+            "no encender luces ni aparatos y salir) y confirma lo mínimo: la finca y que hay una "
+            "emergencia. No pide detalle ni lee el resumen largo. Si el vecino dice que no es una "
+            "emergencia, sigue como urgencia alta; ante la duda, se registra igualmente."
+        ),
+        tipo="pregunta",
+        usa_llm=True,
+        caminos_deterministas=(
+            "indicación de seguridad por palabras clave (gas, fuego/humo, resto)",
+            "sí / no",
+            *_DETERMINISTAS_TURNO,
+        ),
+        destinos=(
+            Arista("atender_emergencia", "el vecino pide repetir o hace una pregunta"),
+            Arista(
+                "siguiente_paso",
+                "confirmada (o respuesta dudosa: se registra igual), o no es una emergencia",
+            ),
+            *_INTENCIONES_GLOBALES,
+        ),
     ),
     "confirmar_resumen": NodoManifiesto(
         id="confirmar_resumen",
@@ -325,7 +356,10 @@ MANIFIESTO: dict[str, NodoManifiesto] = {
         ),
         tipo="efecto",
         usa_llm=False,
-        efectos=("avisa por el canal de la regla (ticket, correo o llamada)",),
+        efectos=(
+            "avisa por el canal de la regla (ticket, correo o llamada)",
+            "emergencia: deja simulada la llamada al teléfono oficial y el correo al coordinador",
+        ),
         destinos=(Arista(FIN, "incidencia creada y vecino informado"),),
     ),
 }

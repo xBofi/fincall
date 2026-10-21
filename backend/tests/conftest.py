@@ -40,7 +40,9 @@ def _actuacion_y_equipo(u: str, sistema: str) -> dict[str, str]:
 
 
 def _clasificar(u: str, catalogo: list[str]) -> tuple[str, str]:
-    if "agua" in u or "fuga" in u or "grifo" in u:
+    if any(p in u for p in ("gas", "humo", "fuego")):
+        cat, urg = "no_clasificable", "emergencia"
+    elif "agua" in u or "fuga" in u or "grifo" in u:
         cat, urg = "fontaneria", "alta" if "inund" in u else "media"
     elif "luz" in u or "enchufe" in u:
         cat, urg = "electricidad", "media"
@@ -151,6 +153,9 @@ class LLMFalso:
             "ruido",
             "parado",
             "portero",
+            "gas",
+            "humo",
+            "fuego",
         )
         if any(p in u for p in palabras_problema) and "problema" not in salida:
             salida["problema"] = texto
