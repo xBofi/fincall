@@ -16,6 +16,7 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import (
     Administrador,
+    Equipo,
     Especialista,
     Finca,
     Incidencia,
@@ -27,6 +28,7 @@ from building_call.repos.modelos_sql import (
     AdministradorSQL,
     AuditoriaEventoSQL,
     ConfiguracionSQL,
+    EquipoSQL,
     EspecialistaSQL,
     FincaSQL,
     IncidenciaSQL,
@@ -90,6 +92,14 @@ class RepositorioPostgres:
             filas = (await s.execute(q)).scalars()
             return [Especialista.model_validate(e, from_attributes=True) for e in filas]
 
+    async def equipos_de(self, finca_id: str) -> list[Equipo]:
+        async with self.sesiones() as s:
+            q = select(EquipoSQL).where(EquipoSQL.finca_id == finca_id)
+            return [
+                Equipo.model_validate(e, from_attributes=True)
+                for e in (await s.execute(q)).scalars()
+            ]
+
     async def configuracion_efectiva(
         self, finca_id: str
     ) -> tuple[ConfiguracionEfectiva, str | None]:
@@ -129,6 +139,17 @@ class RepositorioPostgres:
             u = (
                 await s.execute(
                     select(UsuarioSQL).where(UsuarioSQL.nombre_usuario == nombre_usuario)
+                )
+            ).scalar_one_or_none()
+            return Usuario.model_validate(u, from_attributes=True) if u else None
+
+    async def obtener_usuario_por_identidad(self, proveedor: str, sujeto: str) -> Usuario | None:
+        async with self.sesiones() as s:
+            u = (
+                await s.execute(
+                    select(UsuarioSQL).where(
+                        UsuarioSQL.proveedor == proveedor, UsuarioSQL.sujeto == sujeto
+                    )
                 )
             ).scalar_one_or_none()
             return Usuario.model_validate(u, from_attributes=True) if u else None
@@ -186,6 +207,14 @@ class RepositorioPostgres:
                 update(SesionSQL)
                 .where(SesionSQL.token_hash == token_hash)
                 .values(revocada_en=cuando)
+            )
+
+    async def renovar_sesion(self, token_hash: str, expira_en: datetime) -> None:
+        async with self.sesiones() as s, s.begin():
+            await s.execute(
+                update(SesionSQL)
+                .where(SesionSQL.token_hash == token_hash)
+                .values(expira_en=expira_en)
             )
 
     async def listar_llamadas(self, estado: str | None = None, limite: int = 100) -> list[Llamada]:

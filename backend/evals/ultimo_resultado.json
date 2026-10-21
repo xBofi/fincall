@@ -2,17 +2,17 @@
   {
     "modelo": "vertex:gemini-3.5-flash-lite",
     "interpretacion": {
-      "exactitud": 0.9973333333333333,
-      "n": 375,
-      "p50_ms": 692,
-      "p95_ms": 846
+      "exactitud": 1.0,
+      "n": 447,
+      "p50_ms": 672,
+      "p95_ms": 814
     },
     "clasificacion": {
       "categoria": 1.0,
-      "urgencia": 0.9761904761904762,
+      "urgencia": 1.0,
       "n": 126,
-      "p50_ms": 709.5205999794416,
-      "p95_ms": 860.1078999927267
+      "p50_ms": 719.7643999825232,
+      "p95_ms": 898.1889999995474
     }
   }
 ]

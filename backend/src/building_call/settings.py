@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     # `vertex_credenciales`; vacío = credenciales por defecto (`gcloud auth application-default login`).
     vertex_proyecto: str = ""
     vertex_ubicacion: str = "eu"
-    vertex_modelo: str = "gemini-3.5-flash-lite"  # medido 2026-10-11: 98% exactitud, p50 626 / p95 722 ms (UE)
+    vertex_modelo: str = (
+        "gemini-3.5-flash-lite"  # medido 2026-10-11: 98% exactitud, p50 626 / p95 722 ms (UE)
+    )
     vertex_credenciales: str = ""
     vertex_timeout_s: float = 20.0
 
@@ -60,19 +62,24 @@ class Settings(BaseSettings):
     assemblyai_eot_confianza: float = 0.7
     assemblyai_eot_silencio_ms: int = 220
     assemblyai_max_silencio_ms: int = 800
+    # Modelo de AssemblyAI del agente de LiveKit
+    assemblyai_modelo: str = "universal-3-6-pro"
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # Acceso a la consola operativa: usuarios internos con contraseña (sin proveedor externo).
-    # Si no existe ningún usuario al arrancar se crea este owner con cambio de contraseña
-    # obligatorio en el primer acceso.
-    admin_inicial_usuario: str = "admin"
-    admin_inicial_contrasena: str = "admin"
-    login_max_intentos: int = 5  # fallos por usuario o por IP antes del bloqueo temporal
-    login_bloqueo_s: int = 900
-    sesion_secreto: str = ""  # firma las URLs de audio
+    # Acceso a la consola: solo con Google o Microsoft (decisión de Andreu, 2026-10-21). Quien
+    # entra con BC_OWNER_EMAIL (correo verificado por el proveedor) es owner; el resto solicita
+    # acceso y el owner lo concede. Claves solo en backend/.env.
+    url_consola: str = "http://localhost:5173"  # retorno: {url_consola}/api/auth/oidc/{p}/retorno
+    owner_email: str = ""
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
+    sesion_secreto: str = ""  # firma las URLs de audio y la ida y vuelta al proveedor
     sesion_cookie: str = "bc_sesion"
-    sesion_horas: int = 12
+    # La sesión dura 30 días y se alarga sola al usarla: no hay que volver a entrar cada día
+    sesion_dias: int = 30
 
     # Telefonía real (proveedor Pendiente en la bóveda; Twilio es la primera implementación).
     # Cuando haya número: BC_TELEFONIA=twilio, BC_URL_PUBLICA=https://... (túnel o dominio),
@@ -99,6 +106,18 @@ class Settings(BaseSettings):
     audio_dir: str = ".audio"
     audio_retencion_dias: int = 14
     audio_url_segundos: int = 300
+
+    # LiveKit autoalojado (spec 2026-10-21): servidor de medios y agente de voz en otro proceso.
+    # En desarrollo, `livekit-server --dev` usa devkey / secret.
+    livekit_url: str = ""  # ws://localhost:7880
+    # La que recibe la consola, si no es la misma: "/" = el origen de la consola (túnel ngrok,
+    # con Vite reenviando /rtc a LiveKit)
+    livekit_url_consola: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+    # El agente entra en la API con este secreto (cabecera Authorization: Bearer). Vacío = no
+    agente_secreto: str = ""
+    agente_api_url: str = "http://127.0.0.1:8000"
 
 
 settings = Settings()

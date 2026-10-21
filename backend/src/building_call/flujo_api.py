@@ -121,9 +121,7 @@ def crear_router_flujo(
                     "usa_llm": n.usa_llm,
                     "caminos_deterministas": list(n.caminos_deterministas),
                     "efectos": list(n.efectos),
-                    "plantillas": [
-                        pid for pid, p in pl.CATALOGO.items() if p.nodo == id_
-                    ],
+                    "plantillas": [pid for pid, p in pl.CATALOGO.items() if p.nodo == id_],
                 }
             )
         aristas = [
@@ -140,9 +138,7 @@ def crear_router_flujo(
             "nodos": nodos,
             "aristas": aristas,
             "entrada": "siguiente_paso",
-            "plantillas_globales": [
-                pid for pid, p in pl.CATALOGO.items() if p.nodo == "global"
-            ],
+            "plantillas_globales": [pid for pid, p in pl.CATALOGO.items() if p.nodo == "global"],
             "violaciones": list(VIOLACIONES_MANIFIESTO),
         }
 
@@ -193,9 +189,7 @@ def crear_router_flujo(
         return [_vista(id_) for id_ in pl.CATALOGO]
 
     @r.get("/plantillas/{plantilla_id}")
-    async def ver_plantilla(
-        plantilla_id: str, _: Usuario = Depends(revisor)
-    ) -> dict[str, Any]:
+    async def ver_plantilla(plantilla_id: str, _: Usuario = Depends(revisor)) -> dict[str, Any]:
         if plantilla_id not in pl.CATALOGO:
             raise HTTPException(404, "Plantilla desconocida")
         return {**_vista(plantilla_id), "historial": await repo.historial_plantilla(plantilla_id)}
@@ -318,6 +312,11 @@ def crear_router_flujo(
             "viviendas": [
                 {"id": v.id, "portal": v.portal, "piso": v.piso, "puerta": v.puerta}
                 for v in viviendas
+            ],
+            # Equipos con quien los mantiene: se avisa a su mantenedor antes que al especialista
+            "equipos": [
+                {**e.model_dump(mode="json"), "descripcion": e.descripcion()}
+                for e in await negocio.equipos_de(finca_id)
             ],
             # Las tres capas ya resueltas: la forma más rápida de entender por qué una finca se
             # comporta distinto de otra

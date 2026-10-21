@@ -28,7 +28,7 @@ from building_call.domain.configuracion import (
     URGENCIAS,
     ConfiguracionEfectiva,
 )
-from building_call.domain.entidades import Incidencia, Llamada, Vivienda
+from building_call.domain.entidades import ACTUACIONES, Incidencia, Llamada, Vivienda
 from building_call.graph.estado import EstadoLlamada, Traza
 from building_call.graph.ledger import confirmacion_no_valida, texto_oido_si_cortado
 from building_call.graph.manifiesto import verificar_transicion
@@ -91,6 +91,11 @@ def categoria_hablada(categoria: str) -> str:
 def _mayuscula_inicial(texto: str) -> str:
     """Como `str.capitalize` pero sin pasar a minúsculas el resto ("Fontanería Pérez")."""
     return texto[:1].upper() + texto[1:]
+
+
+def equipos_para(estado: EstadoLlamada) -> list[tuple[str, str]] | None:
+    """(id, descripción) de los equipos de la finca, para que el modelo sepa a cuál afecta."""
+    return [(e["id"], e["descripcion"]) for e in estado.get("equipos", [])] or None
 
 
 def catalogo_para(estado: EstadoLlamada) -> list[str]:
@@ -170,6 +175,25 @@ def _similitud_direccion(entrada: str, direccion: str) -> float:
     contenidos = sum(1 for t in tokens_b if t in a.split())
     cobertura = contenidos / len(tokens_b)
     return max(SequenceMatcher(None, a, b).ratio(), cobertura)
+
+
+# Lo que puede acompañar a una dirección sin aportar nada más
+_RELLENO_DIRECCION = frozenset(
+    "vivo en la el es estoy llamo desde de del numero calle avenida plaza paseo finca mire "
+    "pues hola buenas".split()
+)
+
+
+def _solo_direccion(entrada: str, direccion: str) -> bool:
+    """La frase es solo la dirección (con muletillas). "Calle Mayor 12, el portero no funciona"
+    no: el resto es la avería y la tiene que leer el modelo (2026-10-21)."""
+    propias = set(_normalizar(direccion).split())
+    sobra = [
+        t
+        for t in _normalizar(entrada).split()
+        if t not in propias and t not in _RELLENO_DIRECCION and t not in _MULETILLAS
+    ]
+    return not sobra
 
 
 _SI = {
@@ -403,6 +427,43 @@ def _es_saludo(texto: str) -> bool:
     return _solo_frase_hecha(texto, _SALUDOS)
 
 
+# --------------------------------------------------------------------------- a quién se avisa
+
+_MOTIVO_ACTUACION = {
+    "reposicion": "Hay que cambiarlo entero o hacer obra: necesita presupuesto y aprobación.",
+    "siniestro": "Vandalismo o daños de un tercero: valorar el parte al seguro de la comunidad.",
+    "convivencia": "Es un problema de convivencia entre vecinos, no una avería.",
+    "privativo": "Parece estar dentro de una vivienda particular, no en zona común.",
+}
+
+
+def _sugerencia(
+    actuacion: str,
+    objecion: str | None,
+    equipo: dict[str, Any] | None,
+    mantenedor: Any,
+    propuesto: Any,
+) -> str | None:
+    """Texto para quien recibe la incidencia: equipo, contrato y por qué le llega."""
+    partes: list[str] = []
+    if objecion:
+        partes.append(f"El vecino discrepa: «{objecion}».")
+    if actuacion in _MOTIVO_ACTUACION:
+        partes.append(_MOTIVO_ACTUACION[actuacion])
+    if equipo:
+        datos = [f"Equipo: {equipo['descripcion']}"]
+        if mantenedor:
+            datos.append(f"mantenedor {mantenedor.nombre} ({mantenedor.destino})")
+        if equipo.get("contrato"):
+            datos.append(f"contrato {equipo['contrato']}")
+        if equipo.get("garantia_hasta"):
+            datos.append(f"garantía hasta {equipo['garantia_hasta']}")
+        partes.append(", ".join(datos) + ".")
+    if propuesto is not None and (objecion or actuacion != "reparacion"):
+        partes.append(f"Profesional que se habría avisado: {propuesto.nombre}.")
+    return " ".join(partes) or None
+
+
 # --------------------------------------------------------------------------- utilidades de estado
 
 
@@ -435,7 +496,9 @@ def _anotar_plantilla(estado: EstadoLlamada, nodo: str, texto: Any, extra: dict[
     if plantilla_id is None:
         return
     if CATALOGO_PLANTILLAS[plantilla_id].aviso:
-        extra["avisos_turno"] = [*estado.get("avisos_turno", []), str(texto)]
+        # El aviso es lo que va antes de la pregunta (el saludo acaba preguntando la finca)
+        aviso = str(texto).split("¿", 1)[0]
+        extra["avisos_turno"] = [*estado.get("avisos_turno", []), aviso]
     base = extra.get("traza", estado.get("traza", []))
     extra["traza"] = [
         *base,
@@ -538,15 +601,19 @@ def _sin_coletilla_repeticion(texto: str) -> str:
 # Mientras se piden finca o vivienda, un "problema" que el modelo no sabe clasificar suele ser la
 # respuesta mal transcrita ("Primero abre la"), no una avería: guardarlo saltaba "¿qué ocurre?".
 _NODOS_IDENTIFICACION = frozenset({"identificar_finca", "identificar_vivienda"})
+#: "Primero abre la": lo que el STT deja de una respuesta cortada cabe en pocas palabras
+_PALABRAS_FRASE_CORTADA = 3
 
 
 def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[str, str]:
     pend = dict(estado.get("pendientes", {}))
     # Sin categoría del catálogo tampoco vale: el modelo puede omitirla en vez de decir
-    # no_clasificable (2026-10-21)
+    # no_clasificable. Pero solo en frases muy cortas: "el portero automático no funciona" no
+    # tiene categoría propia y es una avería de verdad (2026-10-21)
     problema_dudoso = (
         interp.categoria in (None, CATEGORIA_NO_CLASIFICABLE)
         and estado.get("nodo_actual") in _NODOS_IDENTIFICACION
+        and len((interp.problema or "").split()) <= _PALABRAS_FRASE_CORTADA
     )
     for campo in ("direccion", "portal", "piso", "puerta", "nombre", "problema"):
         valor = getattr(interp, campo)
@@ -554,10 +621,15 @@ def _fusionar_pendientes(estado: EstadoLlamada, interp: Interpretacion) -> dict[
             pend[campo] = valor
     if interp.problema and not problema_dudoso:
         pend["problema_corto"] = interp.problema
-        for campo in ("categoria", "urgencia"):
+        for campo in ("categoria", "urgencia", "actuacion"):
             valor = getattr(interp, campo)
             if valor:
                 pend[campo] = valor
+        if interp.equipo and interp.equipo in {e["id"] for e in estado.get("equipos", [])}:
+            pend["equipo"] = interp.equipo
+        if estado.get("equipos"):
+            # La clasificación ya tuvo delante los equipos: no hace falta repetirla
+            pend["equipos_evaluados"] = "1"
     return pend
 
 
@@ -700,6 +772,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             nodo,
             catalogo=_catalogo(estado),
             oido=texto_oido_si_cortado(estado.get("entrega_ultima")),
+            equipos=equipos_para(estado),
         )
         return interp, _tiempos(
             estado, interpretacion_ms=interp.llm_ms, llm_llamadas=1, origen_interpretacion="llm"
@@ -975,6 +1048,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     v = pend.pop(k, None)
                     if v:
                         cambios["urgencia_declarada" if k == "urgencia" else k] = v
+                cambios["actuacion"] = pend.pop("actuacion", None)
+                cambios["equipo_id"] = pend.pop("equipo", None)
+                cambios["equipos_evaluados"] = bool(pend.pop("equipos_evaluados", None))
                 if cambios.get("categoria"):
                     # El resumen corto lo da la interpretación; si falta, vale la propia solicitud
                     cambios.setdefault("resumen", pend.pop("problema_corto", None) or problema)
@@ -996,7 +1072,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     **cambios,
                 )
 
-        if not estado.get("categoria"):
+        if not estado.get("categoria") or (
+            # La avería se contó antes de confirmar la finca: se clasifica otra vez con sus equipos
+            estado.get("equipos") and not estado.get("equipos_evaluados")
+        ):
             destino = "clasificar_problema"
         elif not estado.get("urgencia"):
             destino = "determinar_urgencia"
@@ -1151,6 +1230,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 finca = await deps.repo.obtener_finca(candidata)
                 assert finca is not None
                 cfg, cfg_id = await deps.repo.configuracion_efectiva(finca.id)
+                equipos = [
+                    {**e.model_dump(mode="json"), "descripcion": e.descripcion()}
+                    for e in await deps.repo.equipos_de(finca.id)
+                ]
                 return _avanzar(
                     estado,
                     "siguiente_paso",
@@ -1160,6 +1243,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                     finca_candidata_id=None,
                     configuracion=cfg.model_dump(),
                     configuracion_id=cfg_id,
+                    equipos=equipos,
                     pendientes=_fusionar_pendientes(estado, interp),
                     validaciones=[*estado.get("validaciones", []), "finca_confirmada_verbalmente"],
                     traza=_con_traza(estado, nodo, "finca_confirmada", finca.direccion),
@@ -1223,7 +1307,12 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             key=lambda p: p[0],
             reverse=True,
         )
-        if puntuadas and puntuadas[0][0] >= UMBRAL_FINCA and len(entrada.split()) <= 8:
+        if (
+            puntuadas
+            and puntuadas[0][0] >= UMBRAL_FINCA
+            and len(entrada.split()) <= 8
+            and _solo_direccion(entrada, puntuadas[0][1].direccion)
+        ):
             puntuacion, finca = puntuadas[0]
             return _preguntar(
                 estado,
@@ -1433,13 +1522,18 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         resumen = estado.get("resumen")
         tiempos = dict(estado.get("tiempos_turno", {}))
         senales = dict(estado.get("senales_confianza") or {})
-        if not categoria:
+        actuacion, equipo_id = estado.get("actuacion"), estado.get("equipo_id")
+        equipos = equipos_para(estado)
+        if not categoria or (equipos and not estado.get("equipos_evaluados")):
             t0 = perf_counter()
             extraido = await deps.llm.extraer(
-                sistema_clasificacion(catalogo),
+                sistema_clasificacion(catalogo, equipos),
                 estado.get("solicitud") or "",
                 esquema_clasificacion(catalogo),
             )
+            actuacion = extraido.get("actuacion")
+            ids = {i for i, _ in equipos or []}
+            equipo_id = extraido.get("equipo") if extraido.get("equipo") in ids else None
             ms = int((perf_counter() - t0) * 1000)
             tiempos = _tiempos(estado, clasificacion_ms=ms, llm_llamadas=1)
             categoria, urgencia, resumen = (
@@ -1464,6 +1558,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         return _avanzar(
             estado,
             "determinar_urgencia",
+            actuacion=actuacion if actuacion in ACTUACIONES else "reparacion",
+            equipo_id=equipo_id,
+            equipos_evaluados=True,
             categoria=categoria,
             urgencia_declarada=urgencia,
             resumen=(resumen or estado.get("solicitud") or "").strip(),
@@ -1474,7 +1571,10 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         )
 
     def _merece_detalle(estado: EstadoLlamada) -> bool:
-        """Una descripción corta se beneficia de una pregunta de detalle; una larga no."""
+        """Una descripción corta se beneficia de una pregunta de detalle; una larga no. Si no es
+        una reparación (vandalismo, obra...), el detalle técnico lo valora el administrador."""
+        if (estado.get("actuacion") or "reparacion") != "reparacion":
+            return False
         solicitud = estado.get("solicitud") or ""
         return len(solicitud.split()) < 18
 
@@ -1483,9 +1583,17 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         nodo = "pedir_detalle"
         entrada = estado.get("entrada_usuario")
         if entrada is None:
-            pregunta = _PREGUNTAS_DETALLE.get(
-                estado.get("categoria") or "", _PREGUNTAS_DETALLE["_"]
+            equipo = next(
+                (e for e in estado.get("equipos", []) if e["id"] == estado.get("equipo_id")), None
             )
+            if equipo:
+                # La pregunta de la categoría ("para orientar al electricista") no sirve para un
+                # portero o un ascensor concretos
+                pregunta = f"¿Qué le pasa exactamente al {equipo['tipo']} y desde cuándo?"
+            else:
+                pregunta = _PREGUNTAS_DETALLE.get(
+                    estado.get("categoria") or "", _PREGUNTAS_DETALLE["_"]
+                )
             return _preguntar(estado, nodo, pregunta, detalle_pedido=True)
         interp, historial, extra, salida = await _turno(estado, nodo)
         if salida:
@@ -1533,15 +1641,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         nodo = "confirmar_resumen"
         entrada = estado.get("entrada_usuario")
         if entrada is None:
-            categoria = estado.get("categoria")
-            # Nunca se le dice al vecino que "no se ha podido clasificar": se registra igual
-            texto_cat = (
-                render("confirmar_resumen.categoria_no_clasificable")
-                if categoria == CATEGORIA_NO_CLASIFICABLE
-                else render(
-                    "confirmar_resumen.categoria", categoria=categoria_hablada(categoria or "")
-                )
-            )
+            # La categoría y la urgencia son internas: no se leen al vecino (Andreu, 2026-10-21).
+            # Se siguen pasando para que una plantilla publicada que las use no se rompa.
+            categoria = estado.get("categoria") or ""
             # El nombre se repite para que el vecino pueda corregir lo que el STT oyó mal
             quien = f"{nombre}, " if (nombre := estado.get("nombre_declarado")) else ""
             return _preguntar(
@@ -1550,8 +1652,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 render(
                     "confirmar_resumen.resumen",
                     quien=quien,
-                    resumen=estado.get("resumen"),
-                    categoria=_mayuscula_inicial(texto_cat),
+                    resumen=(estado.get("resumen") or "").rstrip(". "),
+                    categoria=categoria_hablada(categoria),
                     urgencia=estado.get("urgencia"),
                 ),
             )
@@ -1592,6 +1694,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 urgencia_declarada=None,
                 resumen=None,
                 confirmado=None,
+                equipo_id=None,
+                actuacion=None,
             )
             pend["problema"] = entrada.strip()
             pend["problema_corto"] = interp.problema
@@ -1630,12 +1734,20 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                 **extra,
             )
         if interp.confirma is True:
+            # "Sí, pero eso no lo arregla un electricista": los hechos valen, el reparto lo
+            # decide el administrador
             return _avanzar(
                 estado,
                 "validar_datos",
                 historial=historial,
                 confirmado=True,
-                traza=_con_traza(estado, nodo, "confirmado"),
+                objecion=interp.objecion,
+                traza=_con_traza(
+                    estado,
+                    nodo,
+                    "confirmado_con_objecion" if interp.objecion else "confirmado",
+                    interp.objecion or "",
+                ),
                 **extra,
             )
         if interp.confirma is False:
@@ -1748,39 +1860,65 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         )
 
     async def asignar_especialista(estado: EstadoLlamada) -> dict[str, Any]:
+        """A quién va la incidencia (regla de Andreu, 2026-10-21, Provisional).
+
+        Se avisa directamente solo a una reparación con alguien que la atienda: primero el
+        mantenedor del equipo afectado, si no el especialista de la categoría. Si no es una
+        reparación o el vecino puso una pega, decide el administrador con una sugerencia."""
         nodo = "asignar_especialista"
         cfg = _config(estado)
         finca = await deps.repo.obtener_finca(estado["finca_id"])  # type: ignore[arg-type]
         assert finca is not None
-        especialista_id = cfg.especialista_por_categoria.get(estado.get("categoria") or "")
         especialistas = {e.id: e for e in await deps.repo.especialistas_de(finca.administrador_id)}
-        especialista = especialistas.get(especialista_id) if especialista_id else None
-        if especialista is None:
-            # Sin especialista: la incidencia queda pendiente para el administrador
+        equipo = next(
+            (e for e in estado.get("equipos", []) if e["id"] == estado.get("equipo_id")), None
+        )
+        mantenedor = especialistas.get(equipo["mantenedor_id"]) if equipo else None
+        id_categoria = cfg.especialista_por_categoria.get(estado.get("categoria") or "")
+        de_categoria = especialistas.get(id_categoria) if id_categoria else None
+        propuesto = mantenedor or de_categoria
+
+        actuacion = estado.get("actuacion") or "reparacion"
+        objecion = estado.get("objecion")
+        motivo: str | None = None
+        if objecion:
+            motivo = f"objecion_vecino:{objecion}"
+        elif actuacion != "reparacion":
+            motivo = f"actuacion:{actuacion}"
+        elif propuesto is None:
             motivo = (
-                f"especialista_inexistente:{especialista_id}"
-                if especialista_id
+                f"especialista_inexistente:{id_categoria}"
+                if id_categoria
                 else "sin_especialista_para_categoria"
             )
+        sugerencia = _sugerencia(actuacion, objecion, equipo, mantenedor, propuesto)
+        if motivo is not None:
             return _avanzar(
                 estado,
                 "crear_ticket",
                 especialista_id=None,
                 especialista_nombre=None,
                 motivo_revision=motivo,
+                sugerencia=sugerencia,
                 validaciones=[*estado.get("validaciones", []), "pendiente_administrador"],
-                traza=_con_traza(estado, nodo, "sin_especialista", motivo),
+                traza=_con_traza(estado, nodo, "para_administrador", motivo),
             )
+        assert propuesto is not None
         return _avanzar(
             estado,
             "crear_ticket",
-            especialista_id=especialista.id,
-            especialista_nombre=especialista.nombre,
+            especialista_id=propuesto.id,
+            especialista_nombre=propuesto.nombre,
+            sugerencia=sugerencia,
             validaciones=[
                 *estado.get("validaciones", []),
-                "especialista_pertenece_al_administrador",
+                "mantenedor_del_equipo"
+                if mantenedor
+                else "especialista_pertenece_al_administrador",
             ],
-            traza=_con_traza(estado, nodo, "asignado", especialista.nombre),
+            traza=_con_traza(
+                estado, nodo, "asignado_mantenedor" if mantenedor else "asignado", propuesto.nombre
+            ),
         )
 
     async def crear_ticket(estado: EstadoLlamada) -> dict[str, Any]:
@@ -1796,6 +1934,9 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             urgencia=estado["urgencia"],  # type: ignore[arg-type]
             estado="asignada" if estado.get("especialista_id") else "pendiente",
             creada_en=datetime.now(UTC),
+            equipo_id=estado.get("equipo_id"),
+            actuacion=estado.get("actuacion") or "reparacion",  # type: ignore[arg-type]
+            sugerencia=estado.get("sugerencia"),
         )
         await deps.repo.guardar_llamada(_llamada_desde(estado, "incidencia_creada"))
         await deps.repo.guardar_incidencia(incidencia)
@@ -1824,7 +1965,15 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if especialista is None:
             destino = cfg.contacto.correo if cfg.contacto else "administrador"
             canal = "correo"
-            aviso = render("avisar_canal.aviso_sin_especialista", contacto=contacto)
+            # Sin profesional para una reparación, el administrador lo asigna; si no es una
+            # reparación (o el vecino puso una pega), decide cómo se resuelve
+            sin_profesional = (estado.get("motivo_revision") or "").startswith(
+                ("sin_especialista", "especialista_inexistente")
+            )
+            if sin_profesional:
+                aviso = render("avisar_canal.aviso_sin_especialista", contacto=contacto)
+            else:
+                aviso = render("avisar_canal.aviso_administrador", contacto=contacto)
         elif destino_regla == "coordinador":
             destino = cfg.contacto.correo if cfg.contacto else "coordinador"
             aviso = render(

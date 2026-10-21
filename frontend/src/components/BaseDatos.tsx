@@ -154,6 +154,34 @@ function TarjetaFinca({
             <Viviendas viviendas={finca.viviendas} resaltada={identificada ? resaltado?.viviendaId : null} />
           </section>
 
+          {finca.equipos.length > 0 && (
+            <section>
+              <h4>Equipos y quién los mantiene</h4>
+              <ul className="bd-filas">
+                {finca.equipos.map((e) => {
+                  const m = e.mantenedor_id ? profesionalPorId[e.mantenedor_id] : undefined
+                  const condiciones = [e.contrato && `contrato ${e.contrato}`, e.garantia_hasta && `garantía hasta ${e.garantia_hasta}`]
+                    .filter(Boolean)
+                    .join(' · ')
+                  return (
+                    <li key={e.id}>
+                      <span className="bd-fila-clave">{e.descripcion}</span>
+                      {m ? (
+                        <span className="bd-fila-valor">
+                          <b>{m.nombre}</b>
+                          <Contacto canal={m.canal_contacto} destino={m.destino} />
+                          {condiciones && <small className="is-muted"> · {condiciones}</small>}
+                        </span>
+                      ) : (
+                        <span className="bd-fila-valor is-muted">Sin mantenedor: se avisa al profesional de la categoría</span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+
           <section>
             <h4>Quién atiende cada avería</h4>
             <ul className="bd-filas">

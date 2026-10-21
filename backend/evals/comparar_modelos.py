@@ -101,6 +101,7 @@ async def evaluar_interpretacion(
                     caso["nodo"],
                     catalogo=catalogo,
                     oido=caso.get("oido"),  # el vecino cortó el mensaje (ledger de entrega)
+                    equipos=[tuple(e) for e in caso["equipos"]] if caso.get("equipos") else None,
                 )
             except Exception as e:  # noqa: BLE001
                 fallos.append(f"ERROR {caso['entrada'][:40]!r}: {e}")
@@ -148,7 +149,11 @@ async def evaluar_clasificacion(llm: Any, casos: list[dict[str, Any]], reps: int
             # Como `clasificar_problema`: sin categoría o fuera del catálogo es no_clasificable
             if r.get("categoria") not in catalogo:
                 r["categoria"] = CATEGORIA_NO_CLASIFICABLE
-            if r.get("categoria") == caso["categoria"]:
+            # Con varias categorías válidas (el portero no tiene una clara) vale cualquiera
+            validas = (
+                caso["categoria"] if isinstance(caso["categoria"], list) else [caso["categoria"]]
+            )
+            if r.get("categoria") in validas:
                 cat_ok += 1
             else:
                 fallos.append(

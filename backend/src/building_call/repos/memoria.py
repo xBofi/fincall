@@ -16,6 +16,7 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import (
     Administrador,
+    Equipo,
     Especialista,
     Finca,
     Incidencia,
@@ -80,6 +81,59 @@ class RepositorioMemoria:
                 canal_contacto="correo",
                 destino="cerrajeria@demo.test",
             ),
+            # Mantenedores de equipos concretos (no son el especialista de ninguna categoría)
+            "esp-porteros": Especialista(
+                id="esp-porteros",
+                administrador_id="adm-demo",
+                nombre="Porteros Levante",
+                categoria_principal="electricidad",
+                canal_contacto="correo",
+                destino="soporte@porteroslevante.demo.test",
+            ),
+            "esp-automatismos": Especialista(
+                id="esp-automatismos",
+                administrador_id="adm-demo",
+                nombre="Automatismos Sur",
+                categoria_principal="cerrajeria",
+                canal_contacto="llamada",
+                destino="+34600000002",
+            ),
+        }
+        # Inventario de demostración, hasta que el administrador dé el real (Pendiente)
+        self.equipos: dict[str, list[Equipo]] = {
+            "finca-mayor-12": [
+                Equipo(
+                    id="eq-mayor12-portero",
+                    finca_id="finca-mayor-12",
+                    tipo="portero automático",
+                    ubicacion="portal",
+                    marca="Fermax",
+                    modelo="Citymax",
+                    instalador="Porteros Levante",
+                    mantenedor_id="esp-porteros",
+                    contrato="PL-2024-118",
+                ),
+                Equipo(
+                    id="eq-mayor12-ascensor",
+                    finca_id="finca-mayor-12",
+                    tipo="ascensor",
+                    marca="Orona",
+                    instalador="Orona",
+                    mantenedor_id="esp-ascensores",
+                    contrato="AN-5531",
+                ),
+            ],
+            "finca-alameda-5": [
+                Equipo(
+                    id="eq-alameda5-garaje",
+                    finca_id="finca-alameda-5",
+                    tipo="puerta de garaje automática",
+                    ubicacion="garaje",
+                    marca="Nice",
+                    instalador="Automatismos Sur",
+                    mantenedor_id="esp-automatismos",
+                ),
+            ],
         }
         self.fincas = {
             "finca-mayor-12": Finca(
@@ -145,6 +199,9 @@ class RepositorioMemoria:
     async def especialistas_de(self, administrador_id: str) -> list[Especialista]:
         return [e for e in self.especialistas.values() if e.administrador_id == administrador_id]
 
+    async def equipos_de(self, finca_id: str) -> list[Equipo]:
+        return list(self.equipos.get(finca_id, []))
+
     async def configuracion_efectiva(
         self, finca_id: str
     ) -> tuple[ConfiguracionEfectiva, str | None]:
@@ -187,6 +244,13 @@ class RepositorioMemoria:
         self._operativo()
         return next((u for u in self.usuarios.values() if u.nombre_usuario == nombre_usuario), None)
 
+    async def obtener_usuario_por_identidad(self, proveedor: str, sujeto: str) -> Usuario | None:
+        self._operativo()
+        return next(
+            (u for u in self.usuarios.values() if (u.proveedor, u.sujeto) == (proveedor, sujeto)),
+            None,
+        )
+
     async def listar_usuarios(self) -> list[Usuario]:
         self._operativo()
         return list(self.usuarios.values())
@@ -214,6 +278,11 @@ class RepositorioMemoria:
         self._operativo()
         if token_hash in self.sesiones:
             self.sesiones[token_hash].revocada_en = cuando
+
+    async def renovar_sesion(self, token_hash: str, expira_en: datetime) -> None:
+        self._operativo()
+        if token_hash in self.sesiones:
+            self.sesiones[token_hash].expira_en = expira_en
 
     async def listar_llamadas(self, estado: str | None = None, limite: int = 100) -> list[Llamada]:
         filas = [ll for ll in self.llamadas.values() if estado is None or ll.estado == estado]
@@ -270,6 +339,9 @@ class RepositorioMemoria:
         self, usuario_id: str | None, accion: str, recurso: str, detalle: dict[str, Any]
     ) -> None:
         self._operativo()
+        # Como la clave foránea de Postgres: un evento solo puede citar a un usuario que existe
+        if usuario_id is not None and usuario_id not in self.usuarios:
+            raise KeyError(f"auditoría de un usuario inexistente: {usuario_id}")
         self.auditoria.append(
             {
                 "usuario_id": usuario_id,

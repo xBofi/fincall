@@ -20,7 +20,7 @@
 {"solicitud": "El ascensor tarda mucho en venir", "categoria": "ascensor", "urgencias": ["baja", "media"]}
 {"solicitud": "Los botones del ascensor no se iluminan pero el ascensor funciona", "categoria": "ascensor", "urgencias": ["baja", "media"]}
 {"solicitud": "Se ha fundido la bombilla del rellano, la que está enfrente del ascensor", "categoria": "electricidad", "urgencias": ["baja", "media"]}
-{"solicitud": "El portero automático no funciona, no se oye cuando llaman", "categoria": "electricidad", "urgencias": ["baja", "media"]}
+{"solicitud": "El portero automático no funciona, no se oye cuando llaman", "categoria": ["electricidad", "no_clasificable"], "urgencias": ["baja", "media"]}
 {"solicitud": "Se ha parado otra vez", "categoria": "no_clasificable", "urgencias": ["baja", "media", "alta"]}
 {"solicitud": "Hay pintadas en la fachada del edificio", "categoria": "pintura", "urgencias": ["baja"]}
 {"solicitud": "Los setos del jardín comunitario invaden la acera", "categoria": "jardineria", "urgencias": ["baja", "media"]}

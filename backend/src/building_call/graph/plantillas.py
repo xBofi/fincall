@@ -266,22 +266,10 @@ CATALOGO: dict[str, Plantilla] = dict(
             "confirmar_resumen.resumen",
             "confirmar_resumen",
             "Se le lee al vecino lo entendido y se espera un sí o un no. {quien} es el nombre "
-            "seguido de coma si lo ha dicho; la vivienda ya está registrada y no se lee.",
-            "Le resumo: {quien}{resumen}. {categoria}, con urgencia {urgencia}. ¿Es correcto?",
+            "seguido de coma si lo ha dicho; la vivienda ya está registrada y no se lee. La "
+            "categoría y la urgencia son internas y no se leen (Andreu, 2026-10-21).",
+            "Le resumo: {quien}{resumen}. ¿Es correcto?",
             pregunta=True,
-        ),
-        _p(
-            "confirmar_resumen.categoria",
-            "confirmar_resumen",
-            "Fragmento con la categoría, dentro del resumen.",
-            "lo he clasificado como {categoria}",
-        ),
-        _p(
-            "confirmar_resumen.categoria_no_clasificable",
-            "confirmar_resumen",
-            "Fragmento cuando no encaja en el catálogo. Nunca se le dice al vecino que no se "
-            "ha podido clasificar: se registra igual.",
-            "lo registro como solicitud general para el administrador",
         ),
         _p(
             "confirmar_resumen.confirmar_si_no",
@@ -350,6 +338,14 @@ CATALOGO: dict[str, Plantilla] = dict(
             "Por su urgencia aviso ahora mismo al coordinador y a {especialista}. "
             "{especialista_mayus} {contacto} lo antes posible para decirle cuándo puede ir; "
             "todavía no puedo confirmarle la hora.",
+        ),
+        _p(
+            "avisar_canal.aviso_administrador",
+            "avisar_canal",
+            "No es una reparación que se pueda encargar directamente (vandalismo, obra, "
+            "convivencia...) o el vecino puso una pega: decide el administrador.",
+            "Se la paso al administrador, que la revisará hoy mismo y {contacto} para decirle "
+            "cómo se va a resolver.",
         ),
         _p(
             "avisar_canal.aviso_especialista",

@@ -233,9 +233,8 @@ async def test_comentario_sobre_el_bot_no_es_una_correccion(
     estado = await _conversar(
         gestor, ["Calle Mayor 12", "sí", "1 A", "Hay que pintar las paredes del corredor"]
     )
-    assert (
-        "solicitud general" in estado["mensajes_bot"][-1] or "pintura" in estado["mensajes_bot"][-1]
-    )
+    # El resumen dice lo entendido, no la categoría interna (Andreu, 2026-10-21)
+    assert "pintar las paredes" in estado["mensajes_bot"][-1]
     assert "no he podido" not in estado["mensajes_bot"][-1].lower()
     original = llm._interpretar
     llm._interpretar = lambda usuario, esquema: {

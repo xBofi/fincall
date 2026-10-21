@@ -23,6 +23,12 @@ export interface DatosLlamada {
   confirmado: boolean | null
   especialista_id: string | null
   especialista_nombre: string | null
+  /** reparacion | reposicion | siniestro | convivencia | privativo */
+  actuacion: string | null
+  equipo_id: string | null
+  /** Para el administrador o el profesional: equipo, contrato y por qué le llega */
+  sugerencia: string | null
+  objecion: string | null
   canal_aviso: string | null
   destino_aviso: string | null
   incidencia_id: string | null
@@ -61,9 +67,21 @@ export interface VistaLlamada {
   pendientes: Record<string, string>
   tiempos: TiemposServidor
   configuracion: Record<string, unknown> | null
+  /** Ledger de entrega: qué frases del último mensaje oyó el vecino. */
+  entrega_ultima?: Record<string, unknown> | null
   datos: DatosLlamada
   transcripcion?: string
   sin_voz?: boolean
+}
+
+export interface TiemposTurnoServidor {
+  turno: number
+  stt_ms: number | null
+  interpretacion_ms: number | null
+  llm_llamadas: number
+  servidor_ms: number
+  respuesta_ms: number | null
+  stt_cliente: string | null
 }
 
 export interface Salud {
@@ -74,6 +92,8 @@ export interface Salud {
   stt_servidor: string
   stt_disponible: boolean
   stt_streaming: string | null
+  /** Hay servidor de LiveKit configurado: la consola puede hablar por WebRTC con el agente. */
+  livekit: boolean
   /** Voz del servidor (la del teléfono); null si no hay y la consola usa la del navegador. */
   tts_servidor: string | null
   grafos: string[]
@@ -128,27 +148,40 @@ const json = (body: unknown, method = 'POST'): RequestInit => ({
 
 export type Rol = 'owner' | 'administrador' | 'calidad'
 
+export type EstadoAccesoUsuario = 'sin_solicitar' | 'solicitado' | 'concedido' | 'denegado'
+
 export interface UsuarioConsola {
   id: string
   nombre_usuario: string
   nombre: string | null
   rol: Rol
   activo: boolean
-  debe_cambiar_contrasena: boolean
+  email: string | null
+  /** 'google' | 'microsoft'; null en las cuentas antiguas con contraseña */
+  proveedor: string | null
+  estado_acceso: EstadoAccesoUsuario
+  solicitado_en: string | null
   creado_en: string | null
 }
 
 export interface EstadoAcceso {
-  modo: 'local'
+  modo: 'oidc'
   autenticado: boolean
   usuario: UsuarioConsola | null
 }
 
+export interface ProveedorAcceso {
+  id: 'google' | 'microsoft'
+  etiqueta: string
+}
+
 export const auth = {
   estado: () => pedir<EstadoAcceso>('/api/auth/estado'),
-  login: (usuario: string, contrasena: string) => pedir<UsuarioConsola>('/api/auth/login', json({ usuario, contrasena })),
+  proveedores: () => pedir<ProveedorAcceso[]>('/api/auth/proveedores'),
+  /** Navegación completa: el proveedor vuelve a /api/auth/oidc/{id}/retorno y de ahí a la consola */
+  entrarCon: (id: string) => window.location.assign(`/api/auth/oidc/${id}/inicio`),
+  solicitar: () => pedir<UsuarioConsola>('/api/auth/solicitar', { method: 'POST' }),
   logout: () => pedir<unknown>('/api/auth/logout', { method: 'POST' }),
-  cambiarContrasena: (actual: string, nueva: string) => pedir<UsuarioConsola>('/api/auth/contrasena', json({ actual, nueva })),
 }
 
 export interface EstadoTelefonia {
@@ -168,11 +201,10 @@ export const telefonia = {
 
 export const usuarios = {
   listar: () => pedir<UsuarioConsola[]>('/api/usuarios'),
-  crear: (datos: { nombre_usuario: string; rol: Rol; nombre?: string }) =>
-    pedir<UsuarioConsola & { contrasena_temporal: string | null }>('/api/usuarios', json(datos)),
+  conceder: (id: string, rol: Rol) => pedir<UsuarioConsola>(`/api/usuarios/${id}/conceder`, json({ rol })),
+  denegar: (id: string) => pedir<UsuarioConsola>(`/api/usuarios/${id}/denegar`, { method: 'POST' }),
   modificar: (id: string, cambios: { rol?: Rol; activo?: boolean; nombre?: string }) =>
     pedir<UsuarioConsola>(`/api/usuarios/${id}`, json(cambios, 'PATCH')),
-  restablecer: (id: string) => pedir<UsuarioConsola & { contrasena_temporal: string }>(`/api/usuarios/${id}/restablecer`, { method: 'POST' }),
   eliminar: (id: string) => pedir<void>(`/api/usuarios/${id}`, { method: 'DELETE' }),
 }
 
@@ -239,6 +271,12 @@ export const api = {
     pedir<unknown>(`/api/llamadas/${id}/metricas`, json(cuerpo)),
   entrega: (id: string, turno: number, estado: string, ratio: number, texto_entregado: string) =>
     pedir<unknown>(`/api/llamadas/${id}/entrega`, json({ turno, estado, ratio, texto_entregado })),
+  obtener: (id: string) => pedir<VistaLlamada>(`/api/llamadas/${id}`),
+  /** Tiempos por turno que guarda el servidor (los del agente de LiveKit incluidos) */
+  metricasLlamada: (id: string) =>
+    pedir<{ turnos: TiemposTurnoServidor[] }>(`/api/llamadas/${id}/metricas`),
+  tokenLiveKit: (llamada_id: string) =>
+    pedir<{ url: string; token: string; sala: string }>('/api/livekit/token', json({ llamada_id })),
 }
 
 // ---------------------------------------------------------------- flujo del asistente
@@ -328,8 +366,22 @@ export interface ViviendaCatalogo {
   puerta: string
 }
 
+export interface EquipoCatalogo {
+  id: string
+  tipo: string
+  descripcion: string
+  ubicacion: string | null
+  marca: string | null
+  modelo: string | null
+  instalador: string | null
+  mantenedor_id: string | null
+  contrato: string | null
+  garantia_hasta: string | null
+}
+
 export interface FincaDetalle extends Omit<FincaResumen, 'viviendas'> {
   viviendas: ViviendaCatalogo[]
+  equipos: EquipoCatalogo[]
   configuracion_efectiva: Record<string, unknown>
   configuracion_id: string | null
 }

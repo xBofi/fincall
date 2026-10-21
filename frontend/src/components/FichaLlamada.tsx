@@ -42,7 +42,7 @@ function pasos(v: VistaLlamada): Paso[] {
     },
     { titulo: 'Resumen confirmado', valor: d.confirmado ? 'Sí, el vecino lo confirmó' : null, nodos: ['confirmar_resumen'] },
     { titulo: 'Incidencia', valor: d.incidencia_id ? `Creada · ref. ${d.incidencia_id}` : null, nodos: ['validar_datos', 'crear_ticket'] },
-    { titulo: 'Aviso (simulado)', valor: aviso, nodos: ['asignar_especialista', 'avisar_canal'] },
+    { titulo: 'Aviso (simulado)', valor: aviso, nodos: ['asignar_especialista', 'avisar_canal'], nota: d.sugerencia },
   ]
 }
 

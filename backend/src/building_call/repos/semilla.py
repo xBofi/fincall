@@ -13,6 +13,7 @@ from building_call.repos.memoria import RepositorioMemoria
 from building_call.repos.modelos_sql import (
     AdministradorSQL,
     ConfiguracionSQL,
+    EquipoSQL,
     EspecialistaSQL,
     FincaSQL,
     ViviendaSQL,
@@ -34,6 +35,10 @@ async def sembrar(database_url: str) -> None:
         for viviendas in demo.viviendas.values():
             for v in viviendas:
                 await s.merge(ViviendaSQL(**v.model_dump()))
+        await s.flush()  # los equipos apuntan a fincas y especialistas
+        for equipos in demo.equipos.values():
+            for eq in equipos:
+                await s.merge(EquipoSQL(**eq.model_dump()))
         for adm_id, cfg in demo.config_administrador.items():
             await s.merge(
                 ConfiguracionSQL(

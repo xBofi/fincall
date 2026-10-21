@@ -5,10 +5,22 @@ Las configuraciones son JSONB versionadas: nunca se actualizan en sitio.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -88,12 +100,18 @@ class LlamadaSQL(Base):
 
 class UsuarioSQL(Base):
     __tablename__ = "usuarios"
+    __table_args__ = (UniqueConstraint("proveedor", "sujeto", name="uq_usuarios_identidad"),)
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     nombre_usuario: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     nombre: Mapped[str | None] = mapped_column(String(200), nullable=True)
     rol: Mapped[str] = mapped_column(String(32))
     activo: Mapped[bool] = mapped_column(Boolean, default=True)
-    hash_contrasena: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True, index=True)
+    proveedor: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sujeto: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    estado_acceso: Mapped[str] = mapped_column(String(32), default="concedido")
+    solicitado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    hash_contrasena: Mapped[str | None] = mapped_column(String(255), nullable=True)
     debe_cambiar_contrasena: Mapped[bool] = mapped_column(Boolean, default=False)
     creado_en: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, server_default=func.now()
@@ -159,6 +177,20 @@ class AuditoriaEventoSQL(Base):
     )
 
 
+class EquipoSQL(Base):
+    __tablename__ = "equipos"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    finca_id: Mapped[str] = mapped_column(ForeignKey("fincas.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(120))
+    ubicacion: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    marca: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    modelo: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    instalador: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    mantenedor_id: Mapped[str | None] = mapped_column(ForeignKey("especialistas.id"), nullable=True)
+    contrato: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    garantia_hasta: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
 class IncidenciaSQL(Base):
     __tablename__ = "incidencias"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -173,6 +205,9 @@ class IncidenciaSQL(Base):
     urgencia: Mapped[str] = mapped_column(String(16))
     estado: Mapped[str] = mapped_column(String(32), default="pendiente")
     creada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    equipo_id: Mapped[str | None] = mapped_column(ForeignKey("equipos.id"), nullable=True)
+    actuacion: Mapped[str] = mapped_column(String(32), default="reparacion")
+    sugerencia: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class IncidenciaHistorialSQL(Base):

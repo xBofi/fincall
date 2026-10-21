@@ -32,14 +32,25 @@ from building_call.grabacion import GrabadorConversacion
 from building_call.graph import plantillas
 from building_call.graph.estado import EstadoLlamada
 from building_call.graph.ledger import texto_oido_si_cortado
-from building_call.graph.nodos import Dependencias, catalogo_para, clave_especulacion
+from building_call.graph.nodos import (
+    Dependencias,
+    catalogo_para,
+    clave_especulacion,
+    equipos_para,
+)
 from building_call.graph.registro import REGISTRO
+from building_call.livekit_api import (
+    crear_router_livekit,
+    livekit_configurado,
+    requiere_usuario_o_agente,
+)
 from building_call.llm.carrera import ModeloCarrera
 from building_call.llm.interpretacion import interpretar
 from building_call.llm.ollama import ModeloOllama
 from building_call.llm.vertex import ModeloVertex
 from building_call.llm.workers_ai import ModeloWorkersAI
 from building_call.metricas import UMBRALES_MS
+from building_call.oidc import ClienteOidc
 from building_call.operaciones_api import crear_router_operaciones
 from building_call.repos.memoria import RepositorioMemoria
 from building_call.servicios import GestorLlamadas, LlamadaNoEncontrada
@@ -133,6 +144,7 @@ def _vista(estado: EstadoLlamada) -> dict[str, Any]:
         "solicitud", "categoria", "urgencia", "urgencia_declarada", "resumen", "confirmado",
         "especialista_id", "especialista_nombre", "canal_aviso", "destino_aviso", "incidencia_id",
         "resultado", "motivo_revision", "configuracion_id", "grafo", "intentos_finca", "intentos_vivienda",
+        "actuacion", "equipo_id", "sugerencia", "objecion",
     ]  # fmt: skip
     return {
         "llamada_id": estado["llamada_id"],
@@ -148,6 +160,7 @@ def _vista(estado: EstadoLlamada) -> dict[str, Any]:
         "interpretacion": estado.get("interpretacion"),
         "pendientes": estado.get("pendientes", {}),
         "entrega_ultima": estado.get("entrega_ultima"),
+        "piezas": estado.get("piezas_bot", []),
         "tiempos": estado.get("tiempos_turno", {}),
         "configuracion": estado.get("configuracion"),
         "datos": {c: estado.get(c) for c in campos},
@@ -266,6 +279,7 @@ def crear_app(
     deps: Dependencias | None = None,
     stt: ReconocedorVoz | None = None,
     fabrica_streaming: FabricaStreaming | None | Any = AUTO,
+    oidc: ClienteOidc | None = None,
 ) -> FastAPI:
     if deps is None:
         if settings.repositorio == "postgres":
@@ -295,7 +309,11 @@ def crear_app(
             await deps.llm.calentar()
         if hasattr(reconocedor, "calentar"):
             await reconocedor.calentar()
-        await acceso.asegurar_admin_inicial()
+        if not acceso.proveedores():
+            logger.warning(
+                "Sin Google ni Microsoft configurados nadie puede entrar en la consola "
+                "(BC_GOOGLE_CLIENT_ID / BC_MICROSOFT_CLIENT_ID en backend/.env)"
+            )
         # Las plantillas publicadas se cargan una vez: durante la llamada, `render` solo mira
         # un diccionario en memoria (el presupuesto de latencia no admite una consulta por frase)
         try:
@@ -319,7 +337,7 @@ def crear_app(
     )
     # Consola operativa: acceso (usuarios internos + cookie de sesión), APIs protegidas y audio
     secreto = secreto_de_firma()
-    acceso = Acceso(deps.repo, settings)  # type: ignore[arg-type]
+    acceso = Acceso(deps.repo, settings, oidc)  # type: ignore[arg-type]
     almacen_audio = AlmacenAudio(
         settings.audio_dir, secreto, settings.audio_retencion_dias, settings.audio_url_segundos
     )
@@ -350,6 +368,9 @@ def crear_app(
     # Las APIs de la llamada de la consola (iniciar, mensajes, voz, métricas) exigen sesión: la
     # telefonía entra por su propio adaptador firmado, así que ya no hay motivo para dejarlas abiertas
     protegido = [Depends(acceso.requiere())]
+    # Las rutas de una llamada también las usa el agente de voz de LiveKit, con su secreto
+    llamada_protegida = [Depends(requiere_usuario_o_agente(acceso))]
+    app.include_router(crear_router_livekit(acceso))
 
     @app.get("/api/telefonia/estado")
     async def telefonia_estado(_: Any = Depends(acceso.requiere())) -> dict[str, Any]:  # noqa: B008
@@ -390,6 +411,7 @@ def crear_app(
             "stt_servidor": reconocedor.nombre,
             "stt_disponible": reconocedor.disponible(),
             "stt_streaming": "assemblyai-eu" if fabrica_streaming else None,
+            "livekit": livekit_configurado(),
             "acceso": acceso.modo,
             "telefonia": settings.telefonia if telefonia_lista() is None else None,
             "tts_servidor": tts.nombre if tts.disponible() else None,
@@ -405,11 +427,51 @@ def crear_app(
             salida.append({**f.model_dump(), "viviendas": [v.etiqueta() for v in viviendas]})
         return salida
 
-    @app.post("/api/llamadas", status_code=201, dependencies=protegido)
+    def especular(llamada_id: str, parcial: str) -> None:
+        """Lanza la interpretación LLM sobre el transcript parcial, antes del fin de turno.
+
+        Solo una en vuelo: un parcial nuevo cancela la anterior. Si el final coincide con el
+        último parcial, `_interpretar` reutiliza el resultado (medido: ahorra ~0,5-0,9 s)."""
+        if len(parcial.split()) < 2:
+            return
+        clave = clave_especulacion(parcial)
+        propias = deps.especulaciones.get(llamada_id, {})
+        if clave in propias:
+            return
+        try:
+            estado_actual = gestor.obtener(llamada_id)
+        except LlamadaNoEncontrada:
+            return
+        deps.descartar_especulaciones(llamada_id)
+        deps.especulaciones[llamada_id] = {}
+        deps.especulaciones[llamada_id][clave] = asyncio.ensure_future(
+            interpretar(
+                deps.llm,
+                estado_actual.get("ultima_pregunta"),
+                parcial,
+                estado_actual.get("nodo_actual", ""),
+                catalogo=catalogo_para(estado_actual),
+                oido=texto_oido_si_cortado(estado_actual.get("entrega_ultima")),
+                equipos=equipos_para(estado_actual),
+            )
+        )
+
+    @app.get("/api/voz/vocabulario", dependencies=llamada_protegida)
+    async def vocabulario() -> list[str]:
+        """Términos de las fincas para el STT del agente de voz (calles, portales, puertas)."""
+        return await vocabulario_stt(deps.repo)
+
+    @app.post("/api/llamadas/{llamada_id}/parcial", status_code=202, dependencies=llamada_protegida)
+    async def parcial(llamada_id: str, cuerpo: Mensaje) -> dict[str, bool]:
+        """Transcript parcial del agente de voz: adelanta la interpretación (como el WebSocket)."""
+        especular(llamada_id, cuerpo.texto)
+        return {"aceptado": True}
+
+    @app.post("/api/llamadas", status_code=201, dependencies=llamada_protegida)
     async def iniciar(cuerpo: NuevaLlamada) -> dict[str, Any]:
         return _vista(await gestor.iniciar(cuerpo.telefono_llamante))
 
-    @app.post("/api/llamadas/{llamada_id}/mensajes", dependencies=protegido)
+    @app.post("/api/llamadas/{llamada_id}/mensajes", dependencies=llamada_protegida)
     async def mensaje(llamada_id: str, cuerpo: Mensaje) -> dict[str, Any]:
         try:
             return _vista(await gestor.mensaje(llamada_id, cuerpo.texto))
@@ -528,40 +590,12 @@ def crear_app(
                 pcm = await tts.sintetizar(texto)
                 grabador.escribir_asistente(pcm, int(tts.tasa), desde=marca)
 
-        def especular(parcial: str) -> None:
-            """Lanza la interpretación LLM sobre el transcript parcial, antes del fin de turno.
-
-            Solo una en vuelo: un parcial nuevo cancela la anterior. Si el final coincide con el
-            último parcial, `_interpretar` reutiliza el resultado (medido: ahorra ~0,5-0,9 s)."""
-            if len(parcial.split()) < 2:
-                return
-            clave = clave_especulacion(parcial)
-            propias = deps.especulaciones.get(llamada_id, {})
-            if clave in propias:
-                return
-            try:
-                estado_actual = gestor.obtener(llamada_id)
-            except LlamadaNoEncontrada:
-                return
-            deps.descartar_especulaciones(llamada_id)
-            deps.especulaciones[llamada_id] = {}
-            deps.especulaciones[llamada_id][clave] = asyncio.ensure_future(
-                interpretar(
-                    deps.llm,
-                    estado_actual.get("ultima_pregunta"),
-                    parcial,
-                    estado_actual.get("nodo_actual", ""),
-                    catalogo=catalogo_para(estado_actual),
-                    oido=texto_oido_si_cortado(estado_actual.get("entrega_ultima")),
-                )
-            )
-
         async def bombear_eventos() -> None:
             nonlocal texto_bot
             async for ev in sesion.eventos():
                 if ev.tipo == "parcial":
                     await ws.send_json({"type": "parcial", "texto": ev.texto})
-                    especular(ev.texto)
+                    especular(llamada_id, ev.texto)
                 elif ev.tipo == "error":
                     await ws.send_json({"type": "error", "mensaje": ev.texto})
                 elif ev.tipo == "final":
@@ -665,7 +699,7 @@ def crear_app(
             except Exception:  # noqa: BLE001
                 pass
 
-    @app.post("/api/llamadas/{llamada_id}/entrega", dependencies=protegido)
+    @app.post("/api/llamadas/{llamada_id}/entrega", dependencies=llamada_protegida)
     async def entrega(llamada_id: str, cuerpo: Entrega) -> dict[str, Any]:
         try:
             estado = gestor.registrar_entrega(
@@ -700,14 +734,14 @@ def crear_app(
             headers={"X-Tasa": str(tts.tasa), "Cache-Control": "no-store"},
         )
 
-    @app.post("/api/llamadas/{llamada_id}/metricas", dependencies=protegido)
+    @app.post("/api/llamadas/{llamada_id}/metricas", dependencies=llamada_protegida)
     async def metricas_cliente(llamada_id: str, cuerpo: MetricasCliente) -> dict[str, Any]:
         t = gestor.metricas.completar_cliente(llamada_id, cuerpo.turno, cuerpo.model_dump())
         if t is None:
             raise HTTPException(404, "Turno no encontrado")
         return t.como_dict()
 
-    @app.get("/api/llamadas/{llamada_id}", dependencies=protegido)
+    @app.get("/api/llamadas/{llamada_id}", dependencies=llamada_protegida)
     async def obtener(llamada_id: str) -> dict[str, Any]:
         try:
             return _vista(gestor.obtener(llamada_id))

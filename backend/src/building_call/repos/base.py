@@ -7,6 +7,7 @@ from typing import Protocol
 from building_call.domain.configuracion import ConfiguracionEfectiva
 from building_call.domain.entidades import (
     Administrador,
+    Equipo,
     Especialista,
     Finca,
     Incidencia,
@@ -25,6 +26,8 @@ class Repositorio(Protocol):
     async def viviendas_de(self, finca_id: str) -> list[Vivienda]: ...
 
     async def especialistas_de(self, administrador_id: str) -> list[Especialista]: ...
+
+    async def equipos_de(self, finca_id: str) -> list[Equipo]: ...
 
     async def configuracion_efectiva(
         self, finca_id: str

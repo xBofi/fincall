@@ -161,8 +161,8 @@ async def test_historial_contiene_turnos_de_bot_y_vecino(gestor: GestorLlamadas)
     assert estado["historial"][0]["texto"].startswith("Hola")
 
 
-async def test_el_resumen_nombra_la_categoria_como_se_dice(gestor: GestorLlamadas) -> None:
-    """El código interno (`fontaneria`) no se lee en voz alta: el vecino oye «fontanería»."""
+async def test_el_resumen_no_lee_la_categoria(gestor: GestorLlamadas) -> None:
+    """La categoría es interna: el vecino oye lo que ha contado, no «fontanería» (2026-10-21)."""
     estado = await _conversar(
         gestor,
         [
@@ -173,7 +173,8 @@ async def test_el_resumen_nombra_la_categoria_como_se_dice(gestor: GestorLlamada
         ],
     )
     resumen = " ".join(estado["mensajes_bot"])
-    assert "fontanería" in resumen and "fontaneria" not in resumen
+    assert "fuga de agua" in resumen
+    assert "fontanería" not in resumen and "fontaneria" not in resumen
 
 
 async def test_el_cierre_respeta_las_mayusculas_del_profesional(gestor: GestorLlamadas) -> None:

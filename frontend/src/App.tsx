@@ -1,9 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Dropdown, Popover, Segmented, Slider, Spin, Switch, Tooltip, message } from 'antd'
+import { Alert, Badge, Button, Dropdown, Popover, Segmented, Slider, Spin, Switch, Tooltip, message } from 'antd'
 import {
   CheckOutlined,
   CloseOutlined,
-  KeyOutlined,
   LogoutOutlined,
   PhoneOutlined,
   ReloadOutlined,
@@ -15,6 +14,7 @@ import {
   auth,
   operaciones,
   telefonia,
+  usuarios as apiUsuarios,
   type DetalleExpediente,
   type EstadoTelefonia,
   type EstadoAcceso,
@@ -25,7 +25,7 @@ import {
   type VistaLlamada,
 } from './api'
 import Logo from './components/Logo'
-import { CambioContrasena } from './components/CambioContrasena'
+import { AccesoPendiente } from './components/AccesoPendiente'
 import { Conversacion, type EstadoVoz } from './components/Conversacion'
 import { Login } from './components/Login'
 import { BaseDatos } from './components/BaseDatos'
@@ -34,6 +34,7 @@ import { Historial } from './components/Historial'
 import { PanelEstado } from './components/PanelEstado'
 import type { TurnoMedido } from './components/PanelLatencia'
 import { useCatalogo } from './catalogo'
+import type { SesionLiveKit } from './livekit'
 import { abrirStreaming, type SesionStreaming } from './streaming'
 import { ROLES, mensajeError } from './textos'
 import {
@@ -51,11 +52,12 @@ import {
 
 // Pantallas que no se usan al simular: se descargan al abrirlas (el arranque pesa menos)
 const GestionUsuarios = lazy(() => import('./components/GestionUsuarios').then((m) => ({ default: m.GestionUsuarios })))
+const SolicitudesAcceso = lazy(() => import('./components/SolicitudesAcceso').then((m) => ({ default: m.SolicitudesAcceso })))
 const PanelFlujo = lazy(() => import('./components/PanelFlujo').then((m) => ({ default: m.PanelFlujo })))
 const PanelLatencia = lazy(() => import('./components/PanelLatencia').then((m) => ({ default: m.PanelLatencia })))
 
-type ModoStt = 'navegador' | 'servidor' | 'streaming'
-type Pantalla = 'simular' | 'historial' | 'datos' | 'flujo' | 'latencia' | 'usuarios'
+type ModoStt = 'navegador' | 'servidor' | 'streaming' | 'livekit'
+type Pantalla = 'simular' | 'historial' | 'datos' | 'flujo' | 'latencia' | 'usuarios' | 'solicitudes'
 
 /** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
 /** El barge-in (cortar al bot cuando el vecino habla) está siempre activo en la consola. */
@@ -97,16 +99,23 @@ export default function App() {
   const [seleccionado, setSeleccionado] = useState<DetalleExpediente | null>(null)
   const [pantalla, setPantalla] = useState<Pantalla>('simular')
   const [tel, setTel] = useState<EstadoTelefonia | null>(null)
-  const [cambioAbierto, setCambioAbierto] = useState(false)
+  const [solicitudes, setSolicitudes] = useState(0)
 
   const refrescarOperaciones = useCallback(async () => {
     try {
       const estado = await auth.estado()
       setAcceso(estado)
-      if (!estado.autenticado || estado.usuario?.debe_cambiar_contrasena) {
+      if (!estado.autenticado || estado.usuario?.estado_acceso !== 'concedido') {
         setResumenOps(null)
         setExpedientes([])
         return
+      }
+      // El owner ve cuántas personas esperan acceso en la pestaña Solicitudes
+      if (estado.usuario.rol === 'owner') {
+        apiUsuarios
+          .listar()
+          .then((todos) => setSolicitudes(todos.filter((u) => u.estado_acceso === 'solicitado').length))
+          .catch(() => undefined)
       }
       const [resumen, lista] = await Promise.all([operaciones.resumen(), operaciones.llamadas()])
       setResumenOps(resumen)
@@ -117,14 +126,9 @@ export default function App() {
     }
   }, [])
 
-  const sesionAbierta = useCallback(
-    (usuario: UsuarioConsola) => {
-      setAcceso({ modo: 'local', autenticado: true, usuario })
-      setPantalla('simular')
-      void refrescarOperaciones()
-    },
-    [refrescarOperaciones],
-  )
+  const personaActualizada = useCallback((usuario: UsuarioConsola) => {
+    setAcceso({ modo: 'oidc', autenticado: true, usuario })
+  }, [])
 
   const abrirExpediente = useCallback(async (id: string) => {
     try {
@@ -139,6 +143,7 @@ export default function App() {
   const cancelarEscuchaRef = useRef<() => void>(() => undefined)
   const cancelarHablaRef = useRef<() => void>(() => undefined)
   const streamingRef = useRef<SesionStreaming | null>(null)
+  const livekitRef = useRef<SesionLiveKit | null>(null)
   const bucleActivoRef = useRef(false)
   // Cada llamada (o colgar) invalida lo que siga en vuelo de la anterior: micrófono, WebSocket
   const generacionRef = useRef(0)
@@ -204,7 +209,7 @@ export default function App() {
       const t: TurnoMedido = {
         turno: v.turno,
         modo: finVozAt === null ? 'texto' : 'voz',
-        stt: finVozAt === null ? null : modo === 'streaming' ? 'servidor' : modo,
+        stt: finVozAt === null ? null : modo === 'streaming' || modo === 'livekit' ? 'servidor' : modo,
         servidor_ms: v.tiempos.servidor_ms,
         interpretacion_ms: v.tiempos.interpretacion_ms,
         llm_llamadas: v.tiempos.llm_llamadas,
@@ -377,7 +382,44 @@ export default function App() {
     cancelarHablaRef.current()
     streamingRef.current?.cerrar()
     streamingRef.current = null
+    livekitRef.current?.cerrar()
+    livekitRef.current = null
     silenciar()
+  }
+
+  /** Por LiveKit el agente del servidor escucha y habla; la consola solo enseña la llamada. */
+  const iniciarLiveKit = async () => {
+    const v = await api.iniciar()
+    vistaRef.current = v
+    setVista(v)
+    const generacion = generacionRef.current
+    // Carga bajo demanda: livekit-client solo hace falta en este modo
+    const { abrirLiveKit } = await import('./livekit')
+    const sesion = await abrirLiveKit(v.llamada_id, {
+      onVista: (nueva) => {
+        vistaRef.current = nueva
+        setVista(nueva)
+      },
+      onTiempos: (ts) =>
+        setTurnos(
+          ts.map((t) => ({
+            turno: t.turno,
+            modo: 'voz',
+            stt: 'servidor',
+            stt_ms: t.stt_ms ?? undefined,
+            servidor_ms: t.servidor_ms,
+            interpretacion_ms: t.interpretacion_ms ?? undefined,
+            llm_llamadas: t.llm_llamadas,
+            respuesta_ms: t.respuesta_ms ?? undefined,
+          })),
+        ),
+      onHablando: (quien) =>
+        setEstadoVoz(quien === 'bot' ? 'respondiendo' : quien === 'vecino' ? 'hablando' : 'esperando_voz'),
+      onCerrada: () => setEstadoVoz('inactivo'),
+    })
+    // Si se colgó mientras se conectaba, la sesión recién abierta no debe quedarse viva
+    if (generacion !== generacionRef.current) sesion.cerrar()
+    else livekitRef.current = sesion
   }
 
   const iniciar = async () => {
@@ -387,6 +429,10 @@ export default function App() {
     setTurnos([])
     bucleActivoRef.current = true
     try {
+      if (opcionesRef.current.modoStt === 'livekit') {
+        await iniciarLiveKit()
+        return
+      }
       const v = await api.iniciar()
       if (opcionesRef.current.modoStt === 'streaming' && opcionesRef.current.manosLibres) {
         // Abrimos el STT mientras suena el saludo para que la conexión no cueste latencia
@@ -410,7 +456,7 @@ export default function App() {
     colgar() // salir con una llamada en curso no puede dejar el micrófono abierto
     setVista(null)
     await auth.logout().catch(() => undefined)
-    setAcceso({ modo: 'local', autenticado: false, usuario: null })
+    setAcceso({ modo: 'oidc', autenticado: false, usuario: null })
     setResumenOps(null)
     setExpedientes([])
     setSeleccionado(null)
@@ -419,7 +465,7 @@ export default function App() {
   const sttServidorOk = !!salud?.stt_disponible
   const sttStreamingOk = !!salud?.stt_streaming
   const sttNavegadorOk = sttNavegadorDisponible()
-  const sesionLista = !!acceso?.autenticado && !acceso.usuario?.debe_cambiar_contrasena
+  const sesionLista = !!acceso?.autenticado && acceso.usuario?.estado_acceso === 'concedido'
   const catalogo = useCatalogo(sesionLista)
 
   if (acceso === null) {
@@ -429,17 +475,32 @@ export default function App() {
       </main>
     )
   }
-  if (!acceso.autenticado || !acceso.usuario) return <Login onEntrar={sesionAbierta} />
+  if (!acceso.autenticado || !acceso.usuario) return <Login />
+  if (acceso.usuario.estado_acceso !== 'concedido') {
+    return <AccesoPendiente usuario={acceso.usuario} onCambio={personaActualizada} onSalir={() => void salir()} />
+  }
 
   const yo = acceso.usuario
   const esOwner = yo.rol === 'owner'
-  const opcionesPantalla: { label: string; value: Pantalla }[] = [
+  const opcionesPantalla: { label: React.ReactNode; value: Pantalla }[] = [
     { label: 'Simular llamada', value: 'simular' },
     { label: 'Historial', value: 'historial' },
     { label: 'Fincas y profesionales', value: 'datos' },
     { label: 'Flujo', value: 'flujo' },
     { label: 'Rendimiento', value: 'latencia' },
-    ...(esOwner ? [{ label: 'Usuarios', value: 'usuarios' as Pantalla }] : []),
+    ...(esOwner
+      ? [
+          {
+            label: (
+              <Badge count={solicitudes} size="small" offset={[8, -2]}>
+                Solicitudes
+              </Badge>
+            ),
+            value: 'solicitudes' as Pantalla,
+          },
+          { label: 'Usuarios', value: 'usuarios' as Pantalla },
+        ]
+      : []),
   ]
 
   const enCurso = !!vista && !vista.finalizada
@@ -467,12 +528,13 @@ export default function App() {
           value={modoStt}
           onChange={(valor) => setModoStt(valor as ModoStt)}
           options={[
+            { label: 'LiveKit', value: 'livekit', disabled: !salud?.livekit },
             { label: 'Servidor', value: 'streaming', disabled: !sttStreamingOk },
             { label: 'Navegador', value: 'navegador', disabled: !sttNavegadorOk },
             { label: 'Grabación', value: 'servidor', disabled: !sttServidorOk || !capturaDisponible() },
           ]}
         />
-        <small>«Servidor» es el que se usará con llamadas reales.</small>
+        <small>«LiveKit» es el camino de las llamadas reales: voz, interrupciones y ledger en el servidor.</small>
       </div>
       {modoStt === 'servidor' && (
         <div>
@@ -486,12 +548,6 @@ export default function App() {
 
   return (
       <main className={`ops-shell ${pantalla === 'simular' ? 'is-fija' : ''}`}>
-        <CambioContrasena
-          abierto={cambioAbierto || yo.debe_cambiar_contrasena}
-          obligatorio={yo.debe_cambiar_contrasena}
-          onCerrar={() => setCambioAbierto(false)}
-          onCambiada={(u) => { setCambioAbierto(false); sesionAbierta(u); message.success('Contraseña actualizada') }}
-        />
         <header className="ops-topbar">
           <div className="ops-brand">
             <Logo conNombre />
@@ -521,7 +577,6 @@ export default function App() {
               items: [
                 { key: 'rol', label: `Rol: ${ROLES[yo.rol] ?? yo.rol}`, disabled: true },
                 { type: 'divider' },
-                { key: 'contrasena', icon: <KeyOutlined />, label: 'Cambiar contraseña', onClick: () => setCambioAbierto(true) },
                 { key: 'salir', icon: <LogoutOutlined />, label: 'Salir', onClick: () => void salir() },
               ],
             }}
@@ -633,6 +688,10 @@ export default function App() {
         <Suspense fallback={<Spin className="ops-cargando" />}>
         {pantalla === 'usuarios' && esOwner && (
           <section className="ops-single"><GestionUsuarios yo={yo} /></section>
+        )}
+
+        {pantalla === 'solicitudes' && esOwner && (
+          <section className="ops-single"><SolicitudesAcceso onCambio={() => void refrescarOperaciones()} /></section>
         )}
 
         {pantalla === 'flujo' && (

@@ -27,6 +27,18 @@ def entorno_de_prueba(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "sesion_secreto", SECRETO_DE_PRUEBA)
 
 
+def _actuacion_y_equipo(u: str, sistema: str) -> dict[str, str]:
+    """Vandalismo o robo -> siniestro; el equipo, si la frase nombra su tipo y está en la lista."""
+    salida: dict[str, str] = {}
+    if any(p in u for p in ("vandaliz", "robado", "reventado")):
+        salida["actuacion"] = "siniestro"
+    for eq_id, descripcion in re.findall(r"(eq-[\w-]+) \(([^)]*)\)", sistema):
+        tipo = descripcion.split()[0]  # "portero", "ascensor", "puerta"
+        if tipo in u:
+            salida["equipo"] = eq_id
+    return salida
+
+
 def _clasificar(u: str, catalogo: list[str]) -> tuple[str, str]:
     if "agua" in u or "fuga" in u or "grifo" in u:
         cat, urg = "fontaneria", "alta" if "inund" in u else "media"
@@ -49,6 +61,7 @@ class LLMFalso:
 
     def __init__(self) -> None:
         self.llamadas: list[tuple[str, str]] = []
+        self.sistema = ""
 
     async def disponible(self) -> bool:
         return True
@@ -62,6 +75,7 @@ class LLMFalso:
     ) -> dict[str, Any]:
         titulo = esquema.get("title")
         self.llamadas.append((titulo or "", usuario))
+        self.sistema = sistema
         if titulo == "interpretacion":
             return self._interpretar(usuario, esquema)
         if titulo == "redaccion":
@@ -70,7 +84,13 @@ class LLMFalso:
         if titulo == "clasificacion":
             catalogo = esquema["properties"]["categoria"]["enum"]
             cat, urg = _clasificar(usuario.lower(), catalogo)
-            return {"categoria": cat, "urgencia": urg, "resumen": f"El vecino informa: {usuario}"}
+            return {
+                "categoria": cat,
+                "urgencia": urg,
+                "resumen": f"El vecino informa: {usuario}",
+                "actuacion": "reparacion",
+                **_actuacion_y_equipo(usuario.lower(), sistema),
+            }
         raise AssertionError(f"esquema desconocido: {titulo}")
 
     def _interpretar(self, usuario: str, esquema: dict[str, Any]) -> dict[str, Any]:
@@ -130,12 +150,16 @@ class LLMFalso:
             "rota",
             "ruido",
             "parado",
+            "portero",
         )
         if any(p in u for p in palabras_problema) and "problema" not in salida:
             salida["problema"] = texto
             if "categoria" in esquema["properties"]:
                 cat, urg = _clasificar(u, esquema["properties"]["categoria"]["enum"])
                 salida.update(categoria=cat, urgencia=urg, resumen=f"El vecino informa: {texto}")
+                salida.update(_actuacion_y_equipo(u, self.sistema))
+        if "pero eso no lo arregla" in u:
+            salida["objecion"] = texto.split("pero", 1)[1].strip()
         if "corregir" in u or "me he equivocado" in u or "antes le he dicho" in u:
             salida["intencion"] = "corregir"
         return salida

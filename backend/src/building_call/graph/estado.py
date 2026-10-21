@@ -48,6 +48,16 @@ class EstadoLlamada(TypedDict, total=False):
     # Datos dichos por el vecino aún no consumidos por su nodo
     pendientes: dict[str, str]
 
+    # Equipos de la finca (cargados al confirmarla) y si la clasificación ya los tuvo delante
+    equipos: list[dict[str, Any]]
+    equipos_evaluados: bool
+    # A quién va la incidencia: equipo afectado, tipo de actuación y pega del vecino al resumen
+    equipo_id: str | None
+    actuacion: str | None
+    objecion: str | None
+    # Para el administrador o el profesional: equipo, contrato y por qué le llega
+    sugerencia: str | None
+
     # Configuración efectiva resuelta al identificar la finca
     configuracion: dict[str, Any] | None
     configuracion_id: str | None
@@ -105,6 +115,12 @@ def estado_inicial(llamada_id: str, iniciada_en: str, grafo: str) -> EstadoLlama
         tiempos_turno={},
         interpretacion=None,
         pendientes={},
+        equipos=[],
+        equipos_evaluados=False,
+        equipo_id=None,
+        actuacion=None,
+        objecion=None,
+        sugerencia=None,
         configuracion=None,
         configuracion_id=None,
         grafo=grafo,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -42,6 +42,34 @@ class Finca(BaseModel):
     direccion: str
     correo: str
     telefono_oficial: str
+
+
+#: Qué tipo de actuación pide la incidencia. Solo `reparacion` se avisa directamente a un
+#: profesional; el resto lo decide el administrador (regla de Andreu, 2026-10-21)
+Actuacion = Literal["reparacion", "reposicion", "siniestro", "convivencia", "privativo"]
+ACTUACIONES: tuple[str, ...] = ("reparacion", "reposicion", "siniestro", "convivencia", "privativo")
+
+
+class Equipo(BaseModel):
+    """Instalación de la finca con quien la mantiene: se avisa a su mantenedor antes que a un
+    profesional genérico de la categoría."""
+
+    id: str
+    finca_id: str
+    tipo: str  # portero automático, ascensor, puerta de garaje...
+    ubicacion: str | None = None
+    marca: str | None = None
+    modelo: str | None = None
+    instalador: str | None = None
+    mantenedor_id: str | None = None  # un Especialista del administrador
+    contrato: str | None = None
+    garantia_hasta: date | None = None
+
+    def descripcion(self) -> str:
+        """'portero automático Fermax Citymax (portal)' para el prompt y la sugerencia."""
+        marca = " ".join(p for p in (self.marca, self.modelo) if p)
+        texto = f"{self.tipo} {marca}".strip()
+        return f"{texto} ({self.ubicacion})" if self.ubicacion else texto
 
 
 class Vivienda(BaseModel):
@@ -85,3 +113,7 @@ class Incidencia(BaseModel):
     urgencia: Urgencia
     estado: EstadoIncidencia = "pendiente"
     creada_en: datetime
+    equipo_id: str | None = None
+    actuacion: Actuacion = "reparacion"
+    # Para el administrador: por qué le llega y a quién se sugiere avisar
+    sugerencia: str | None = None
