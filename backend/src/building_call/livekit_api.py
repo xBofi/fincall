@@ -14,17 +14,18 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel
 
 from building_call.acceso import Acceso
 from building_call.settings import settings
 
-#: Nombre con el que se registra el agente; la sala lo pide en su despacho
+#: Identidad del agente en la API (quién hizo la petición). El nombre con el que se registra en
+#: LiveKit y que piden las salas es `settings.livekit_agente`
 NOMBRE_AGENTE = "fincall"
 
 
-def es_agente(request: Request) -> bool:
+def es_agente(request: Request | WebSocket) -> bool:
     secreto = settings.agente_secreto
     cabecera = request.headers.get("authorization", "")
     if not secreto or not cabecera.startswith("Bearer "):
@@ -65,7 +66,8 @@ def crear_router_livekit(acceso: Acceso) -> APIRouter:
 
         sala = f"consola-{uuid4().hex[:12]}"
         despacho = api.RoomAgentDispatch(
-            agent_name=NOMBRE_AGENTE, metadata=json.dumps({"llamada_id": cuerpo.llamada_id})
+            agent_name=settings.livekit_agente,
+            metadata=json.dumps({"llamada_id": cuerpo.llamada_id}),
         )
         jwt = (
             api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)

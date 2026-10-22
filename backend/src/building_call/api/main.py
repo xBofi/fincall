@@ -41,6 +41,7 @@ from building_call.graph.nodos import (
 from building_call.graph.registro import REGISTRO
 from building_call.livekit_api import (
     crear_router_livekit,
+    es_agente,
     livekit_configurado,
     requiere_usuario_o_agente,
 )
@@ -531,7 +532,8 @@ def crear_app(
         "eou_at"}, {"type":"respuesta", ...vista, "tiempos"}, {"type":"error","mensaje"}.
         """
         await ws.accept()
-        if await acceso.usuario_de_peticion(ws) is None:  # type: ignore[arg-type]
+        # Consola o, como en el resto de rutas de llamada, el secreto del agente (banco de voz)
+        if not es_agente(ws) and await acceso.usuario_de_peticion(ws) is None:  # type: ignore[arg-type]
             await ws.send_json({"type": "error", "mensaje": "Sesión no válida o expirada"})
             await ws.close(code=1008)
             return
