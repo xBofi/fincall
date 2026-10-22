@@ -13,8 +13,8 @@ uv run ruff check src tests; uv run ruff format --check src tests
 
 ## Modos
 
-- `BC_REPOSITORY=memoria` (por defecto): datos de demostración en memoria, sin base de datos. Para validar los agentes.
-- `BC_REPOSITORY=postgres`: modo real. Requiere PostgreSQL y migraciones:
+- `BC_REPOSITORY=memory` (por defecto): datos de demostración en memoria, sin base de datos. Para validar los agentes.
+- `BC_REPOSITORY=postgres`: modo real. Requiere PostgreSQL y migrations:
 
 ```powershell
 uv run alembic upgrade head
@@ -38,12 +38,12 @@ ni nombre del vecino):
 
 ```powershell
 uv run python evals/export_cases.py --simular        # desde la base de datos configurada
-uv run python evals/export_cases.py --entrada casos.json   # JSON de GET /api/operaciones/casos
+uv run python evals/export_cases.py --entrada casos.json   # JSON de GET /api/operations/cases
 ```
 
-Métricas de latencia por etapa: `GET /api/metricas`. El navegador envía `respuesta_ms` (fin de
-voz del vecino → inicio de voz del bot) a `POST /api/llamadas/{id}/metricas`. Umbrales en
-`metricas.py`. Spec: `docs/superpowers/specs/2026-08-28-voice-pipeline-latency-design.md`.
+Métricas de latencia por etapa: `GET /api/metrics`. El navegador envía `response_ms` (fin de
+voz del vecino → inicio de voz del bot) a `POST /api/calls/{id}/metrics`. Umbrales en
+`metrics.py`. Spec: `docs/superpowers/specs/2026-08-28-voice-pipeline-latency-design.md`.
 
 ## STT en servidor (opcional)
 
@@ -55,12 +55,12 @@ Instalar con `uv pip install faster-whisper` (opcional, no está en el lock). Si
 ```text
 src/building_call/
   domain/        configuración por capas (defaults -> administrador -> finca) y entidades
-  graph/         estado, nodos reutilizables, `siguiente_paso` y registro de grafos (hoy solo `estandar`)
+  graph/         estado, nodos reutilizables, `next_step` y registro de grafos (hoy solo `standard`)
   llm/           contrato ModeloLenguaje, cliente Ollama, interpretación de turno y prompts versionados
   metricas.py    tiempos por turno, agregados p50/p95 y calificación por umbrales
   stt.py         reconocimiento de voz en servidor (faster-whisper, opcional)
   repos/         Repositorio (protocolo), memoria, PostgreSQL, modelos SQL, semilla
-  api/           FastAPI: /api/salud, /api/fincas, /api/llamadas, /api/incidencias
+  api/           FastAPI: /api/health, /api/estates, /api/calls, /api/incidents
   servicios.py   GestorLlamadas: estado por llamada e invocación del grafo por turno
 alembic/         migraciones
 evals/           gold sets y comparativa de modelos (exactitud + latencia)

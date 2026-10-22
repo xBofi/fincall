@@ -66,7 +66,7 @@ La consola es privada: usuarios internos con contraseña, sin proveedor externo 
    antes de poder ver nada. Hasta entonces la API responde `403` en todo lo que no sea `/api/auth/*`.
 3. En la pestaña **Usuarios** (solo rol `owner`) das de alta a más personas: cada alta o restablecimiento
    genera una contraseña temporal que se muestra una única vez y que el usuario debe cambiar al entrar.
-   Desde ahí también cambias roles (`owner`, `administrador`, `calidad`), desactivas o eliminas usuarios.
+   Desde ahí también cambias roles (`owner`, `administrator`, `quality`), desactivas o eliminas usuarios.
 
 ### Usar la consola fuera de casa (túnel ngrok)
 
