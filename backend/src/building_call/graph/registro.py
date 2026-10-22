@@ -52,7 +52,8 @@ def _entrada(estado: EstadoLlamada) -> str:
 def construir_estandar(deps: Dependencias) -> Any:
     """Grafo estándar: las aristas son deterministas y salen de `nodo_actual`."""
     nodos = construir_nodos(deps)
-    g: StateGraph = StateGraph(EstadoLlamada)
+    # Los genéricos de StateGraph cambian entre versiones de LangGraph: no aportan aquí
+    g: Any = StateGraph(EstadoLlamada)
     for nombre in _ORDEN_ESTANDAR:
         g.add_node(nombre, nodos[nombre])
     destinos = {**{n: n for n in _ORDEN_ESTANDAR}, END: END}

@@ -46,7 +46,10 @@ def cargar_credenciales(ruta_json: str = "") -> Any:
     from google.oauth2 import service_account
 
     if ruta_json:
-        return service_account.Credentials.from_service_account_file(ruta_json, scopes=[ALCANCE])
+        # google-auth no tipa este constructor
+        return service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
+            ruta_json, scopes=[ALCANCE]
+        )
     credenciales, _ = google.auth.default(scopes=[ALCANCE])
     return credenciales
 

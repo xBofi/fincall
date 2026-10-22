@@ -6,10 +6,10 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from time import perf_counter, time
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
-from building_call.domain.entidades import Llamada
+from building_call.domain.entidades import Llamada, ResultadoLlamada
 from building_call.graph.estado import EstadoLlamada, estado_inicial
 from building_call.graph.ledger import avisos_no_oidos, evaluar, trocear
 from building_call.graph.nodos import Dependencias
@@ -178,7 +178,7 @@ class GestorLlamadas:
                 nombre_declarado=estado.get("nombre_declarado"),
                 transcripcion=estado.get("historial", []),
                 resumen=estado.get("resumen") or estado.get("solicitud"),
-                resultado=resultado,
+                resultado=cast("ResultadoLlamada | None", resultado),
                 motivo_revision=estado.get("motivo_revision"),
                 configuracion_id=estado.get("configuracion_id"),
                 grafo=estado.get("grafo"),

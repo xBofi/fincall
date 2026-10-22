@@ -47,11 +47,13 @@ class TextoRenderizado(str):
     """
 
     __slots__ = ("plantilla_id", "version")
+    plantilla_id: str
+    version: int
 
     def __new__(cls, texto: str, plantilla_id: str, version: int) -> TextoRenderizado:
         obj = super().__new__(cls, texto)
-        obj.plantilla_id = plantilla_id  # type: ignore[misc]
-        obj.version = version  # type: ignore[misc]
+        obj.plantilla_id = plantilla_id
+        obj.version = version
         return obj
 
 

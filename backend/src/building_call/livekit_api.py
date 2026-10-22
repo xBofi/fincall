@@ -37,7 +37,7 @@ def es_agente(request: Request | WebSocket) -> bool:
     return hmac.compare_digest(cabecera.removeprefix("Bearer ").encode(), secreto.encode())
 
 
-def requiere_usuario_o_agente(acceso: Acceso) -> Callable[[Request], Coroutine[Any, Any, Any]]:
+def requiere_usuario_o_agente(acceso: Acceso) -> Callable[..., Coroutine[Any, Any, Any]]:
     usuario = acceso.requiere()
 
     async def dependencia(request: Request, response: Response) -> Any:

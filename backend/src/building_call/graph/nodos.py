@@ -1020,7 +1020,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                         pend.pop(k, None)
                     cambios.update(vivienda_id=vivienda.id, vivienda_etiqueta=vivienda.etiqueta())
                     validaciones.append("vivienda_existe_en_finca")
-                    estado = {**estado, **cambios}  # type: ignore[assignment]
+                    estado = {**estado, **cambios}  # type: ignore[typeddict-item]
                 elif len(candidatas) > 1:
                     # Mismo piso y puerta en varios portales: solo falta el portal (no es un fallo)
                     pend.pop("portal", None)
@@ -1078,7 +1078,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
         if not estado.get("nombre_declarado") and (nombre := pend.pop("nombre", None)):
             cambios["nombre_declarado"] = nombre
             traza.append(Traza(nodo=nodo, accion="nombre_registrado", detalle=nombre))
-            estado = {**estado, **cambios}  # type: ignore[assignment]
+            estado = {**estado, **cambios}  # type: ignore[typeddict-item]
 
         if not estado.get("solicitud"):
             problema = pend.pop("problema", None)
@@ -1101,7 +1101,7 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
                         "fusionada_con_interpretacion": True,
                     }
                 traza.append(Traza(nodo=nodo, accion="solicitud_recogida", detalle=problema[:60]))
-                estado = {**estado, **cambios}  # type: ignore[assignment]
+                estado = {**estado, **cambios}  # type: ignore[typeddict-item]
             else:
                 return _avanzar(
                     estado,
@@ -1238,7 +1238,8 @@ def construir_nodos(deps: Dependencias) -> dict[str, Any]:
             )
         texto = await _pregunta_puerta_del_piso(estado, pend)
         if texto is None:
-            ayuda = await _describir_viviendas(estado["finca_id"]) if estado.get("finca_id") else ""
+            finca_id = estado.get("finca_id")
+            ayuda = await _describir_viviendas(finca_id) if finca_id else ""
             texto = render("identificar_vivienda.reintento", ayuda=ayuda)
         return _preguntar(
             estado,

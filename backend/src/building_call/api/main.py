@@ -715,7 +715,7 @@ def crear_app(
                 # Sin voz del bot la llamada se guarda igual: mejor una pista que ninguna
                 logger.exception("No se pudo reconstruir la voz del bot en %s", llamada_id)
             try:
-                await almacen_audio.guardar_conversacion(deps.repo, llamada_id, grabador)
+                await almacen_audio.guardar_conversacion(deps.repo, llamada_id, grabador)  # type: ignore[arg-type]
             except Exception:  # noqa: BLE001
                 logger.exception("No se pudo guardar el audio de la llamada %s", llamada_id)
             try:

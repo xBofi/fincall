@@ -475,7 +475,7 @@ class RepositorioMemoria:
 
     async def guardar_plantilla(self, plantilla_id: str, texto: str, autor: str | None) -> int:
         self._operativo()
-        version = self.plantillas.get(plantilla_id, {}).get("version", 0) + 1
+        version: int = self.plantillas.get(plantilla_id, {}).get("version", 0) + 1
         self.plantillas[plantilla_id] = {"texto": texto, "version": version, "autor": autor}
         self.plantilla_historial.append(
             {
