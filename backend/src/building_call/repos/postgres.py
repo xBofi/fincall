@@ -9,529 +9,529 @@ from uuid import uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from building_call.domain.configuracion import (
-    ConfiguracionEfectiva,
-    ConfiguracionParcial,
-    resolver,
+from building_call.domain.config import (
+    EffectiveConfig,
+    PartialConfig,
+    resolve,
 )
-from building_call.domain.entidades import (
-    Administrador,
-    EntradaHistorialIncidencia,
-    Equipo,
-    Especialista,
-    Finca,
-    Incidencia,
-    Llamada,
-    Vivienda,
+from building_call.domain.entities import (
+    Administrator,
+    Call,
+    Equipment,
+    Estate,
+    Home,
+    Incident,
+    IncidentHistoryEntry,
+    Specialist,
 )
-from building_call.domain.operaciones import Usuario
-from building_call.repos.catalogo import Ambito, CampoReferencia
-from building_call.repos.estado_llamada import AlmacenEstadoPostgres
-from building_call.repos.modelos_sql import (
-    AdministradorSQL,
-    AuditoriaEventoSQL,
-    CasoBancoSQL,
-    ConfiguracionSQL,
-    EquipoSQL,
-    EspecialistaSQL,
-    FincaSQL,
-    IncidenciaHistorialSQL,
-    IncidenciaSQL,
-    LlamadaDecisionSQL,
-    LlamadaSQL,
-    LlamadaTurnoSQL,
-    PistaAudioSQL,
-    PlantillaSQL,
-    PlantillaVersionSQL,
-    SesionSQL,
-    UsuarioSQL,
-    ViviendaSQL,
+from building_call.domain.operations import User
+from building_call.repos.call_state import PostgresStateStore
+from building_call.repos.catalog import ReferenceField, Scope
+from building_call.repos.operational import AccessSession
+from building_call.repos.sql_models import (
+    AdministratorSQL,
+    AudioTrackSQL,
+    AuditEventSQL,
+    BankCaseSQL,
+    CallDecisionSQL,
+    CallSQL,
+    CallTurnSQL,
+    ConfigSQL,
+    EquipmentSQL,
+    EstateSQL,
+    HomeSQL,
+    IncidentHistorySQL,
+    IncidentSQL,
+    SessionSQL,
+    SpecialistSQL,
+    TemplateSQL,
+    TemplateVersionSQL,
+    UserSQL,
 )
-from building_call.repos.operativo import SesionAcceso
 
 
-class RepositorioPostgres:
+class PostgresRepository:
     def __init__(self, database_url: str) -> None:
         # pre_ping: tras un reinicio de PostgreSQL las conexiones muertas se descartan en vez de
         # fallar en mitad de una llamada. Pool explícito: llamadas en curso + consola.
         self.engine = create_async_engine(
             database_url, pool_pre_ping=True, pool_size=10, max_overflow=20
         )
-        self.sesiones = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
         # Estado vivo de las llamadas en curso: sobrevive a un reinicio de la API
-        self.estado_llamadas = AlmacenEstadoPostgres(self.sesiones)
+        self.call_state_store = PostgresStateStore(self.sessions)
 
-    async def _ultima_configuracion(
-        self, s: AsyncSession, ambito: str, ambito_id: str
-    ) -> ConfiguracionSQL | None:
+    async def _latest_config(
+        self, s: AsyncSession, scope: str, scope_id: str
+    ) -> ConfigSQL | None:
         q = (
-            select(ConfiguracionSQL)
-            .where(ConfiguracionSQL.ambito == ambito, ConfiguracionSQL.ambito_id == ambito_id)
-            .order_by(ConfiguracionSQL.valido_desde.desc())
+            select(ConfigSQL)
+            .where(ConfigSQL.scope == scope, ConfigSQL.scope_id == scope_id)
+            .order_by(ConfigSQL.valid_from.desc())
             .limit(1)
         )
         return (await s.execute(q)).scalar_one_or_none()
 
-    async def listar_fincas(self) -> list[Finca]:
-        async with self.sesiones() as s:
-            filas = (await s.execute(select(FincaSQL))).scalars()
-            return [Finca.model_validate(f, from_attributes=True) for f in filas]
+    async def list_estates(self) -> list[Estate]:
+        async with self.sessions() as s:
+            rows = (await s.execute(select(EstateSQL))).scalars()
+            return [Estate.model_validate(f, from_attributes=True) for f in rows]
 
-    async def obtener_finca(self, finca_id: str) -> Finca | None:
-        async with self.sesiones() as s:
-            f = await s.get(FincaSQL, finca_id)
-            return Finca.model_validate(f, from_attributes=True) if f else None
+    async def get_estate(self, estate_id: str) -> Estate | None:
+        async with self.sessions() as s:
+            f = await s.get(EstateSQL, estate_id)
+            return Estate.model_validate(f, from_attributes=True) if f else None
 
-    async def obtener_administrador(self, administrador_id: str) -> Administrador | None:
-        async with self.sesiones() as s:
-            a = await s.get(AdministradorSQL, administrador_id)
-            return Administrador.model_validate(a, from_attributes=True) if a else None
+    async def get_administrator(self, administrator_id: str) -> Administrator | None:
+        async with self.sessions() as s:
+            a = await s.get(AdministratorSQL, administrator_id)
+            return Administrator.model_validate(a, from_attributes=True) if a else None
 
-    async def viviendas_de(self, finca_id: str) -> list[Vivienda]:
-        async with self.sesiones() as s:
-            q = select(ViviendaSQL).where(ViviendaSQL.finca_id == finca_id)
-            filas = (await s.execute(q)).scalars()
-            return [Vivienda.model_validate(v, from_attributes=True) for v in filas]
+    async def homes_of(self, estate_id: str) -> list[Home]:
+        async with self.sessions() as s:
+            q = select(HomeSQL).where(HomeSQL.estate_id == estate_id)
+            rows = (await s.execute(q)).scalars()
+            return [Home.model_validate(v, from_attributes=True) for v in rows]
 
-    async def especialistas_de(self, administrador_id: str) -> list[Especialista]:
-        async with self.sesiones() as s:
-            q = select(EspecialistaSQL).where(EspecialistaSQL.administrador_id == administrador_id)
-            filas = (await s.execute(q)).scalars()
-            return [Especialista.model_validate(e, from_attributes=True) for e in filas]
+    async def specialists_of(self, administrator_id: str) -> list[Specialist]:
+        async with self.sessions() as s:
+            q = select(SpecialistSQL).where(SpecialistSQL.administrator_id == administrator_id)
+            rows = (await s.execute(q)).scalars()
+            return [Specialist.model_validate(e, from_attributes=True) for e in rows]
 
-    async def equipos_de(self, finca_id: str) -> list[Equipo]:
-        async with self.sesiones() as s:
-            q = select(EquipoSQL).where(EquipoSQL.finca_id == finca_id)
+    async def equipment_of(self, estate_id: str) -> list[Equipment]:
+        async with self.sessions() as s:
+            q = select(EquipmentSQL).where(EquipmentSQL.estate_id == estate_id)
             return [
-                Equipo.model_validate(e, from_attributes=True)
+                Equipment.model_validate(e, from_attributes=True)
                 for e in (await s.execute(q)).scalars()
             ]
 
-    async def configuracion_efectiva(
-        self, finca_id: str
-    ) -> tuple[ConfiguracionEfectiva, str | None]:
-        async with self.sesiones() as s:
-            finca = await s.get(FincaSQL, finca_id)
-            if finca is None:
-                raise KeyError(finca_id)
-            cfg_adm = await self._ultima_configuracion(s, "administrador", finca.administrador_id)
-            cfg_fin = await self._ultima_configuracion(s, "finca", finca_id)
-            efectiva = resolver(
-                ConfiguracionParcial.model_validate(cfg_adm.documento) if cfg_adm else None,
-                ConfiguracionParcial.model_validate(cfg_fin.documento) if cfg_fin else None,
+    async def effective_config(
+        self, estate_id: str
+    ) -> tuple[EffectiveConfig, str | None]:
+        async with self.sessions() as s:
+            estate = await s.get(EstateSQL, estate_id)
+            if estate is None:
+                raise KeyError(estate_id)
+            cfg_admin = await self._latest_config(s, "administrator", estate.administrator_id)
+            cfg_est = await self._latest_config(s, "estate", estate_id)
+            effective = resolve(
+                PartialConfig.model_validate(cfg_admin.document) if cfg_admin else None,
+                PartialConfig.model_validate(cfg_est.document) if cfg_est else None,
             )
-            return efectiva, (cfg_fin.id if cfg_fin else None)
+            return effective, (cfg_est.id if cfg_est else None)
 
-    async def guardar_llamada(self, llamada: Llamada) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(LlamadaSQL(**llamada.model_dump()))
+    async def save_call(self, call: Call) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(CallSQL(**call.model_dump()))
 
-    async def guardar_incidencia(self, incidencia: Incidencia) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(IncidenciaSQL(**incidencia.model_dump()))
+    async def save_incident(self, incident: Incident) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(IncidentSQL(**incident.model_dump()))
 
     # --------------------------------------------------------------- catálogo (escritura)
 
-    async def listar_administradores(self) -> list[Administrador]:
-        async with self.sesiones() as s:
-            filas = (await s.execute(select(AdministradorSQL))).scalars()
-            return [Administrador.model_validate(a, from_attributes=True) for a in filas]
+    async def list_administrators(self) -> list[Administrator]:
+        async with self.sessions() as s:
+            rows = (await s.execute(select(AdministratorSQL))).scalars()
+            return [Administrator.model_validate(a, from_attributes=True) for a in rows]
 
-    async def obtener_especialista(self, especialista_id: str) -> Especialista | None:
-        async with self.sesiones() as s:
-            e = await s.get(EspecialistaSQL, especialista_id)
-            return Especialista.model_validate(e, from_attributes=True) if e else None
+    async def get_specialist(self, specialist_id: str) -> Specialist | None:
+        async with self.sessions() as s:
+            e = await s.get(SpecialistSQL, specialist_id)
+            return Specialist.model_validate(e, from_attributes=True) if e else None
 
-    async def guardar_finca(self, finca: Finca) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(FincaSQL(**finca.model_dump()))
+    async def save_estate(self, estate: Estate) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(EstateSQL(**estate.model_dump()))
 
-    async def eliminar_finca(self, finca_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.execute(delete(EquipoSQL).where(EquipoSQL.finca_id == finca_id))
-            await s.execute(delete(ViviendaSQL).where(ViviendaSQL.finca_id == finca_id))
+    async def delete_estate(self, estate_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.execute(delete(EquipmentSQL).where(EquipmentSQL.estate_id == estate_id))
+            await s.execute(delete(HomeSQL).where(HomeSQL.estate_id == estate_id))
             await s.execute(
-                delete(ConfiguracionSQL).where(
-                    ConfiguracionSQL.ambito == "finca", ConfiguracionSQL.ambito_id == finca_id
+                delete(ConfigSQL).where(
+                    ConfigSQL.scope == "estate", ConfigSQL.scope_id == estate_id
                 )
             )
-            await s.execute(delete(FincaSQL).where(FincaSQL.id == finca_id))
+            await s.execute(delete(EstateSQL).where(EstateSQL.id == estate_id))
 
-    async def guardar_vivienda(self, vivienda: Vivienda) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(ViviendaSQL(**vivienda.model_dump()))
+    async def save_home(self, home: Home) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(HomeSQL(**home.model_dump()))
 
-    async def eliminar_vivienda(self, vivienda_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.execute(delete(ViviendaSQL).where(ViviendaSQL.id == vivienda_id))
+    async def delete_home(self, home_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.execute(delete(HomeSQL).where(HomeSQL.id == home_id))
 
-    async def guardar_especialista(self, especialista: Especialista) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(EspecialistaSQL(**especialista.model_dump()))
+    async def save_specialist(self, specialist: Specialist) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(SpecialistSQL(**specialist.model_dump()))
 
-    async def eliminar_especialista(self, especialista_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.execute(delete(EspecialistaSQL).where(EspecialistaSQL.id == especialista_id))
+    async def delete_specialist(self, specialist_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.execute(delete(SpecialistSQL).where(SpecialistSQL.id == specialist_id))
 
-    async def guardar_equipo(self, equipo: Equipo) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(EquipoSQL(**equipo.model_dump()))
+    async def save_equipment(self, equipment: Equipment) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(EquipmentSQL(**equipment.model_dump()))
 
-    async def eliminar_equipo(self, equipo_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.execute(delete(EquipoSQL).where(EquipoSQL.id == equipo_id))
+    async def delete_equipment(self, equipment_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.execute(delete(EquipmentSQL).where(EquipmentSQL.id == equipment_id))
 
-    async def configuracion_de(
-        self, ambito: Ambito, ambito_id: str
-    ) -> tuple[ConfiguracionParcial | None, str | None]:
-        async with self.sesiones() as s:
-            fila = await self._ultima_configuracion(s, ambito, ambito_id)
-            if fila is None:
+    async def config_of(
+        self, scope: Scope, scope_id: str
+    ) -> tuple[PartialConfig | None, str | None]:
+        async with self.sessions() as s:
+            row = await self._latest_config(s, scope, scope_id)
+            if row is None:
                 return None, None
-            return ConfiguracionParcial.model_validate(fila.documento), fila.id
+            return PartialConfig.model_validate(row.document), row.id
 
-    async def guardar_configuracion(
-        self, ambito: Ambito, ambito_id: str, capa: ConfiguracionParcial
+    async def save_config(
+        self, scope: Scope, scope_id: str, layer: PartialConfig
     ) -> str:
         version_id = f"cfg-{uuid4().hex[:16]}"
-        async with self.sesiones() as s, s.begin():
+        async with self.sessions() as s, s.begin():
             s.add(
-                ConfiguracionSQL(
+                ConfigSQL(
                     id=version_id,
-                    ambito=ambito,
-                    ambito_id=ambito_id,
-                    documento=capa.model_dump(exclude_none=True),
+                    scope=scope,
+                    scope_id=scope_id,
+                    document=layer.model_dump(exclude_none=True),
                     # Explícito: `now()` es el inicio de la transacción y dos versiones
                     # seguidas empatarían al buscar la vigente
-                    valido_desde=datetime.now(UTC),
+                    valid_from=datetime.now(UTC),
                 )
             )
         return version_id
 
-    async def contar_referencias(self, campo: CampoReferencia, valor: str) -> dict[str, int]:
-        async with self.sesiones() as s:
-            llamadas = 0
-            columna_llamada = getattr(LlamadaSQL, campo, None)
-            if columna_llamada is not None:
-                q = select(func.count()).select_from(LlamadaSQL).where(columna_llamada == valor)
-                llamadas = (await s.execute(q)).scalar_one()
+    async def count_references(self, field: ReferenceField, value: str) -> dict[str, int]:
+        async with self.sessions() as s:
+            calls = 0
+            call_column = getattr(CallSQL, field, None)
+            if call_column is not None:
+                q = select(func.count()).select_from(CallSQL).where(call_column == value)
+                calls = (await s.execute(q)).scalar_one()
             q = (
                 select(func.count())
-                .select_from(IncidenciaSQL)
-                .where(getattr(IncidenciaSQL, campo) == valor)
+                .select_from(IncidentSQL)
+                .where(getattr(IncidentSQL, field) == value)
             )
-            incidencias = (await s.execute(q)).scalar_one()
-        return {"llamadas": int(llamadas), "incidencias": int(incidencias)}
+            incidents = (await s.execute(q)).scalar_one()
+        return {"calls": int(calls), "incidents": int(incidents)}
 
     # ------------------------------------------------------------- operativo (acceso y trazabilidad)
 
-    async def guardar_usuario(self, usuario: Usuario) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(UsuarioSQL(**usuario.model_dump()))
+    async def save_user(self, user: User) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(UserSQL(**user.model_dump()))
 
-    async def obtener_usuario(self, usuario_id: str) -> Usuario | None:
-        async with self.sesiones() as s:
-            u = await s.get(UsuarioSQL, usuario_id)
-            return Usuario.model_validate(u, from_attributes=True) if u else None
+    async def get_user(self, user_id: str) -> User | None:
+        async with self.sessions() as s:
+            u = await s.get(UserSQL, user_id)
+            return User.model_validate(u, from_attributes=True) if u else None
 
-    async def obtener_usuario_por_nombre(self, nombre_usuario: str) -> Usuario | None:
-        async with self.sesiones() as s:
+    async def get_user_by_name(self, username: str) -> User | None:
+        async with self.sessions() as s:
             u = (
                 await s.execute(
-                    select(UsuarioSQL).where(UsuarioSQL.nombre_usuario == nombre_usuario)
+                    select(UserSQL).where(UserSQL.username == username)
                 )
             ).scalar_one_or_none()
-            return Usuario.model_validate(u, from_attributes=True) if u else None
+            return User.model_validate(u, from_attributes=True) if u else None
 
-    async def obtener_usuario_por_identidad(self, proveedor: str, sujeto: str) -> Usuario | None:
-        async with self.sesiones() as s:
+    async def get_user_by_identity(self, provider: str, subject: str) -> User | None:
+        async with self.sessions() as s:
             u = (
                 await s.execute(
-                    select(UsuarioSQL).where(
-                        UsuarioSQL.proveedor == proveedor, UsuarioSQL.sujeto == sujeto
+                    select(UserSQL).where(
+                        UserSQL.provider == provider, UserSQL.subject == subject
                     )
                 )
             ).scalar_one_or_none()
-            return Usuario.model_validate(u, from_attributes=True) if u else None
+            return User.model_validate(u, from_attributes=True) if u else None
 
-    async def listar_usuarios(self) -> list[Usuario]:
-        async with self.sesiones() as s:
-            filas = (await s.execute(select(UsuarioSQL))).scalars()
-            return [Usuario.model_validate(u, from_attributes=True) for u in filas]
+    async def list_users(self) -> list[User]:
+        async with self.sessions() as s:
+            rows = (await s.execute(select(UserSQL))).scalars()
+            return [User.model_validate(u, from_attributes=True) for u in rows]
 
-    async def eliminar_usuario(self, usuario_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.execute(delete(SesionSQL).where(SesionSQL.usuario_id == usuario_id))
-            await s.execute(delete(UsuarioSQL).where(UsuarioSQL.id == usuario_id))
+    async def delete_user(self, user_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.execute(delete(SessionSQL).where(SessionSQL.user_id == user_id))
+            await s.execute(delete(UserSQL).where(UserSQL.id == user_id))
 
-    async def revocar_sesiones_de(self, usuario_id: str, cuando: datetime) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def revoke_sessions_of(self, user_id: str, when: datetime) -> None:
+        async with self.sessions() as s, s.begin():
             await s.execute(
-                update(SesionSQL)
-                .where(SesionSQL.usuario_id == usuario_id, SesionSQL.revocada_en.is_(None))
-                .values(revocada_en=cuando)
+                update(SessionSQL)
+                .where(SessionSQL.user_id == user_id, SessionSQL.revoked_at.is_(None))
+                .values(revoked_at=when)
             )
 
-    async def guardar_sesion(self, sesion: SesionAcceso) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def save_session(self, session: AccessSession) -> None:
+        async with self.sessions() as s, s.begin():
             await s.merge(
-                SesionSQL(
-                    id=sesion.id,
-                    usuario_id=sesion.usuario_id,
-                    token_hash=sesion.token_hash,
-                    creada_en=sesion.creada_en,
-                    expira_en=sesion.expira_en,
-                    revocada_en=sesion.revocada_en,
+                SessionSQL(
+                    id=session.id,
+                    user_id=session.user_id,
+                    token_hash=session.token_hash,
+                    created_at=session.created_at,
+                    expires_at=session.expires_at,
+                    revoked_at=session.revoked_at,
                 )
             )
 
-    async def obtener_sesion_por_hash(self, token_hash: str) -> SesionAcceso | None:
-        async with self.sesiones() as s:
-            fila = (
-                await s.execute(select(SesionSQL).where(SesionSQL.token_hash == token_hash))
+    async def get_session_by_hash(self, token_hash: str) -> AccessSession | None:
+        async with self.sessions() as s:
+            row = (
+                await s.execute(select(SessionSQL).where(SessionSQL.token_hash == token_hash))
             ).scalar_one_or_none()
-            if fila is None:
+            if row is None:
                 return None
-            return SesionAcceso(
-                fila.id,
-                fila.usuario_id,
-                fila.token_hash,
-                fila.creada_en,
-                fila.expira_en,
-                fila.revocada_en,
+            return AccessSession(
+                row.id,
+                row.user_id,
+                row.token_hash,
+                row.created_at,
+                row.expires_at,
+                row.revoked_at,
             )
 
-    async def revocar_sesion(self, token_hash: str, cuando: datetime) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def revoke_session(self, token_hash: str, when: datetime) -> None:
+        async with self.sessions() as s, s.begin():
             await s.execute(
-                update(SesionSQL)
-                .where(SesionSQL.token_hash == token_hash)
-                .values(revocada_en=cuando)
+                update(SessionSQL)
+                .where(SessionSQL.token_hash == token_hash)
+                .values(revoked_at=when)
             )
 
-    async def renovar_sesion(self, token_hash: str, expira_en: datetime) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def renew_session(self, token_hash: str, expires_at: datetime) -> None:
+        async with self.sessions() as s, s.begin():
             await s.execute(
-                update(SesionSQL)
-                .where(SesionSQL.token_hash == token_hash)
-                .values(expira_en=expira_en)
+                update(SessionSQL)
+                .where(SessionSQL.token_hash == token_hash)
+                .values(expires_at=expires_at)
             )
 
-    async def listar_llamadas(self, estado: str | None = None, limite: int = 100) -> list[Llamada]:
-        async with self.sesiones() as s:
-            q = select(LlamadaSQL).order_by(LlamadaSQL.iniciada_en.desc()).limit(limite)
-            if estado:
-                q = q.where(LlamadaSQL.estado == estado)
+    async def list_calls(self, state: str | None = None, limit: int = 100) -> list[Call]:
+        async with self.sessions() as s:
+            q = select(CallSQL).order_by(CallSQL.started_at.desc()).limit(limit)
+            if state:
+                q = q.where(CallSQL.state == state)
             return [
-                Llamada.model_validate(f, from_attributes=True)
+                Call.model_validate(f, from_attributes=True)
                 for f in (await s.execute(q)).scalars()
             ]
 
-    async def obtener_llamada(self, llamada_id: str) -> Llamada | None:
-        async with self.sesiones() as s:
-            f = await s.get(LlamadaSQL, llamada_id)
-            return Llamada.model_validate(f, from_attributes=True) if f else None
+    async def get_call(self, call_id: str) -> Call | None:
+        async with self.sessions() as s:
+            f = await s.get(CallSQL, call_id)
+            return Call.model_validate(f, from_attributes=True) if f else None
 
-    async def guardar_turno(self, llamada_id: str, turno: int, datos: dict[str, Any]) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def save_turn(self, call_id: str, turn: int, data: dict[str, Any]) -> None:
+        async with self.sessions() as s, s.begin():
             await s.merge(
-                LlamadaTurnoSQL(
-                    id=f"{llamada_id}:{turno}", llamada_id=llamada_id, turno=turno, datos=datos
+                CallTurnSQL(
+                    id=f"{call_id}:{turn}", call_id=call_id, turn=turn, data=data
                 )
             )
 
-    async def listar_turnos(self, llamada_id: str) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
+    async def list_turns(self, call_id: str) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
             q = (
-                select(LlamadaTurnoSQL)
-                .where(LlamadaTurnoSQL.llamada_id == llamada_id)
-                .order_by(LlamadaTurnoSQL.turno)
+                select(CallTurnSQL)
+                .where(CallTurnSQL.call_id == call_id)
+                .order_by(CallTurnSQL.turn)
             )
-            return [{"turno": f.turno, **f.datos} for f in (await s.execute(q)).scalars()]
+            return [{"turn": f.turn, **f.data} for f in (await s.execute(q)).scalars()]
 
-    async def guardar_decision(
-        self, llamada_id: str, turno: int, nodo: str, datos: dict[str, Any]
+    async def save_decision(
+        self, call_id: str, turn: int, node: str, data: dict[str, Any]
     ) -> None:
-        async with self.sesiones() as s, s.begin():
+        async with self.sessions() as s, s.begin():
             s.add(
-                LlamadaDecisionSQL(
+                CallDecisionSQL(
                     id=f"dec-{uuid4().hex[:16]}",
-                    llamada_id=llamada_id,
-                    turno=turno,
-                    nodo=nodo,
-                    datos=datos,
+                    call_id=call_id,
+                    turn=turn,
+                    node=node,
+                    data=data,
                 )
             )
 
-    async def listar_decisiones(self, llamada_id: str) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
+    async def list_decisions(self, call_id: str) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
             q = (
-                select(LlamadaDecisionSQL)
-                .where(LlamadaDecisionSQL.llamada_id == llamada_id)
-                .order_by(LlamadaDecisionSQL.turno, LlamadaDecisionSQL.creada_en)
+                select(CallDecisionSQL)
+                .where(CallDecisionSQL.call_id == call_id)
+                .order_by(CallDecisionSQL.turn, CallDecisionSQL.created_at)
             )
             return [
-                {"turno": f.turno, "nodo": f.nodo, **f.datos}
+                {"turn": f.turn, "node": f.node, **f.data}
                 for f in (await s.execute(q)).scalars()
             ]
 
-    async def guardar_pista(self, pista: dict[str, Any]) -> None:
-        async with self.sesiones() as s, s.begin():
-            await s.merge(PistaAudioSQL(**pista))
+    async def save_track(self, track: dict[str, Any]) -> None:
+        async with self.sessions() as s, s.begin():
+            await s.merge(AudioTrackSQL(**track))
 
-    def _pista_dict(self, f: PistaAudioSQL) -> dict[str, Any]:
+    def _track_dict(self, f: AudioTrackSQL) -> dict[str, Any]:
         return {
             c: getattr(f, c)
             for c in (
-                "id", "llamada_id", "canal", "clave_objeto", "mime", "checksum", "duracion_ms",
-                "creada_en", "expira_en", "eliminada_en",
+                "id", "call_id", "channel", "object_key", "mime", "checksum", "duration_ms",
+                "created_at", "expires_at", "deleted_at",
             )
         }  # fmt: skip
 
-    async def listar_pistas(self, llamada_id: str) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
-            q = select(PistaAudioSQL).where(PistaAudioSQL.llamada_id == llamada_id)
-            return [self._pista_dict(f) for f in (await s.execute(q)).scalars()]
+    async def list_tracks(self, call_id: str) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
+            q = select(AudioTrackSQL).where(AudioTrackSQL.call_id == call_id)
+            return [self._track_dict(f) for f in (await s.execute(q)).scalars()]
 
-    async def obtener_pista(self, pista_id: str) -> dict[str, Any] | None:
-        async with self.sesiones() as s:
-            f = await s.get(PistaAudioSQL, pista_id)
-            return self._pista_dict(f) if f else None
+    async def get_track(self, track_id: str) -> dict[str, Any] | None:
+        async with self.sessions() as s:
+            f = await s.get(AudioTrackSQL, track_id)
+            return self._track_dict(f) if f else None
 
-    async def pistas_vencidas(self, ahora: datetime) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
-            q = select(PistaAudioSQL).where(
-                PistaAudioSQL.expira_en <= ahora, PistaAudioSQL.eliminada_en.is_(None)
+    async def expired_tracks(self, now: datetime) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
+            q = select(AudioTrackSQL).where(
+                AudioTrackSQL.expires_at <= now, AudioTrackSQL.deleted_at.is_(None)
             )
-            return [self._pista_dict(f) for f in (await s.execute(q)).scalars()]
+            return [self._track_dict(f) for f in (await s.execute(q)).scalars()]
 
-    async def marcar_pista_eliminada(self, pista_id: str, cuando: datetime) -> None:
-        async with self.sesiones() as s, s.begin():
+    async def mark_track_deleted(self, track_id: str, when: datetime) -> None:
+        async with self.sessions() as s, s.begin():
             await s.execute(
-                update(PistaAudioSQL)
-                .where(PistaAudioSQL.id == pista_id)
-                .values(eliminada_en=cuando)
+                update(AudioTrackSQL)
+                .where(AudioTrackSQL.id == track_id)
+                .values(deleted_at=when)
             )
 
-    async def registrar_auditoria(
-        self, usuario_id: str | None, accion: str, recurso: str, detalle: dict[str, Any]
+    async def record_audit(
+        self, user_id: str | None, action: str, resource: str, detail: dict[str, Any]
     ) -> None:
-        async with self.sesiones() as s, s.begin():
+        async with self.sessions() as s, s.begin():
             s.add(
-                AuditoriaEventoSQL(
+                AuditEventSQL(
                     id=f"aud-{uuid4().hex[:16]}",
-                    usuario_id=usuario_id,
-                    accion=accion,
-                    recurso=recurso,
-                    detalle=detalle,
+                    user_id=user_id,
+                    action=action,
+                    resource=resource,
+                    detail=detail,
                 )
             )
 
-    async def listar_auditoria(self, limite: int = 200) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
+    async def list_audit(self, limit: int = 200) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
             q = (
-                select(AuditoriaEventoSQL)
-                .order_by(AuditoriaEventoSQL.ocurrido_en.desc())
-                .limit(limite)
+                select(AuditEventSQL)
+                .order_by(AuditEventSQL.occurred_at.desc())
+                .limit(limit)
             )
             return [
                 {
-                    "usuario_id": f.usuario_id,
-                    "accion": f.accion,
-                    "recurso": f.recurso,
-                    "detalle": f.detalle,
-                    "ocurrido_en": f.ocurrido_en.isoformat() if f.ocurrido_en else None,
+                    "user_id": f.user_id,
+                    "action": f.action,
+                    "resource": f.resource,
+                    "detail": f.detail,
+                    "occurred_at": f.occurred_at.isoformat() if f.occurred_at else None,
                 }
                 for f in (await s.execute(q)).scalars()
             ]
 
-    async def listar_incidencias(self) -> list[Incidencia]:
-        async with self.sesiones() as s:
-            filas = (await s.execute(select(IncidenciaSQL))).scalars()
-            return [Incidencia.model_validate(i, from_attributes=True) for i in filas]
+    async def list_incidents(self) -> list[Incident]:
+        async with self.sessions() as s:
+            rows = (await s.execute(select(IncidentSQL))).scalars()
+            return [Incident.model_validate(i, from_attributes=True) for i in rows]
 
-    async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None:
-        async with self.sesiones() as s:
-            i = await s.get(IncidenciaSQL, incidencia_id)
-            return Incidencia.model_validate(i, from_attributes=True) if i else None
+    async def get_incident(self, incident_id: str) -> Incident | None:
+        async with self.sessions() as s:
+            i = await s.get(IncidentSQL, incident_id)
+            return Incident.model_validate(i, from_attributes=True) if i else None
 
-    async def aplicar_accion_incidencia(
-        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    async def apply_incident_action(
+        self, before: Incident, after: Incident, utterance: IncidentHistoryEntry
     ) -> bool:
-        async with self.sesiones() as s, s.begin():
+        async with self.sessions() as s, s.begin():
             # Bloquea la fila: dos decisiones a la vez sobre la misma incidencia se serializan
-            actual = await s.get(IncidenciaSQL, antes.id, with_for_update=True)
-            if actual is None or (actual.estado, actual.especialista_id) != (
-                antes.estado,
-                antes.especialista_id,
+            current = await s.get(IncidentSQL, before.id, with_for_update=True)
+            if current is None or (current.state, current.specialist_id) != (
+                before.state,
+                before.specialist_id,
             ):
                 return False
-            actual.estado = despues.estado
-            actual.especialista_id = despues.especialista_id
-            s.add(IncidenciaHistorialSQL(**entrada.model_dump()))
+            current.state = after.state
+            current.specialist_id = after.specialist_id
+            s.add(IncidentHistorySQL(**utterance.model_dump()))
             return True
 
-    async def listar_historial_incidencia(
-        self, incidencia_id: str
-    ) -> list[EntradaHistorialIncidencia]:
-        async with self.sesiones() as s:
+    async def list_incident_history(
+        self, incident_id: str
+    ) -> list[IncidentHistoryEntry]:
+        async with self.sessions() as s:
             q = (
-                select(IncidenciaHistorialSQL)
-                .where(IncidenciaHistorialSQL.incidencia_id == incidencia_id)
-                .order_by(IncidenciaHistorialSQL.cambiado_en, IncidenciaHistorialSQL.id)
+                select(IncidentHistorySQL)
+                .where(IncidentHistorySQL.incident_id == incident_id)
+                .order_by(IncidentHistorySQL.changed_at, IncidentHistorySQL.id)
             )
             return [
-                EntradaHistorialIncidencia.model_validate(h, from_attributes=True)
+                IncidentHistoryEntry.model_validate(h, from_attributes=True)
                 for h in (await s.execute(q)).scalars()
             ]
 
     # ----------------------------------------------------------------- plantillas del asistente
 
-    async def listar_plantillas_sobrescritas(self) -> dict[str, tuple[str, int]]:
-        async with self.sesiones() as s:
-            filas = (await s.execute(select(PlantillaSQL))).scalars().all()
-        return {f.id: (f.texto, f.version) for f in filas}
+    async def list_overridden_templates(self) -> dict[str, tuple[str, int]]:
+        async with self.sessions() as s:
+            rows = (await s.execute(select(TemplateSQL))).scalars().all()
+        return {f.id: (f.text, f.version) for f in rows}
 
-    async def guardar_plantilla(self, plantilla_id: str, texto: str, autor: str | None) -> int:
-        async with self.sesiones() as s, s.begin():
-            actual = await s.get(PlantillaSQL, plantilla_id)
-            version = (actual.version if actual else 0) + 1
-            if actual is None:
+    async def save_template(self, template_id: str, text: str, author: str | None) -> int:
+        async with self.sessions() as s, s.begin():
+            current = await s.get(TemplateSQL, template_id)
+            version = (current.version if current else 0) + 1
+            if current is None:
                 s.add(
-                    PlantillaSQL(
-                        id=plantilla_id, texto=texto, version=version, actualizada_por=autor
+                    TemplateSQL(
+                        id=template_id, text=text, version=version, updated_by=author
                     )
                 )
             else:
-                actual.texto = texto
-                actual.version = version
-                actual.actualizada_por = autor
-                actual.actualizada_en = datetime.now(UTC)
+                current.text = text
+                current.version = version
+                current.updated_by = author
+                current.updated_at = datetime.now(UTC)
             s.add(
-                PlantillaVersionSQL(
+                TemplateVersionSQL(
                     id=f"plv-{uuid4().hex[:16]}",
-                    plantilla_id=plantilla_id,
+                    template_id=template_id,
                     version=version,
-                    texto=texto,
-                    autor=autor,
+                    text=text,
+                    author=author,
                 )
             )
         return version
 
-    async def borrar_plantilla(self, plantilla_id: str) -> None:
-        async with self.sesiones() as s, s.begin():
-            actual = await s.get(PlantillaSQL, plantilla_id)
-            if actual is not None:
-                await s.delete(actual)
+    async def delete_template(self, template_id: str) -> None:
+        async with self.sessions() as s, s.begin():
+            current = await s.get(TemplateSQL, template_id)
+            if current is not None:
+                await s.delete(current)
 
-    async def historial_plantilla(self, plantilla_id: str) -> list[dict[str, Any]]:
-        async with self.sesiones() as s:
-            filas = (
+    async def template_history(self, template_id: str) -> list[dict[str, Any]]:
+        async with self.sessions() as s:
+            rows = (
                 (
                     await s.execute(
-                        select(PlantillaVersionSQL)
-                        .where(PlantillaVersionSQL.plantilla_id == plantilla_id)
-                        .order_by(PlantillaVersionSQL.version.desc())
+                        select(TemplateVersionSQL)
+                        .where(TemplateVersionSQL.template_id == template_id)
+                        .order_by(TemplateVersionSQL.version.desc())
                     )
                 )
                 .scalars()
@@ -540,63 +540,63 @@ class RepositorioPostgres:
         return [
             {
                 "version": f.version,
-                "texto": f.texto,
-                "autor": f.autor,
-                "creada_en": f.creada_en.isoformat() if f.creada_en else None,
+                "text": f.text,
+                "author": f.author,
+                "created_at": f.created_at.isoformat() if f.created_at else None,
             }
-            for f in filas
+            for f in rows
         ]
 
     # ----------------------------------------------------------------- casos del banco de pruebas
 
-    _CAMPOS_CASO = (
-        "id", "llamada_id", "turno", "banco", "nodo", "pregunta", "oido", "entrada", "catalogo",
-        "equipos", "esperado", "nota", "autor_id",
+    _CASE_FIELDS = (
+        "id", "call_id", "turn", "bank", "node", "question", "heard_text", "utterance", "catalog",
+        "equipment_list", "expected", "note", "author_id",
     )  # fmt: skip
 
-    def _caso_dict(self, f: CasoBancoSQL) -> dict[str, Any]:
+    def _case_dict(self, f: BankCaseSQL) -> dict[str, Any]:
         return {
-            **{c: getattr(f, c) for c in self._CAMPOS_CASO},
-            "creado_en": f.creado_en.isoformat() if f.creado_en else None,
-            "actualizado_en": f.actualizado_en.isoformat() if f.actualizado_en else None,
+            **{c: getattr(f, c) for c in self._CASE_FIELDS},
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+            "updated_at": f.updated_at.isoformat() if f.updated_at else None,
         }
 
-    async def guardar_caso_banco(self, caso: dict[str, Any]) -> dict[str, Any]:
-        datos = {c: caso.get(c) for c in self._CAMPOS_CASO if c != "id"}
-        async with self.sesiones() as s, s.begin():
-            previo = (
+    async def save_test_bank_case(self, case: dict[str, Any]) -> dict[str, Any]:
+        data = {c: case.get(c) for c in self._CASE_FIELDS if c != "id"}
+        async with self.sessions() as s, s.begin():
+            previous = (
                 await s.execute(
-                    select(CasoBancoSQL).where(
-                        CasoBancoSQL.llamada_id == caso["llamada_id"],
-                        CasoBancoSQL.turno == caso["turno"],
-                        CasoBancoSQL.banco == caso["banco"],
+                    select(BankCaseSQL).where(
+                        BankCaseSQL.call_id == case["call_id"],
+                        BankCaseSQL.turn == case["turn"],
+                        BankCaseSQL.bank == case["bank"],
                     )
                 )
             ).scalar_one_or_none()
-            if previo is None:
-                fila = CasoBancoSQL(id=f"cb-{uuid4().hex[:16]}", **datos)
-                s.add(fila)
+            if previous is None:
+                row = BankCaseSQL(id=f"cb-{uuid4().hex[:16]}", **data)
+                s.add(row)
             else:
-                fila = previo
-                for c, v in datos.items():
-                    setattr(fila, c, v)
-                fila.actualizado_en = datetime.now(UTC)
+                row = previous
+                for c, v in data.items():
+                    setattr(row, c, v)
+                row.updated_at = datetime.now(UTC)
             await s.flush()
-            await s.refresh(fila)
-            return self._caso_dict(fila)
+            await s.refresh(row)
+            return self._case_dict(row)
 
-    async def listar_casos_banco(self, llamada_id: str | None = None) -> list[dict[str, Any]]:
-        q = select(CasoBancoSQL).order_by(CasoBancoSQL.creado_en, CasoBancoSQL.id)
-        if llamada_id is not None:
-            q = q.where(CasoBancoSQL.llamada_id == llamada_id)
-        async with self.sesiones() as s:
-            return [self._caso_dict(f) for f in (await s.execute(q)).scalars()]
+    async def list_test_bank_cases(self, call_id: str | None = None) -> list[dict[str, Any]]:
+        q = select(BankCaseSQL).order_by(BankCaseSQL.created_at, BankCaseSQL.id)
+        if call_id is not None:
+            q = q.where(BankCaseSQL.call_id == call_id)
+        async with self.sessions() as s:
+            return [self._case_dict(f) for f in (await s.execute(q)).scalars()]
 
-    async def eliminar_caso_banco(self, caso_id: str) -> dict[str, Any] | None:
-        async with self.sesiones() as s, s.begin():
-            fila = await s.get(CasoBancoSQL, caso_id)
-            if fila is None:
+    async def delete_test_bank_case(self, case_id: str) -> dict[str, Any] | None:
+        async with self.sessions() as s, s.begin():
+            row = await s.get(BankCaseSQL, case_id)
+            if row is None:
                 return None
-            caso = self._caso_dict(fila)
-            await s.delete(fila)
-            return caso
+            case = self._case_dict(row)
+            await s.delete(row)
+            return case

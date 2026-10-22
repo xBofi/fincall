@@ -17,6 +17,6 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 RUN uv sync --frozen --no-dev --extra tts
 
-ENV PATH="/app/.venv/bin:$PATH" BC_PIPER_MODELO=/app/.voces/es_ES-davefx-medium.onnx
+ENV PATH="/app/.venv/bin:$PATH" BC_PIPER_MODEL=/app/.voces/es_ES-davefx-medium.onnx
 EXPOSE 8000
 CMD ["uvicorn", "building_call.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

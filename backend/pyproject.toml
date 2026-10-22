@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 # TTS de servidor para telefonía (Piper local). Instalar con: uv sync --extra tts
 tts = ["piper-tts>=1.7.0"]
-voz = [
+voice = [
     "livekit-agents==1.8.5",
     "livekit-plugins-assemblyai==1.8.5",
     "livekit-plugins-elevenlabs==1.8.5",
@@ -30,7 +30,7 @@ voz = [
 
 [project.scripts]
 building-call = "building_call.api.main:run"
-building-call-agente = "building_call.voz.agente:main"
+building-call-agent = "building_call.voice.agent:main"
 
 [build-system]
 requires = ["uv_build>=0.11.15,<0.12.0"]
@@ -60,11 +60,12 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # Depends(...) en valores por defecto es el idioma de FastAPI
-"src/building_call/operaciones_api.py" = ["B008"]
-"src/building_call/acceso.py" = ["B008"]
+"src/building_call/operations_api.py" = ["B008"]
+"src/building_call/access.py" = ["B008"]
 "src/building_call/api/main.py" = ["B008"]
-"src/building_call/flujo_api.py" = ["B008"]
-"src/building_call/catalogo_api.py" = ["B008"]
+"src/building_call/flow_api.py" = ["B008"]
+"src/building_call/catalog_api.py" = ["B008"]
+"src/building_call/inbox_api.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"

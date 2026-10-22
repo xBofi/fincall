@@ -13,12 +13,12 @@ uv run ruff check src tests; uv run ruff format --check src tests
 
 ## Modos
 
-- `BC_REPOSITORIO=memoria` (por defecto): datos de demostración en memoria, sin base de datos. Para validar los agentes.
-- `BC_REPOSITORIO=postgres`: modo real. Requiere PostgreSQL y migraciones:
+- `BC_REPOSITORY=memoria` (por defecto): datos de demostración en memoria, sin base de datos. Para validar los agentes.
+- `BC_REPOSITORY=postgres`: modo real. Requiere PostgreSQL y migraciones:
 
 ```powershell
 uv run alembic upgrade head
-uv run python -m building_call.repos.semilla   # datos de demostración
+uv run python -m building_call.repos.seed   # datos de demostración
 ```
 
 ## Modelo y latencia
@@ -28,7 +28,7 @@ El cliente usa `format="json"` con `think=false`: el esquema JSON estricto con e
 de Ollama cuelga la petición. Comparar modelos y formatos de prompt:
 
 ```powershell
-uv run python evals/comparar_modelos.py --modelos qwen3.5:4b,qwen3:1.7b --verboso
+uv run python evals/compare_models.py --modelos qwen3.5:4b,qwen3:1.7b --verboso
 ```
 
 Casos reales al banco: en el Historial de la consola, calidad (o administrador/owner) marca un
@@ -37,8 +37,8 @@ turno del vecino como "caso para el banco" con lo que el bot debería haber ente
 ni nombre del vecino):
 
 ```powershell
-uv run python evals/exportar_casos.py --simular        # desde la base de datos configurada
-uv run python evals/exportar_casos.py --entrada casos.json   # JSON de GET /api/operaciones/casos
+uv run python evals/export_cases.py --simular        # desde la base de datos configurada
+uv run python evals/export_cases.py --entrada casos.json   # JSON de GET /api/operaciones/casos
 ```
 
 Métricas de latencia por etapa: `GET /api/metricas`. El navegador envía `respuesta_ms` (fin de
@@ -47,7 +47,7 @@ voz del vecino → inicio de voz del bot) a `POST /api/llamadas/{id}/metricas`. 
 
 ## STT en servidor (opcional)
 
-`BC_STT=whisper` activa faster-whisper (`BC_WHISPER_MODELO=small|base|turbo`, `BC_WHISPER_DISPOSITIVO=cuda|cpu`).
+`BC_STT=whisper` activa faster-whisper (`BC_WHISPER_MODEL=small|base|turbo`, `BC_WHISPER_DEVICE=cuda|cpu`).
 Instalar con `uv pip install faster-whisper` (opcional, no está en el lock). Sin él, el navegador transcribe (Web Speech API).
 
 ## Estructura

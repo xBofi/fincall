@@ -1,97 +1,97 @@
 /**
  * Voz por LiveKit: la consola entra en una sala con el micrófono y el agente de voz del servidor
- * (`building_call.voz.agente`) escucha, habla e informa del ledger de entrega. La consola solo
+ * (`building_call.voice.agent`) escucha, habla e informa del ledger de entrega. La consola solo
  * muestra el estado de la llamada, que sigue en la API.
  */
 import { Room, RoomEvent, Track } from 'livekit-client'
-import { api, type TiemposTurnoServidor, type VistaLlamada } from './api'
+import { api, type ServerTurnTimings, type CallView } from './api'
 
-export interface SesionLiveKit {
-  cerrar: () => void
+export interface LiveKitSession {
+  close: () => void
 }
 
-interface Eventos {
-  onVista: (v: VistaLlamada) => void
+interface Events {
+  onView: (v: CallView) => void
   /** Tiempos que mide el agente (el navegador aquí no mide: ni escucha ni habla) */
-  onTiempos: (turnos: TiemposTurnoServidor[]) => void
-  onHablando: (quien: 'bot' | 'vecino' | null) => void
-  onCerrada: () => void
+  onTimings: (turns: ServerTurnTimings[]) => void
+  onSpeaking: (who: 'bot' | 'caller' | null) => void
+  onEnded: () => void
 }
 
 /** Cada cuánto se refresca la vista de la llamada mientras habla el agente. */
-const REFRESCO_MS = 700
+const REFRESH_MS = 700
 
-export async function abrirLiveKit(llamadaId: string, eventos: Eventos): Promise<SesionLiveKit> {
-  const respuesta = await api.tokenLiveKit(llamadaId)
-  const token = respuesta.token
+export async function openLiveKit(callId: string, events: Events): Promise<LiveKitSession> {
+  const reply = await api.liveKitToken(callId)
+  const token = reply.token
   // "/" = LiveKit por el mismo origen que la consola (túnel): Vite reenvía /rtc
-  const url = respuesta.url.startsWith('/')
+  const url = reply.url.startsWith('/')
     ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
-    : respuesta.url
-  const sala = new Room({ adaptiveStream: true, dynacast: true })
+    : reply.url
+  const room = new Room({ adaptiveStream: true, dynacast: true })
   const audios: HTMLMediaElement[] = []
-  let cerrada = false
-  let ultimaVersion = ''
+  let closed = false
+  let lastVersion = ''
 
-  const cerrar = () => {
-    if (cerrada) return
-    cerrada = true
+  const close = () => {
+    if (closed) return
+    closed = true
     window.clearInterval(refresco)
     audios.forEach((a) => a.remove())
-    void sala.disconnect()
+    void room.disconnect()
     // El agente envía los tiempos del último turno justo antes de colgar: una última consulta
-    void Promise.all([api.obtener(llamadaId), api.metricasLlamada(llamadaId)])
+    void Promise.all([api.get(callId), api.callMetrics(callId)])
       .then(([v, m]) => {
-        eventos.onVista(v)
-        eventos.onTiempos(m.turnos)
+        events.onView(v)
+        events.onTimings(m.turns)
       })
       .catch(() => undefined)
-    eventos.onCerrada()
+    events.onEnded()
   }
 
-  sala.on(RoomEvent.TrackSubscribed, (track) => {
+  room.on(RoomEvent.TrackSubscribed, (track) => {
     if (track.kind !== Track.Kind.Audio) return
     const el = track.attach()
     el.style.display = 'none'
     document.body.appendChild(el)
     audios.push(el)
   })
-  sala.on(RoomEvent.ActiveSpeakersChanged, (activos) => {
-    const local = sala.localParticipant.identity
-    if (!activos.length) eventos.onHablando(null)
-    else eventos.onHablando(activos.some((p) => p.identity === local) ? 'vecino' : 'bot')
+  room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+    const local = room.localParticipant.identity
+    if (!speakers.length) events.onSpeaking(null)
+    else events.onSpeaking(speakers.some((p) => p.identity === local) ? 'caller' : 'bot')
   })
   // El agente cuelga borrando la sala al terminar la despedida
-  sala.on(RoomEvent.Disconnected, cerrar)
+  room.on(RoomEvent.Disconnected, close)
 
   const refresco = window.setInterval(() => {
     api
-      .obtener(llamadaId)
+      .get(callId)
       .then((v) => {
-        const version = `${v.turno}:${v.historial.length}:${v.finalizada}:${JSON.stringify(v.entrega_ultima)}`
-        if (version !== ultimaVersion) {
-          ultimaVersion = version
-          eventos.onVista(v)
+        const version = `${v.turn}:${v.history.length}:${v.finished}:${JSON.stringify(v.last_delivery)}`
+        if (version !== lastVersion) {
+          lastVersion = version
+          events.onView(v)
         }
       })
       .catch(() => undefined)
     // El agente informa de la latencia cuando la respuesta ya ha sonado: se consulta siempre
     api
-      .metricasLlamada(llamadaId)
-      .then((m) => eventos.onTiempos(m.turnos))
+      .callMetrics(callId)
+      .then((m) => events.onTimings(m.turns))
       .catch(() => undefined)
-  }, REFRESCO_MS)
+  }, REFRESH_MS)
 
   try {
-    await sala.connect(url, token)
-    await sala.localParticipant.setMicrophoneEnabled(true, {
+    await room.connect(url, token)
+    await room.localParticipant.setMicrophoneEnabled(true, {
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
     })
   } catch (e) {
-    cerrar()
+    close()
     throw e
   }
-  return { cerrar }
+  return { close }
 }

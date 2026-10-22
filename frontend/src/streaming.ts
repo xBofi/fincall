@@ -5,9 +5,9 @@
  * `ultimaVozAt` se mide localmente por energía para calcular `respuesta_ms` (fin de voz -> TTS).
  */
 
-import type { VistaLlamada } from './api'
+import type { CallView } from './api'
 
-const CODIGO_WORKLET = `
+const WORKLET_CODE = `
 class CapturaPcm extends AudioWorkletProcessor {
   constructor() { super(); this.acum = []; this.n = 0; }
   process(inputs) {
@@ -37,51 +37,51 @@ class CapturaPcm extends AudioWorkletProcessor {
 registerProcessor('captura-pcm', CapturaPcm);
 `
 
-export type MensajeServidor =
-  | { type: 'listo'; conexion_ms?: number }
-  | { type: 'parcial'; texto: string }
-  | { type: 'final'; texto: string }
-  | ({ type: 'respuesta' } & VistaLlamada)
-  | { type: 'error'; mensaje: string }
+export type ServerMessage =
+  | { type: 'ready'; connection_ms?: number }
+  | { type: 'partial'; text: string }
+  | { type: 'final'; text: string }
+  | ({ type: 'reply' } & CallView)
+  | { type: 'error'; message: string }
 
 export interface CallbacksStreaming {
-  onListo: (conexionMs?: number) => void
-  onParcial: (texto: string) => void
-  onFinal: (texto: string, ultimaVozAt: number) => void
-  onRespuesta: (vista: VistaLlamada, ultimaVozAt: number) => void
-  onError: (mensaje: string) => void
-  onVoz: (hablando: boolean) => void
+  onReady: (connectionMs?: number) => void
+  onPartial: (text: string) => void
+  onFinal: (text: string, lastVoiceAt: number) => void
+  onResponse: (view: CallView, lastVoiceAt: number) => void
+  onError: (message: string) => void
+  onVoice: (speaking: boolean) => void
   /** El vecino habla mientras el asistente está en pausa (reproduciendo): barge-in. */
   onBargeIn?: () => void
-  onCerrado: () => void
+  onClosed: () => void
 }
 
-export interface SesionStreaming {
-  pausar: () => void
-  reanudar: () => void
+export interface StreamingSession {
+  should_pause: () => void
+  resume: () => void
   /** Ledger de salida: informa al servidor de qué parte del mensaje del turno llegó a sonar. */
-  informarEntrega: (turno: number, estado: string, ratio: number, textoEntregado: string) => void
-  cerrar: () => void
+  reportDelivery: (turn: number, state: string, ratio: number, deliveredText: string) => void
+  close: () => void
 }
 
-export async function abrirStreaming(
-  llamadaId: string,
+export async function openStreaming(
+  callId: string,
   cb: CallbacksStreaming,
-  umbralVoz = 0.02,
-): Promise<SesionStreaming> {
+  voiceThreshold = 0.02,
+): Promise<StreamingSession> {
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
   })
   const ctx = new AudioContext({ sampleRate: 16000 })
-  let fuente: MediaStreamAudioSourceNode
-  let nodo: AudioWorkletNode
+  let source: MediaStreamAudioSourceNode
+  let node: AudioWorkletNode
   try {
-    const url = URL.createObjectURL(new Blob([CODIGO_WORKLET], { type: 'application/javascript' }))
+    const url = URL.createObjectURL(new Blob([WORKLET_CODE], { type: 'application/javascript' }))
     await ctx.audioWorklet.addModule(url)
     URL.revokeObjectURL(url)
-    fuente = ctx.createMediaStreamSource(stream)
-    nodo = new AudioWorkletNode(ctx, 'captura-pcm')
-    fuente.connect(nodo)
+    source = ctx.createMediaStreamSource(stream)
+    node = new AudioWorkletNode(ctx, 'captura-pcm')
+    source.connect(node)
   } catch (e) {
     // Sin esto el micrófono quedaría encendido aunque la llamada no llegue a empezar
     stream.getTracks().forEach((t) => t.stop())
@@ -91,123 +91,123 @@ export async function abrirStreaming(
   // No conectamos a destino: no queremos oír el micrófono
 
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const ws = new WebSocket(`${proto}://${location.host}/api/llamadas/${llamadaId}/voz?sample_rate=${ctx.sampleRate}`)
+  const ws = new WebSocket(`${proto}://${location.host}/api/calls/${callId}/voice?sample_rate=${ctx.sampleRate}`)
   ws.binaryType = 'arraybuffer'
 
-  let pausado = false
-  let pausadoDesde = 0
-  let ultimaVozAt = 0
-  let hablando = false
-  let vozDesde = 0
-  let cerrado = false
+  let paused = false
+  let pausedSince = 0
+  let lastVoiceAt = 0
+  let speaking = false
+  let voiceSince = 0
+  let closed = false
 
-  const marcarVoz = (rms: number) => {
-    const ahora = performance.now()
-    if (pausado) {
+  const markVoice = (rms: number) => {
+    const now = performance.now()
+    if (paused) {
       // Barge-in: el asistente está hablando; el altavoz puede colarse por el micrófono, así que
       // el umbral es más alto, se exige voz sostenida y se ignoran los primeros 400 ms
-      if (rms >= umbralVoz * 2.5 && ahora - pausadoDesde > 400) {
-        vozDesde ||= ahora
-        if (ahora - vozDesde >= 250) {
-          vozDesde = 0
+      if (rms >= voiceThreshold * 2.5 && now - pausedSince > 400) {
+        voiceSince ||= now
+        if (now - voiceSince >= 250) {
+          voiceSince = 0
           cb.onBargeIn?.()
         }
       } else {
-        vozDesde = 0
+        voiceSince = 0
       }
       return
     }
-    if (rms >= umbralVoz) {
-      vozDesde ||= ahora
-      if (!hablando && ahora - vozDesde >= 150) {
-        hablando = true
-        cb.onVoz(true)
+    if (rms >= voiceThreshold) {
+      voiceSince ||= now
+      if (!speaking && now - voiceSince >= 150) {
+        speaking = true
+        cb.onVoice(true)
       }
-      ultimaVozAt = ahora
+      lastVoiceAt = now
     } else {
-      vozDesde = 0
-      if (hablando && ahora - ultimaVozAt > 300) {
-        hablando = false
-        cb.onVoz(false)
+      voiceSince = 0
+      if (speaking && now - lastVoiceAt > 300) {
+        speaking = false
+        cb.onVoice(false)
       }
     }
   }
 
-  nodo.port.onmessage = (e: MessageEvent<{ pcm?: ArrayBuffer; rms: number }>) => {
-    marcarVoz(e.data.rms)
+  node.port.onmessage = (e: MessageEvent<{ pcm?: ArrayBuffer; rms: number }>) => {
+    markVoice(e.data.rms)
     if (e.data.pcm && ws.readyState === WebSocket.OPEN) ws.send(e.data.pcm)
   }
 
   ws.onmessage = (e) => {
-    let m: MensajeServidor
+    let m: ServerMessage
     try {
-      m = JSON.parse(e.data as string) as MensajeServidor
+      m = JSON.parse(e.data as string) as ServerMessage
     } catch {
       return // mensaje que no es del protocolo: se ignora
     }
     switch (m.type) {
-      case 'listo':
-        cb.onListo(m.conexion_ms)
+      case 'ready':
+        cb.onReady(m.connection_ms)
         break
-      case 'parcial':
-        cb.onParcial(m.texto)
+      case 'partial':
+        cb.onPartial(m.text)
         break
       case 'final':
-        hablando = false
-        cb.onFinal(m.texto, ultimaVozAt)
+        speaking = false
+        cb.onFinal(m.text, lastVoiceAt)
         break
-      case 'respuesta': {
-        const { type: _t, ...vista } = m
-        cb.onRespuesta(vista as VistaLlamada, ultimaVozAt)
+      case 'reply': {
+        const { type: _t, ...view } = m
+        cb.onResponse(view as CallView, lastVoiceAt)
         break
       }
       case 'error':
-        cb.onError(m.mensaje)
+        cb.onError(m.message)
         break
     }
   }
-  const limpiar = () => {
-    if (cerrado) return
-    cerrado = true
-    nodo.disconnect()
-    fuente.disconnect()
+  const clean_up = () => {
+    if (closed) return
+    closed = true
+    node.disconnect()
+    source.disconnect()
     stream.getTracks().forEach((t) => t.stop())
     void ctx.close().catch(() => undefined)
-    cb.onCerrado()
+    cb.onClosed()
   }
-  let listo = false
+  let ready = false
   ws.onclose = (e) => {
-    if (!listo) {
+    if (!ready) {
       console.error(`WebSocket de voz cerrado antes de estar listo (código ${e.code})`)
       cb.onError('No se pudo conectar el reconocimiento de voz. Comprueba que el servidor está en marcha.')
     }
-    limpiar()
+    clean_up()
   }
   ws.onerror = () => cb.onError('Error de conexión con el servidor de voz')
-  const onListoOriginal = cb.onListo
-  cb.onListo = (ms) => {
-    listo = true
-    onListoOriginal(ms)
+  const onReadyOriginal = cb.onReady
+  cb.onReady = (ms) => {
+    ready = true
+    onReadyOriginal(ms)
   }
 
-  const enviar = (o: unknown) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(o))
+  const send = (o: unknown) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(o))
   return {
-    pausar: () => {
-      pausado = true
-      pausadoDesde = performance.now()
-      vozDesde = 0
-      enviar({ type: 'pausa' })
+    should_pause: () => {
+      paused = true
+      pausedSince = performance.now()
+      voiceSince = 0
+      send({ type: 'pause' })
     },
-    reanudar: () => {
-      pausado = false
-      vozDesde = 0
-      enviar({ type: 'reanudar' })
+    resume: () => {
+      paused = false
+      voiceSince = 0
+      send({ type: 'resume' })
     },
-    informarEntrega: (turno, estado, ratio, textoEntregado) =>
-      enviar({ type: 'entrega', turno, estado, ratio, texto_entregado: textoEntregado }),
-    cerrar: () => {
+    reportDelivery: (turn, state, ratio, deliveredText) =>
+      send({ type: 'delivery', turn, state, ratio, delivered_text: deliveredText }),
+    close: () => {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close()
-      limpiar()
+      clean_up()
     },
   }
 }

@@ -1,145 +1,145 @@
-export interface Traza {
-  nodo: string
-  accion: string
-  detalle: string
+export interface Trace {
+  node: string
+  action: string
+  detail: string
 }
 
-export interface Turno {
-  rol: 'bot' | 'vecino'
-  texto: string
+export interface Turn {
+  role: 'bot' | 'caller'
+  text: string
 }
 
-export interface DatosLlamada {
-  finca_id: string | null
-  finca_direccion: string | null
-  vivienda_id: string | null
-  vivienda_etiqueta: string | null
-  nombre_declarado: string | null
-  solicitud: string | null
-  categoria: string | null
-  urgencia: string | null
-  urgencia_declarada: string | null
-  resumen: string | null
-  confirmado: boolean | null
+export interface CallData {
+  estate_id: string | null
+  estate_address: string | null
+  home_id: string | null
+  home_label: string | null
+  declared_name: string | null
+  request: string | null
+  category: string | null
+  urgency: string | null
+  declared_urgency: string | null
+  summary: string | null
+  confirmed: boolean | null
   /** Emergencia con tratamiento activado: indicación de seguridad dada y respuesta recogida */
-  emergencia_atendida?: boolean | null
-  especialista_id: string | null
-  especialista_nombre: string | null
+  emergency_handled?: boolean | null
+  specialist_id: string | null
+  specialist_name: string | null
   /** reparacion | reposicion | siniestro | convivencia | privativo */
-  actuacion: string | null
-  equipo_id: string | null
+  work_type: string | null
+  equipment_id: string | null
   /** Para el administrador o el profesional: equipo, contrato y por qué le llega */
-  sugerencia: string | null
-  objecion: string | null
-  canal_aviso: string | null
-  destino_aviso: string | null
-  incidencia_id: string | null
-  resultado: string | null
-  motivo_revision: string | null
-  configuracion_id: string | null
-  grafo: string | null
-  intentos_finca: number | null
-  intentos_vivienda: number | null
+  suggestion: string | null
+  objection: string | null
+  notice_channel: string | null
+  notice_target: string | null
+  incident_id: string | null
+  result: string | null
+  review_reason: string | null
+  config_id: string | null
+  graph: string | null
+  estate_attempts: number | null
+  home_attempts: number | null
 }
 
-export interface TiemposServidor {
-  turno?: number
-  servidor_ms?: number
-  grafo_ms?: number
+export interface ServerTimings {
+  turn?: number
+  server_ms?: number
+  graph_ms?: number
   stt_ms?: number
-  interpretacion_ms?: number
-  clasificacion_ms?: number
-  llm_llamadas?: number
-  origen_interpretacion?: string
-  stt_eou_a_respuesta_ms?: number
+  interpretation_ms?: number
+  classification_ms?: number
+  llm_calls?: number
+  interpretation_origin?: string
+  stt_eou_to_response_ms?: number
 }
 
-export interface VistaLlamada {
-  llamada_id: string
-  turno: number
-  nodo_actual: string
-  esperando_usuario: boolean
-  finalizada: boolean
-  mensajes_bot: string[]
-  historial: Turno[]
-  traza: Traza[]
-  validaciones: string[]
-  senales_confianza: Record<string, unknown> | null
-  interpretacion: Record<string, unknown> | null
-  pendientes: Record<string, string>
-  tiempos: TiemposServidor
-  configuracion: Record<string, unknown> | null
+export interface CallView {
+  call_id: string
+  turn: number
+  current_node: string
+  awaiting_user: boolean
+  finished: boolean
+  bot_messages: string[]
+  history: Turn[]
+  trace: Trace[]
+  validations: string[]
+  confidence_signals: Record<string, unknown> | null
+  interpretation: Record<string, unknown> | null
+  pending: Record<string, string>
+  timings: ServerTimings
+  config: Record<string, unknown> | null
   /** Ledger de entrega: qué frases del último mensaje oyó el vecino. */
-  entrega_ultima?: Record<string, unknown> | null
-  datos: DatosLlamada
-  transcripcion?: string
-  sin_voz?: boolean
+  last_delivery?: Record<string, unknown> | null
+  data: CallData
+  transcript?: string
+  no_voice?: boolean
 }
 
-export interface TiemposTurnoServidor {
-  turno: number
+export interface ServerTurnTimings {
+  turn: number
   stt_ms: number | null
-  interpretacion_ms: number | null
-  llm_llamadas: number
-  servidor_ms: number
-  respuesta_ms: number | null
-  stt_cliente: string | null
+  interpretation_ms: number | null
+  llm_calls: number
+  server_ms: number
+  response_ms: number | null
+  stt_client: string | null
 }
 
-export interface Salud {
-  estado: string
-  repositorio: string
-  modelo: string
-  modelo_disponible: boolean
-  stt_servidor: string
-  stt_disponible: boolean
+export interface Health {
+  state: string
+  repository: string
+  model: string
+  model_available: boolean
+  stt_server: string
+  stt_available: boolean
   stt_streaming: string | null
   /** Hay servidor de LiveKit configurado: la consola puede hablar por WebRTC con el agente. */
   livekit: boolean
   /** Voz del servidor (la del teléfono); null si no hay y la consola usa la del navegador. */
-  tts_servidor: string | null
-  grafos: string[]
-  umbrales_ms: Record<string, number>
+  server_tts: string | null
+  graphs: string[]
+  thresholds_ms: Record<string, number>
 }
 
-export interface MetricasCliente {
-  turno: number
-  vad_silencio_ms?: number
-  red_ms?: number
-  tts_inicio_ms?: number
-  respuesta_ms?: number
-  stt_cliente?: string
+export interface ClientMetrics {
+  turn: number
+  vad_silence_ms?: number
+  network_ms?: number
+  tts_start_ms?: number
+  response_ms?: number
+  stt_client?: string
   extra?: Record<string, unknown>
 }
 
 export class ApiError extends Error {
   status: number
-  detalle: string
-  constructor(status: number, detalle: string) {
-    super(`${status} ${detalle}`)
+  detail: string
+  constructor(status: number, detail: string) {
+    super(`${status} ${detail}`)
     this.status = status
-    this.detalle = detalle
+    this.detail = detail
   }
 }
 
-async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
+async function ask<T>(url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { credentials: 'same-origin', ...init })
   if (!r.ok) {
-    const texto = await r.text()
-    let detalle = texto
+    const text = await r.text()
+    let detail = text
     try {
-      const j = JSON.parse(texto) as { detail?: unknown }
-      if (typeof j.detail === 'string') detalle = j.detail
+      const j = JSON.parse(text) as { detail?: unknown }
+      if (typeof j.detail === 'string') detail = j.detail
       // Errores de validación de FastAPI: una lista de {loc, msg}; se enseñan los mensajes
       else if (Array.isArray(j.detail))
-        detalle = j.detail
+        detail = j.detail
           .map((d: { msg?: string }) => (d.msg ?? '').replace(/^Value error, /, ''))
           .filter(Boolean)
           .join(' · ')
     } catch {
       // cuerpo no JSON: se usa el texto tal cual
     }
-    throw new ApiError(r.status, detalle || r.statusText)
+    throw new ApiError(r.status, detail || r.statusText)
   }
   if (r.status === 204) return undefined as T
   return (await r.json()) as T
@@ -154,478 +154,478 @@ const json = (body: unknown, method = 'POST'): RequestInit => ({
 
 // ---------------------------------------------------------------- consola operativa (APIs protegidas)
 
-export type Rol = 'owner' | 'administrador' | 'calidad'
+export type Role = 'owner' | 'administrator' | 'quality'
 
-export type EstadoAccesoUsuario = 'sin_solicitar' | 'solicitado' | 'concedido' | 'denegado'
+export type UserAccessState = 'not_requested' | 'requested' | 'granted' | 'denied'
 
-export interface UsuarioConsola {
+export interface ConsoleUser {
   id: string
-  nombre_usuario: string
-  nombre: string | null
-  rol: Rol
-  activo: boolean
+  username: string
+  name: string | null
+  role: Role
+  active: boolean
   email: string | null
   /** 'google' | 'microsoft'; null en las cuentas antiguas con contraseña */
-  proveedor: string | null
-  estado_acceso: EstadoAccesoUsuario
-  solicitado_en: string | null
-  creado_en: string | null
+  provider: string | null
+  access_state: UserAccessState
+  requested_at: string | null
+  created_at: string | null
 }
 
-export interface EstadoAcceso {
-  modo: 'oidc'
-  autenticado: boolean
-  usuario: UsuarioConsola | null
+export interface AccessState {
+  mode: 'oidc'
+  authenticated: boolean
+  user: ConsoleUser | null
 }
 
-export interface ProveedorAcceso {
+export interface AccessProvider {
   id: 'google' | 'microsoft'
-  etiqueta: string
+  label: string
 }
 
 export const auth = {
-  estado: () => pedir<EstadoAcceso>('/api/auth/estado'),
-  proveedores: () => pedir<ProveedorAcceso[]>('/api/auth/proveedores'),
+  state: () => ask<AccessState>('/api/auth/state'),
+  providers: () => ask<AccessProvider[]>('/api/auth/providers'),
   /** Navegación completa: el proveedor vuelve a /api/auth/oidc/{id}/retorno y de ahí a la consola */
-  entrarCon: (id: string) => window.location.assign(`/api/auth/oidc/${id}/inicio`),
-  solicitar: () => pedir<UsuarioConsola>('/api/auth/solicitar', { method: 'POST' }),
-  logout: () => pedir<unknown>('/api/auth/logout', { method: 'POST' }),
+  signInWith: (id: string) => window.location.assign(`/api/auth/oidc/${id}/start`),
+  submit_request: () => ask<ConsoleUser>('/api/auth/submit_request', { method: 'POST' }),
+  logout: () => ask<unknown>('/api/auth/logout', { method: 'POST' }),
 }
 
-export interface EstadoTelefonia {
-  proveedor: string
-  lista: boolean
-  motivo: string | null
-  numero: string | null
-  url_publica: string | null
+export interface TelephonyStatus {
+  provider: string
+  items: boolean
+  reason: string | null
+  number: string | null
+  public_url: string | null
   tts: string
-  tts_disponible: boolean
+  tts_available: boolean
   stt_streaming: boolean
 }
 
-export const telefonia = {
-  estado: () => pedir<EstadoTelefonia>('/api/telefonia/estado'),
+export const telephony = {
+  state: () => ask<TelephonyStatus>('/api/telephony/state'),
 }
 
-export const usuarios = {
-  listar: () => pedir<UsuarioConsola[]>('/api/usuarios'),
-  conceder: (id: string, rol: Rol) => pedir<UsuarioConsola>(`/api/usuarios/${id}/conceder`, json({ rol })),
-  denegar: (id: string) => pedir<UsuarioConsola>(`/api/usuarios/${id}/denegar`, { method: 'POST' }),
-  modificar: (id: string, cambios: { rol?: Rol; activo?: boolean; nombre?: string }) =>
-    pedir<UsuarioConsola>(`/api/usuarios/${id}`, json(cambios, 'PATCH')),
-  eliminar: (id: string) => pedir<void>(`/api/usuarios/${id}`, { method: 'DELETE' }),
+export const users = {
+  list_all: () => ask<ConsoleUser[]>('/api/users'),
+  grant: (id: string, role: Role) => ask<ConsoleUser>(`/api/users/${id}/grant`, json({ role })),
+  deny: (id: string) => ask<ConsoleUser>(`/api/users/${id}/deny`, { method: 'POST' }),
+  modify: (id: string, changes: { role?: Role; active?: boolean; name?: string }) =>
+    ask<ConsoleUser>(`/api/users/${id}`, json(changes, 'PATCH')),
+  remove: (id: string) => ask<void>(`/api/users/${id}`, { method: 'DELETE' }),
 }
 
-export interface Resumen {
+export interface Summary {
   n: number
   p50: number | null
   p95: number | null
   max: number | null
 }
 
-export interface ResumenOperaciones {
-  llamadas: number
-  resueltas: number
-  no_resueltas: number
-  activas: number
-  requieren_revision: number
-  respuesta_ms: Resumen
-  latencia_global: Resumen
+export interface OperationsSummary {
+  calls: number
+  resolved: number
+  unresolved: number
+  active_calls: number
+  need_review: number
+  response_ms: Summary
+  global_latency: Summary
 }
 
-export interface Expediente {
+export interface CallRecord {
   id: string
-  iniciada_en: string
-  telefono_llamante: string | null
-  finca_id: string | null
-  vivienda_id: string | null
-  nombre_declarado: string | null
-  resumen: string | null
-  resultado: string | null
-  motivo_revision: string | null
-  estado: 'activa' | 'finalizada'
-  finalizada_en: string | null
-  requiere_revision: boolean
-  respuesta_ms_p50: number | null
+  started_at: string
+  caller_phone: string | null
+  estate_id: string | null
+  home_id: string | null
+  declared_name: string | null
+  summary: string | null
+  result: string | null
+  review_reason: string | null
+  state: 'active' | 'finished'
+  finished_at: string | null
+  needs_review: boolean
+  response_ms_p50: number | null
 }
 
 /** Lo que el asistente debería haber entendido: un valor, "*" (cualquiera), null (sin dato) o alternativas. */
-export type ValorEsperado = string | boolean | null | (string | boolean | null)[]
+export type ExpectedValue = string | boolean | null | (string | boolean | null)[]
 
-export type BancoPruebas = 'interpretacion' | 'clasificacion'
+export type TestBank = 'interpretation' | 'classification'
 
 /** Turno real del vecino marcado por calidad como caso del banco de pruebas. */
-export interface CasoBanco {
+export interface BankCase {
   id: string
-  llamada_id: string
-  turno: number
-  banco: BancoPruebas
-  nodo: string
-  pregunta: string | null
-  oido: string | null
-  entrada: string
-  catalogo: boolean
-  equipos: [string, string][] | null
-  esperado: Record<string, ValorEsperado>
-  nota: string | null
-  autor_id: string | null
-  creado_en: string
-  actualizado_en: string
+  call_id: string
+  turn: number
+  bank: TestBank
+  node: string
+  question: string | null
+  heard_text: string | null
+  utterance: string
+  catalog: boolean
+  equipment_list: [string, string][] | null
+  expected: Record<string, ExpectedValue>
+  note: string | null
+  author_id: string | null
+  created_at: string
+  updated_at: string
 }
 
-export interface NuevoCasoBanco {
-  turno: number
-  banco: BancoPruebas
-  esperado: Record<string, ValorEsperado>
-  nota?: string | null
-  oido?: string | null
-  pregunta?: string | null
+export interface NewTestBankCase {
+  turn: number
+  bank: TestBank
+  expected: Record<string, ExpectedValue>
+  note?: string | null
+  heard_text?: string | null
+  question?: string | null
 }
 
-export interface OpcionesCaso {
-  claves: string[]
-  intenciones: string[]
-  urgencias: string[]
-  actuaciones: string[]
-  categorias: string[]
+export interface CaseOptions {
+  keys: string[]
+  intents: string[]
+  urgencies: string[]
+  work_types: string[]
+  categories: string[]
 }
 
-export interface DetalleExpediente {
-  llamada: Expediente & { transcripcion: Turno[] }
-  turnos: {
-    turno: number
-    vecino: string | null
-    asistente: string[]
-    nodo_inicial: string
-    nodo_final: string
-    tiempos: TiemposServidor
-    interpretacion?: Record<string, unknown> | null
+export interface CallRecordDetail {
+  call: CallRecord & { transcript: Turn[] }
+  turns: {
+    turn: number
+    caller: string | null
+    assistant: string[]
+    initial_node: string
+    final_node: string
+    timings: ServerTimings
+    interpretation?: Record<string, unknown> | null
   }[]
-  decisiones: { turno: number; nodo: string; accion: string; detalle: string }[]
-  casos?: CasoBanco[]
-  metricas: Record<string, unknown>[]
-  pistas: { id: string; canal: string; duracion_ms: number | null; expira_en: string; disponible: boolean; url: string | null }[]
+  decisions: { turn: number; node: string; action: string; detail: string }[]
+  cases?: BankCase[]
+  metrics: Record<string, unknown>[]
+  tracks: { id: string; channel: string; duration_ms: number | null; expires_at: string; available: boolean; url: string | null }[]
 }
 
-export const operaciones = {
-  resumen: () => pedir<ResumenOperaciones>('/api/operaciones/resumen'),
-  llamadas: (estado?: string) => pedir<Expediente[]>(`/api/operaciones/llamadas${estado ? `?estado=${estado}` : ''}`),
-  detalle: (id: string) => pedir<DetalleExpediente>(`/api/operaciones/llamadas/${id}`),
-  opcionesCaso: () => pedir<OpcionesCaso>('/api/operaciones/casos/opciones'),
-  marcarCaso: (llamadaId: string, caso: NuevoCasoBanco) =>
-    pedir<CasoBanco>(`/api/operaciones/llamadas/${llamadaId}/casos`, json(caso)),
-  desmarcarCaso: (casoId: string) => pedir<void>(`/api/operaciones/casos/${casoId}`, { method: 'DELETE' }),
+export const operations = {
+  summary: () => ask<OperationsSummary>('/api/operations/summary'),
+  calls: (state?: string) => ask<CallRecord[]>(`/api/operations/calls${state ? `?estado=${state}` : ''}`),
+  detail: (id: string) => ask<CallRecordDetail>(`/api/operations/calls/${id}`),
+  caseOptions: () => ask<CaseOptions>('/api/operations/cases/options'),
+  markCase: (callId: string, testCase: NewTestBankCase) =>
+    ask<BankCase>(`/api/operations/calls/${callId}/cases`, json(testCase)),
+  unmarkCase: (caseId: string) => ask<void>(`/api/operations/cases/${caseId}`, { method: 'DELETE' }),
 }
 
 export const api = {
-  salud: () => pedir<Salud>('/api/salud'),
-  iniciar: (telefono?: string) =>
-    pedir<VistaLlamada>('/api/llamadas', json({ telefono_llamante: telefono ?? null })),
-  mensaje: (id: string, texto: string) =>
-    pedir<VistaLlamada>(`/api/llamadas/${id}/mensajes`, json({ texto })),
+  health: () => ask<Health>('/api/health'),
+  begin: (phone?: string) =>
+    ask<CallView>('/api/calls', json({ caller_phone: phone ?? null })),
+  message: (id: string, text: string) =>
+    ask<CallView>(`/api/calls/${id}/messages`, json({ text })),
   audio: (id: string, blob: Blob, mime: string) => {
     const form = new FormData()
-    form.append('fichero', blob, 'turno.webm')
+    form.append('file', blob, 'turno.webm')
     form.append('mime', mime)
-    return pedir<VistaLlamada>(`/api/llamadas/${id}/audio`, { method: 'POST', body: form })
+    return ask<CallView>(`/api/calls/${id}/audio`, { method: 'POST', body: form })
   },
-  metricas: (id: string, cuerpo: MetricasCliente) =>
-    pedir<unknown>(`/api/llamadas/${id}/metricas`, json(cuerpo)),
-  entrega: (id: string, turno: number, estado: string, ratio: number, texto_entregado: string) =>
-    pedir<unknown>(`/api/llamadas/${id}/entrega`, json({ turno, estado, ratio, texto_entregado })),
-  obtener: (id: string) => pedir<VistaLlamada>(`/api/llamadas/${id}`),
+  metrics: (id: string, body: ClientMetrics) =>
+    ask<unknown>(`/api/calls/${id}/metrics`, json(body)),
+  delivery: (id: string, turn: number, state: string, ratio: number, delivered_text: string) =>
+    ask<unknown>(`/api/calls/${id}/delivery`, json({ turn, state, ratio, delivered_text })),
+  get: (id: string) => ask<CallView>(`/api/calls/${id}`),
   /** Tiempos por turno que guarda el servidor (los del agente de LiveKit incluidos) */
-  metricasLlamada: (id: string) =>
-    pedir<{ turnos: TiemposTurnoServidor[] }>(`/api/llamadas/${id}/metricas`),
-  tokenLiveKit: (llamada_id: string) =>
-    pedir<{ url: string; token: string; sala: string }>('/api/livekit/token', json({ llamada_id })),
+  callMetrics: (id: string) =>
+    ask<{ turns: ServerTurnTimings[] }>(`/api/calls/${id}/metrics`),
+  liveKitToken: (call_id: string) =>
+    ask<{ url: string; token: string; room: string }>('/api/livekit/token', json({ call_id })),
 }
 
 // ---------------------------------------------------------------- flujo del asistente
 
-export type TipoNodo = 'decision' | 'pregunta' | 'efecto' | 'terminal'
+export type NodeType = 'decision' | 'question' | 'effect' | 'terminal'
 
-export interface NodoGrafo {
+export interface GraphNode {
   id: string
-  titulo: string
-  resumen: string
-  tipo: TipoNodo
-  etapa: number
-  usa_llm: boolean
-  caminos_deterministas: string[]
-  efectos: string[]
-  plantillas: string[]
+  title: string
+  summary: string
+  kind: NodeType
+  stage: number
+  uses_llm: boolean
+  deterministic_paths: string[]
+  effects: string[]
+  templates: string[]
 }
 
-export interface AristaGrafo {
-  origen: string
-  destino: string
-  condicion: string
-  veces: number
+export interface GraphEdge {
+  origin: string
+  target: string
+  condition: string
+  times: number
 }
 
-export interface Grafo {
-  nodos: NodoGrafo[]
-  aristas: AristaGrafo[]
-  entrada: string
-  plantillas_globales: string[]
-  violaciones: string[]
+export interface Graph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  utterance: string
+  global_templates: string[]
+  violations: string[]
 }
 
-export interface Plantilla {
+export interface Template {
   id: string
-  nodo: string
-  descripcion: string
-  texto: string
-  texto_original: string
+  node: string
+  description: string
+  text: string
+  original_text: string
   variables: string[]
-  pregunta: boolean
-  pregunta_en: string | null
-  sobrescrita: boolean
+  question: boolean
+  question_in: string | null
+  overridden: boolean
   version: number
 }
 
-export interface PromptSistema {
+export interface SystemPrompt {
   id: string
-  titulo: string
+  title: string
   version: string
-  fichero: string
-  cuando: string
-  texto: string
-  contrato: string[]
+  file: string
+  when: string
+  text: string
+  contract: string[]
 }
 
 export interface Prompts {
   editables: boolean
-  motivo: string
-  prompts: PromptSistema[]
+  reason: string
+  prompts: SystemPrompt[]
 }
 
 export const flujo = {
-  grafo: () => pedir<Grafo>('/api/grafo'),
-  prompts: () => pedir<Prompts>('/api/prompts'),
-  plantillas: () => pedir<Plantilla[]>('/api/plantillas'),
-  publicar: (id: string, texto: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, json({ texto }, 'PUT')),
-  restaurar: (id: string) => pedir<Plantilla>(`/api/plantillas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  graph: () => ask<Graph>('/api/graph'),
+  prompts: () => ask<Prompts>('/api/prompts'),
+  templates: () => ask<Template[]>('/api/templates'),
+  publish: (id: string, text: string) => ask<Template>(`/api/templates/${encodeURIComponent(id)}`, json({ text }, 'PUT')),
+  restore: (id: string) => ask<Template>(`/api/templates/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------- catálogos
 
-export interface FincaResumen {
+export interface EstateSummary {
   id: string
-  direccion: string
-  administrador_id: string
-  administrador: string
-  correo: string
-  telefono_oficial: string
-  viviendas: number
+  address: string
+  administrator_id: string
+  administrator: string
+  email: string
+  official_phone: string
+  homes: number
 }
 
-export interface ViviendaCatalogo {
+export interface CatalogHome {
   id: string
-  portal: string | null
-  piso: string
-  puerta: string
+  entrance: string | null
+  floor: string
+  door: string
 }
 
-export interface EquipoCatalogo {
+export interface CatalogEquipment {
   id: string
-  tipo: string
-  descripcion: string
-  ubicacion: string | null
-  marca: string | null
-  modelo: string | null
-  instalador: string | null
-  mantenedor_id: string | null
-  contrato: string | null
-  garantia_hasta: string | null
+  kind: string
+  description: string
+  location: string | null
+  brand: string | null
+  model: string | null
+  installer: string | null
+  maintainer_id: string | null
+  contract: string | null
+  warranty_until: string | null
 }
 
-export interface FincaDetalle extends Omit<FincaResumen, 'viviendas'> {
-  viviendas: ViviendaCatalogo[]
-  equipos: EquipoCatalogo[]
-  configuracion_efectiva: Record<string, unknown>
-  configuracion_id: string | null
+export interface EstateDetail extends Omit<EstateSummary, 'homes'> {
+  homes: CatalogHome[]
+  equipment_list: CatalogEquipment[]
+  effective_config: Record<string, unknown>
+  config_id: string | null
   /** La finca fija sus propios profesionales: lo que se asigne al administrador no le llega. */
-  asignacion_propia?: boolean
+  own_assignment?: boolean
 }
 
-export interface EspecialistaCatalogo {
+export interface CatalogSpecialist {
   id: string
-  nombre: string
-  administrador_id: string
-  administrador: string
-  categoria_principal: string
-  canal_contacto: string
-  destino: string
+  name: string
+  administrator_id: string
+  administrator: string
+  main_category: string
+  contact_channel: string
+  target: string
 }
 
-export interface AdministradorCatalogo {
+export interface CatalogAdministrator {
   id: string
-  nombre: string
-  fincas: { id: string; direccion: string }[]
-  catalogo_categorias: string[]
-  especialista_por_categoria: Record<string, string>
-  configuracion_id: string | null
+  name: string
+  estates: { id: string; address: string }[]
+  category_catalog: string[]
+  specialist_by_category: Record<string, string>
+  config_id: string | null
 }
 
-export interface DatosFinca {
-  direccion: string
-  correo: string
-  telefono_oficial: string
+export interface EstateData {
+  address: string
+  email: string
+  official_phone: string
 }
 
-export interface DatosVivienda {
-  portal: string | null
-  piso: string
-  puerta: string
+export interface HomeData {
+  entrance: string | null
+  floor: string
+  door: string
 }
 
-export type DatosEquipo = Omit<EquipoCatalogo, 'id' | 'descripcion'>
+export type EquipmentData = Omit<CatalogEquipment, 'id' | 'description'>
 
-export interface DatosEspecialista {
-  nombre: string
-  categoria_principal: string
-  canal_contacto: 'correo' | 'llamada'
-  destino: string
+export interface SpecialistData {
+  name: string
+  main_category: string
+  contact_channel: 'email' | 'call'
+  target: string
 }
 
-export interface BorradoEspecialista {
-  borrado: string
-  categorias_desasignadas: string[]
-  equipos_sin_mantenedor: string[]
+export interface SpecialistDeletion {
+  deleted: string
+  unassigned_categories: string[]
+  equipment_without_maintainer: string[]
 }
 
-const ruta = (...partes: string[]) => `/api/catalogos/${partes.map(encodeURIComponent).join('/')}`
+const path = (...parts: string[]) => `/api/catalogs/${parts.map(encodeURIComponent).join('/')}`
 
-export const catalogos = {
-  fincas: () => pedir<FincaResumen[]>('/api/catalogos/fincas'),
-  finca: (id: string) => pedir<FincaDetalle>(`/api/catalogos/fincas/${encodeURIComponent(id)}`),
-  especialistas: () => pedir<EspecialistaCatalogo[]>('/api/catalogos/especialistas'),
-  administradores: () => pedir<AdministradorCatalogo[]>('/api/catalogos/administradores'),
+export const catalogs = {
+  estates: () => ask<EstateSummary[]>('/api/catalogs/estates'),
+  estate: (id: string) => ask<EstateDetail>(`/api/catalogs/estates/${encodeURIComponent(id)}`),
+  specialists: () => ask<CatalogSpecialist[]>('/api/catalogs/specialists'),
+  administrators: () => ask<CatalogAdministrator[]>('/api/catalogs/administrators'),
 
-  crearFinca: (datos: DatosFinca & { administrador_id: string }) => pedir<FincaDetalle>(ruta('fincas'), json(datos)),
-  editarFinca: (id: string, datos: DatosFinca) => pedir<FincaDetalle>(ruta('fincas', id), json(datos, 'PUT')),
-  borrarFinca: (id: string) => pedir<unknown>(ruta('fincas', id), { method: 'DELETE' }),
+  createEstate: (data: EstateData & { administrator_id: string }) => ask<EstateDetail>(path('estates'), json(data)),
+  editEstate: (id: string, data: EstateData) => ask<EstateDetail>(path('estates', id), json(data, 'PUT')),
+  deleteEstate: (id: string) => ask<unknown>(path('estates', id), { method: 'DELETE' }),
 
-  crearVivienda: (finca: string, datos: DatosVivienda) => pedir<ViviendaCatalogo>(ruta('fincas', finca, 'viviendas'), json(datos)),
-  editarVivienda: (finca: string, id: string, datos: DatosVivienda) =>
-    pedir<ViviendaCatalogo>(ruta('fincas', finca, 'viviendas', id), json(datos, 'PUT')),
-  borrarVivienda: (finca: string, id: string) => pedir<unknown>(ruta('fincas', finca, 'viviendas', id), { method: 'DELETE' }),
+  createHome: (estate: string, data: HomeData) => ask<CatalogHome>(path('estates', estate, 'homes'), json(data)),
+  editHome: (estate: string, id: string, data: HomeData) =>
+    ask<CatalogHome>(path('estates', estate, 'homes', id), json(data, 'PUT')),
+  deleteHome: (estate: string, id: string) => ask<unknown>(path('estates', estate, 'homes', id), { method: 'DELETE' }),
 
-  crearEquipo: (finca: string, datos: DatosEquipo) => pedir<EquipoCatalogo>(ruta('fincas', finca, 'equipos'), json(datos)),
-  editarEquipo: (finca: string, id: string, datos: DatosEquipo) =>
-    pedir<EquipoCatalogo>(ruta('fincas', finca, 'equipos', id), json(datos, 'PUT')),
-  borrarEquipo: (finca: string, id: string) => pedir<unknown>(ruta('fincas', finca, 'equipos', id), { method: 'DELETE' }),
+  createEquipment: (estate: string, data: EquipmentData) => ask<CatalogEquipment>(path('estates', estate, 'equipment_list'), json(data)),
+  editEquipment: (estate: string, id: string, data: EquipmentData) =>
+    ask<CatalogEquipment>(path('estates', estate, 'equipment_list', id), json(data, 'PUT')),
+  deleteEquipment: (estate: string, id: string) => ask<unknown>(path('estates', estate, 'equipment_list', id), { method: 'DELETE' }),
 
-  crearEspecialista: (datos: DatosEspecialista & { administrador_id: string }) =>
-    pedir<EspecialistaCatalogo>(ruta('especialistas'), json(datos)),
-  editarEspecialista: (id: string, datos: DatosEspecialista) =>
-    pedir<EspecialistaCatalogo>(ruta('especialistas', id), json(datos, 'PUT')),
-  borrarEspecialista: (id: string, forzar = false) =>
-    pedir<BorradoEspecialista>(`${ruta('especialistas', id)}${forzar ? '?forzar=true' : ''}`, { method: 'DELETE' }),
+  createSpecialist: (data: SpecialistData & { administrator_id: string }) =>
+    ask<CatalogSpecialist>(path('specialists'), json(data)),
+  editSpecialist: (id: string, data: SpecialistData) =>
+    ask<CatalogSpecialist>(path('specialists', id), json(data, 'PUT')),
+  deleteSpecialist: (id: string, force = false) =>
+    ask<SpecialistDeletion>(`${path('specialists', id)}${force ? '?forzar=true' : ''}`, { method: 'DELETE' }),
 
-  asignarCategoria: (admin: string, categoria: string, especialista_id: string | null) =>
-    pedir<AdministradorCatalogo>(ruta('administradores', admin, 'categorias', categoria), json({ especialista_id }, 'PUT')),
+  assignCategory: (admin: string, category: string, specialist_id: string | null) =>
+    ask<CatalogAdministrator>(path('administrators', admin, 'categories', category), json({ specialist_id }, 'PUT')),
 }
 
 // ---------------------------------------------------------------- bandeja del administrador
 
-export type EstadoIncidencia = 'pendiente' | 'asignada' | 'en_curso' | 'esperando_informacion' | 'resuelta' | 'cerrada'
-export type EstadoManual = 'en_curso' | 'esperando_informacion' | 'resuelta' | 'cerrada'
+export type IncidentStatus = 'pending' | 'assigned' | 'in_progress' | 'awaiting_information' | 'resolved' | 'closed'
+export type ManualStatus = 'in_progress' | 'awaiting_information' | 'resolved' | 'closed'
 
-export interface Incidencia {
+export interface Incident {
   id: string
-  llamada_id: string
-  finca_id: string
-  vivienda_id: string
-  descripcion: string
-  categoria: string
-  especialista_id: string | null
-  urgencia: 'baja' | 'media' | 'alta' | 'emergencia'
-  estado: EstadoIncidencia
-  creada_en: string
-  equipo_id: string | null
-  actuacion: string
-  sugerencia: string | null
+  call_id: string
+  estate_id: string
+  home_id: string
+  description: string
+  category: string
+  specialist_id: string | null
+  urgency: 'low' | 'medium' | 'high' | 'emergency'
+  state: IncidentStatus
+  created_at: string
+  equipment_id: string | null
+  work_type: string
+  suggestion: string | null
 }
 
-export interface FilaBandeja extends Incidencia {
-  pendiente_administrador: boolean
-  finca_direccion: string | null
-  vivienda: string | null
-  especialista_nombre: string | null
-  motivo_revision: string | null
+export interface InboxRow extends Incident {
+  pending_administrator: boolean
+  estate_address: string | null
+  home: string | null
+  specialist_name: string | null
+  review_reason: string | null
 }
 
-export interface EspecialistaBandeja {
+export interface InboxSpecialist {
   id: string
-  administrador_id: string
-  nombre: string
-  categoria_principal: string
-  canal_contacto: string
-  destino: string
+  administrator_id: string
+  name: string
+  main_category: string
+  contact_channel: string
+  target: string
 }
 
-export interface EntradaHistorial {
+export interface HistoryEntry {
   id: string
-  accion: 'asignar' | 'cambiar_estado' | 'nota'
-  estado_anterior: EstadoIncidencia | null
-  estado_nuevo: EstadoIncidencia
-  usuario_id: string | null
-  usuario_nombre?: string | null
-  nota: string | null
-  detalle: Record<string, unknown>
-  cambiado_en: string
+  action: 'assign' | 'change_state' | 'note'
+  previous_state: IncidentStatus | null
+  new_state: IncidentStatus
+  user_id: string | null
+  user_name?: string | null
+  note: string | null
+  detail: Record<string, unknown>
+  changed_at: string
 }
 
-export interface DetalleIncidencia {
-  incidencia: Incidencia
-  pendiente_administrador: boolean
-  finca: { id: string; direccion: string } | null
-  vivienda: string | null
-  llamada: {
+export interface IncidentDetail {
+  incident: Incident
+  pending_administrator: boolean
+  estate: { id: string; address: string } | null
+  home: string | null
+  call: {
     id: string
-    iniciada_en: string
-    telefono_llamante: string | null
-    nombre_declarado: string | null
-    resumen: string | null
-    transcripcion: Turno[]
-    resultado: string | null
-    motivo_revision: string | null
+    started_at: string
+    caller_phone: string | null
+    declared_name: string | null
+    summary: string | null
+    transcript: Turn[]
+    result: string | null
+    review_reason: string | null
   } | null
-  equipo: (EquipoCatalogo & { mantenedor: EspecialistaBandeja | null }) | null
-  especialista: EspecialistaBandeja | null
-  especialistas: EspecialistaBandeja[]
-  historial: EntradaHistorial[]
+  equipment: (CatalogEquipment & { maintainer: InboxSpecialist | null }) | null
+  specialist: InboxSpecialist | null
+  specialists: InboxSpecialist[]
+  history: HistoryEntry[]
 }
 
-export interface FiltrosBandeja {
-  estado?: EstadoIncidencia
-  pendientes_administrador?: boolean
-  finca_id?: string
-  urgencia?: string
+export interface InboxFilters {
+  state?: IncidentStatus
+  pending_administrator_only?: boolean
+  estate_id?: string
+  urgency?: string
 }
 
-export interface ResultadoAccion {
-  incidencia: Incidencia
-  historial: EntradaHistorial
-  aviso?: string
+export interface ActionResult {
+  incident: Incident
+  history: HistoryEntry
+  notice?: string
 }
 
-const rutaIncidencia = (id: string, accion = '') => `/api/bandeja/incidencias/${encodeURIComponent(id)}${accion}`
+const incidentPath = (id: string, action = '') => `/api/inbox/incidents/${encodeURIComponent(id)}${action}`
 
-export const bandeja = {
-  listar: (f: FiltrosBandeja = {}) => {
+export const inbox = {
+  list_all: (f: InboxFilters = {}) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== false && v !== '') q.set(k, String(v))
     const s = q.toString()
-    return pedir<FilaBandeja[]>(`/api/bandeja/incidencias${s ? `?${s}` : ''}`)
+    return ask<InboxRow[]>(`/api/inbox/incidents${s ? `?${s}` : ''}`)
   },
-  detalle: (id: string) => pedir<DetalleIncidencia>(rutaIncidencia(id)),
-  asignar: (id: string, especialista_id: string, nota?: string) =>
-    pedir<ResultadoAccion>(rutaIncidencia(id, '/asignar'), json({ especialista_id, nota: nota || null })),
-  estado: (id: string, estado: EstadoManual, nota?: string) =>
-    pedir<ResultadoAccion>(rutaIncidencia(id, '/estado'), json({ estado, nota: nota || null })),
-  nota: (id: string, texto: string) => pedir<ResultadoAccion>(rutaIncidencia(id, '/nota'), json({ texto })),
+  detail: (id: string) => ask<IncidentDetail>(incidentPath(id)),
+  assign: (id: string, specialist_id: string, note?: string) =>
+    ask<ActionResult>(incidentPath(id, '/assign'), json({ specialist_id, note: note || null })),
+  state: (id: string, state: ManualStatus, note?: string) =>
+    ask<ActionResult>(incidentPath(id, '/state'), json({ state, note: note || null })),
+  note: (id: string, text: string) => ask<ActionResult>(incidentPath(id, '/note'), json({ text })),
 }

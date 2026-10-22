@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Spin } from 'antd'
-import { auth, type ProveedorAcceso } from '../api'
+import { auth, type AccessProvider } from '../api'
 import Logo from './Logo'
 
-function IconoGoogle() {
+function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
       <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.2C12.4 13.7 17.7 9.5 24 9.5z" />
@@ -14,7 +14,7 @@ function IconoGoogle() {
   )
 }
 
-function IconoMicrosoft() {
+function MicrosoftIcon() {
   return (
     <svg viewBox="0 0 23 23" width="18" height="18" aria-hidden="true">
       <path fill="#f35325" d="M1 1h10v10H1z" />
@@ -25,18 +25,18 @@ function IconoMicrosoft() {
   )
 }
 
-const ICONOS: Record<string, () => React.JSX.Element> = { google: IconoGoogle, microsoft: IconoMicrosoft }
+const ICONS: Record<string, () => React.JSX.Element> = { google: GoogleIcon, microsoft: MicrosoftIcon }
 
 /** Entrada a la consola: solo con Google o Microsoft (sin contraseñas). */
 export function Login() {
-  const [proveedores, setProveedores] = useState<ProveedorAcceso[] | null>(null)
+  const [providers, setProviders] = useState<AccessProvider[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const fallo = new URLSearchParams(window.location.search).get('acceso') === 'error'
+  const failure = new URLSearchParams(window.location.search).get('access') === 'error'
 
   useEffect(() => {
     auth
-      .proveedores()
-      .then(setProveedores)
+      .providers()
+      .then(setProviders)
       .catch(() => setError('No se ha podido contactar con el servidor.'))
   }, [])
 
@@ -44,26 +44,26 @@ export function Login() {
     <main className="ops-login">
       <section className="ops-login-card" aria-labelledby="titulo-acceso">
         <div className="ops-brand">
-          <Logo conNombre />
+          <Logo withName />
           <div className="ops-brand-producto">
             <h1 id="titulo-acceso">Centro operativo</h1>
           </div>
         </div>
         <p className="ops-login-note">Entra con tu cuenta. Cada acceso queda registrado.</p>
-        {fallo && (
+        {failure && (
           <Alert type="error" showIcon message="No se ha podido completar el inicio de sesión. Vuelve a intentarlo." style={{ marginBottom: 16 }} />
         )}
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
-        {proveedores === null && !error && <Spin className="ops-cargando" />}
-        {proveedores?.length === 0 && (
+        {providers === null && !error && <Spin className="ops-cargando" />}
+        {providers?.length === 0 && (
           <Alert type="warning" showIcon message="El inicio de sesión no está configurado en el servidor." />
         )}
         <div className="ops-login-proveedores">
-          {proveedores?.map((p) => {
-            const Icono = ICONOS[p.id]
+          {providers?.map((p) => {
+            const Icon = ICONS[p.id]
             return (
-              <Button key={p.id} size="large" block icon={Icono ? <Icono /> : undefined} onClick={() => auth.entrarCon(p.id)}>
-                Continuar con {p.etiqueta}
+              <Button key={p.id} size="large" block icon={Icon ? <Icon /> : undefined} onClick={() => auth.signInWith(p.id)}>
+                Continuar con {p.label}
               </Button>
             )
           })}

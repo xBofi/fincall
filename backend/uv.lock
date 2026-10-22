@@ -247,7 +247,7 @@ dependencies = [
 tts = [
     { name = "piper-tts" },
 ]
-voz = [
+voice = [
     { name = "livekit-agents" },
     { name = "livekit-plugins-assemblyai" },
     { name = "livekit-plugins-elevenlabs" },
@@ -271,18 +271,18 @@ requires-dist = [
     { name = "google-auth", extras = ["requests"], specifier = ">=2.61.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langgraph", specifier = ">=1.2.11" },
-    { name = "livekit-agents", marker = "extra == 'voz'", specifier = "==1.8.5" },
+    { name = "livekit-agents", marker = "extra == 'voice'", specifier = "==1.8.5" },
     { name = "livekit-api", specifier = "==1.2.1" },
-    { name = "livekit-plugins-assemblyai", marker = "extra == 'voz'", specifier = "==1.8.5" },
-    { name = "livekit-plugins-elevenlabs", marker = "extra == 'voz'", specifier = "==1.8.5" },
-    { name = "livekit-plugins-silero", marker = "extra == 'voz'", specifier = "==1.8.5" },
+    { name = "livekit-plugins-assemblyai", marker = "extra == 'voice'", specifier = "==1.8.5" },
+    { name = "livekit-plugins-elevenlabs", marker = "extra == 'voice'", specifier = "==1.8.5" },
+    { name = "livekit-plugins-silero", marker = "extra == 'voice'", specifier = "==1.8.5" },
     { name = "piper-tts", marker = "extra == 'tts'", specifier = ">=1.7.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "pyjwt", extras = ["crypto"], specifier = "==2.15.1" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.52" },
 ]
-provides-extras = ["tts", "voz"]
+provides-extras = ["tts", "voice"]
 
 [package.metadata.requires-dev]
 dev = [

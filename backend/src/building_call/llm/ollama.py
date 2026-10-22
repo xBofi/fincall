@@ -17,99 +17,99 @@ from typing import Any
 
 import httpx
 
-_CERCA_CODIGO = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
+_CODE_FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 
 class LLMError(RuntimeError):
     pass
 
 
-def _extraer_json(contenido: str) -> dict[str, Any]:
-    texto = contenido.strip()
-    m = _CERCA_CODIGO.match(texto)
+def _extract_json(content_text: str) -> dict[str, Any]:
+    text = content_text.strip()
+    m = _CODE_FENCE.match(text)
     if m:
-        texto = m.group(1)
+        text = m.group(1)
     try:
-        datos = json.loads(texto)
+        data = json.loads(text)
     except json.JSONDecodeError:
-        inicio, fin = texto.find("{"), texto.rfind("}")
-        if inicio == -1 or fin == -1:
-            raise LLMError(f"El modelo no devolvió JSON: {contenido[:200]!r}") from None
+        start, end = text.find("{"), text.rfind("}")
+        if start == -1 or end == -1:
+            raise LLMError(f"El modelo no devolvió JSON: {content_text[:200]!r}") from None
         try:
-            datos = json.loads(texto[inicio : fin + 1])
+            data = json.loads(text[start : end + 1])
         except json.JSONDecodeError as e:
             raise LLMError(f"JSON inválido del modelo: {e}") from e
-    if not isinstance(datos, dict):
+    if not isinstance(data, dict):
         raise LLMError("La respuesta del modelo no es un objeto JSON")
-    return datos
+    return data
 
 
-def describir_esquema(esquema: dict[str, Any], omitir_nulos: bool = True) -> str:
-    props: dict[str, Any] = esquema.get("properties", {})
-    lineas = []
-    for clave, spec in props.items():
-        tipo = spec.get("type", "string")
-        tipo_txt = " o ".join(tipo) if isinstance(tipo, list) else str(tipo)
+def describe_schema(schema: dict[str, Any], omit_nulls: bool = True) -> str:
+    props: dict[str, Any] = schema.get("properties", {})
+    lines = []
+    for key, spec in props.items():
+        kind = spec.get("type", "string")
+        kind_txt = " o ".join(kind) if isinstance(kind, list) else str(kind)
         if "enum" in spec:
-            tipo_txt += " (uno de: " + ", ".join(map(str, spec["enum"])) + ")"
-        lineas.append(f'- "{clave}": {tipo_txt}')
-    cabecera = "Responde únicamente con un objeto JSON. Claves posibles:\n"
-    pie = (
+            kind_txt += " (uno de: " + ", ".join(map(str, spec["enum"])) + ")"
+        lines.append(f'- "{key}": {kind_txt}')
+    header = "Responde únicamente con un objeto JSON. Claves posibles:\n"
+    footer = (
         "\nOmite las claves cuyo valor sería null: incluye solo lo que el texto diga."
-        if omitir_nulos
+        if omit_nulls
         else "\nIncluye todas las claves."
     )
-    return cabecera + "\n".join(lineas) + pie
+    return header + "\n".join(lines) + footer
 
 
-def _validar(datos: dict[str, Any], esquema: dict[str, Any]) -> dict[str, Any]:
-    props: dict[str, Any] = esquema.get("properties", {})
-    salida: dict[str, Any] = {}
-    for clave, spec in props.items():
-        valor = datos.get(clave)
-        if isinstance(valor, str) and valor.strip().lower() in {"", "null", "none", "n/a"}:
-            valor = None
-        if "enum" in spec and valor not in spec["enum"]:
-            valor = None
-        salida[clave] = valor
-    return salida
+def _validate(data: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    props: dict[str, Any] = schema.get("properties", {})
+    output: dict[str, Any] = {}
+    for key, spec in props.items():
+        value = data.get(key)
+        if isinstance(value, str) and value.strip().lower() in {"", "null", "none", "n/a"}:
+            value = None
+        if "enum" in spec and value not in spec["enum"]:
+            value = None
+        output[key] = value
+    return output
 
 
-class ModeloOllama:
+class OllamaModel:
     def __init__(
         self,
         url: str,
-        modelo: str,
+        model: str,
         timeout_s: float = 120.0,
         num_predict: int = 160,
         num_ctx: int = 2048,
         keep_alive: str = "30m",
     ) -> None:
         self.url = url.rstrip("/")
-        self.modelo = modelo
-        self.nombre = f"ollama/{modelo}"
+        self.model = model
+        self.name = f"ollama/{model}"
         self.num_predict = num_predict
         self.num_ctx = num_ctx
         self.keep_alive = keep_alive
-        self._cliente = httpx.AsyncClient(timeout=timeout_s)
+        self._client = httpx.AsyncClient(timeout=timeout_s)
 
-    async def extraer(
+    async def extract(
         self,
-        sistema: str,
-        usuario: str,
-        esquema: dict[str, Any],
-        instruccion_formato: str | None = None,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        format_instruction: str | None = None,
     ) -> dict[str, Any]:
         """`instruccion_formato=None` describe el esquema automáticamente; "" indica que el
         prompt de sistema ya incluye el formato."""
-        if instruccion_formato is None:
-            instruccion_formato = describir_esquema(esquema)
-        contenido = f"{sistema}\n\n{instruccion_formato}" if instruccion_formato else sistema
-        cuerpo = {
-            "model": self.modelo,
+        if format_instruction is None:
+            format_instruction = describe_schema(schema)
+        content_text = f"{system}\n\n{format_instruction}" if format_instruction else system
+        body = {
+            "model": self.model,
             "messages": [
-                {"role": "system", "content": contenido},
-                {"role": "user", "content": usuario},
+                {"role": "system", "content": content_text},
+                {"role": "user", "content": user},
             ],
             "format": "json",
             "stream": False,
@@ -122,25 +122,25 @@ class ModeloOllama:
             },
         }
         try:
-            r = await self._cliente.post(f"{self.url}/api/chat", json=cuerpo)
+            r = await self._client.post(f"{self.url}/api/chat", json=body)
             r.raise_for_status()
-            contenido = r.json()["message"]["content"]
+            content_text = r.json()["message"]["content"]
         except (httpx.HTTPError, KeyError, ValueError) as e:
             raise LLMError(f"Error llamando a Ollama: {e}") from e
-        return _validar(_extraer_json(contenido), esquema)
+        return _validate(_extract_json(content_text), schema)
 
-    async def disponible(self) -> bool:
+    async def available(self) -> bool:
         try:
-            r = await self._cliente.get(f"{self.url}/api/tags")
-            modelos = r.json().get("models", [])
-            return r.status_code == 200 and any(m["name"] == self.modelo for m in modelos)
+            r = await self._client.get(f"{self.url}/api/tags")
+            models = r.json().get("models", [])
+            return r.status_code == 200 and any(m["name"] == self.model for m in models)
         except (httpx.HTTPError, ValueError):
             return False
 
-    async def calentar(self) -> None:
+    async def warm_up(self) -> None:
         """Carga el modelo en GPU para que el primer turno real no pague la carga."""
         try:
-            await self.extraer(
+            await self.extract(
                 "Devuelve JSON.",
                 "hola",
                 {"type": "object", "properties": {"ok": {"type": "boolean"}}},

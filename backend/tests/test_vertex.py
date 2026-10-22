@@ -9,17 +9,17 @@ import httpx
 import pytest
 
 from building_call.llm.ollama import LLMError
-from building_call.llm.vertex import ModeloVertex, url_generacion, validar_ubicacion
+from building_call.llm.vertex import VertexModel, generation_url, validate_location
 
-ESQUEMA = {
+SCHEMA = {
     "type": "object",
-    "properties": {"intencion": {"type": "string"}, "urgente": {"type": "boolean"}},
+    "properties": {"intent": {"type": "string"}, "urgent": {"type": "boolean"}},
 }
 
 
-class CredencialesFalsas:
+class FakeCredentials:
     def __init__(self) -> None:
-        self.refrescos = 0
+        self.refreshes = 0
         self.token: str | None = None
 
     @property
@@ -27,108 +27,108 @@ class CredencialesFalsas:
         return self.token is not None
 
     def refresh(self, _request: Any) -> None:
-        self.refrescos += 1
-        self.token = f"token-{self.refrescos}"
+        self.refreshes += 1
+        self.token = f"token-{self.refreshes}"
 
 
-def _respuesta(texto: str) -> dict[str, Any]:
-    return {"candidates": [{"content": {"role": "model", "parts": [{"text": texto}]}}]}
+def _response(text: str) -> dict[str, Any]:
+    return {"candidates": [{"content": {"role": "model", "parts": [{"text": text}]}}]}
 
 
-def _modelo(
-    manejador: Any, credenciales: Any, modelo: str = "gemini-2.5-flash-lite"
-) -> ModeloVertex:
-    return ModeloVertex(
+def _model(
+    handler: Any, credentials: Any, model: str = "gemini-2.5-flash-lite"
+) -> VertexModel:
+    return VertexModel(
         "mi-proyecto",
-        modelo,
-        credenciales=credenciales,
-        transporte=httpx.MockTransport(manejador),
+        model,
+        credentials=credentials,
+        transport=httpx.MockTransport(handler),
     )
 
 
-def test_url_multi_region_ue() -> None:
-    assert url_generacion("p", "eu", "gemini-2.5-flash-lite") == (
+def test_url_multi_region_eu() -> None:
+    assert generation_url("p", "eu", "gemini-2.5-flash-lite") == (
         "https://aiplatform.eu.rep.googleapis.com/v1/projects/p/locations/eu"
         "/publishers/google/models/gemini-2.5-flash-lite:generateContent"
     )
 
 
-def test_url_region_europea() -> None:
-    assert url_generacion("p", "europe-southwest1", "m").startswith(
+def test_url_european_region() -> None:
+    assert generation_url("p", "europe-southwest1", "m").startswith(
         "https://europe-southwest1-aiplatform.googleapis.com/v1/projects/p/locations/europe-southwest1/"
     )
 
 
-@pytest.mark.parametrize("ubicacion", ["us-central1", "global", "us", "asia-northeast1", ""])
-def test_rechaza_ubicacion_no_europea(ubicacion: str) -> None:
+@pytest.mark.parametrize("location", ["us-central1", "global", "us", "asia-northeast1", ""])
+def test_rejects_non_european_location(location: str) -> None:
     with pytest.raises(ValueError, match="no europea"):
-        validar_ubicacion(ubicacion)
+        validate_location(location)
     with pytest.raises(ValueError):
-        ModeloVertex("p", "m", ubicacion=ubicacion, credenciales=CredencialesFalsas())
+        VertexModel("p", "m", location=location, credentials=FakeCredentials())
 
 
-async def test_extrae_json_y_desactiva_razonamiento(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("building_call.llm.vertex._refrescar", lambda c: c.refresh(None))
-    peticiones: list[httpx.Request] = []
+async def test_extracts_json_and_disables_reasoning(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("building_call.llm.vertex._refresh", lambda c: c.refresh(None))
+    http_requests: list[httpx.Request] = []
 
-    def manejador(peticion: httpx.Request) -> httpx.Response:
-        peticiones.append(peticion)
-        return httpx.Response(200, json=_respuesta('{"intencion": "averia", "urgente": true}'))
+    def handler(request_body: httpx.Request) -> httpx.Response:
+        http_requests.append(request_body)
+        return httpx.Response(200, json=_response('{"intent": "breakdown", "urgent": true}'))
 
-    llm = _modelo(manejador, CredencialesFalsas())
-    assert await llm.extraer("sistema", "Hay una fuga", ESQUEMA) == {
-        "intencion": "averia",
-        "urgente": True,
+    llm = _model(handler, FakeCredentials())
+    assert await llm.extract("system", "Hay una fuga", SCHEMA) == {
+        "intent": "breakdown",
+        "urgent": True,
     }
-    cuerpo = json.loads(peticiones[0].content)
-    assert cuerpo["generationConfig"]["responseMimeType"] == "application/json"
-    assert cuerpo["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
-    assert cuerpo["contents"][0]["parts"][0]["text"] == "Hay una fuga"
-    assert peticiones[0].headers["Authorization"] == "Bearer token-1"
-    assert peticiones[0].url.host == "aiplatform.eu.rep.googleapis.com"
+    body = json.loads(http_requests[0].content)
+    assert body["generationConfig"]["responseMimeType"] == "application/json"
+    assert body["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+    assert body["contents"][0]["parts"][0]["text"] == "Hay una fuga"
+    assert http_requests[0].headers["Authorization"] == "Bearer token-1"
+    assert http_requests[0].url.host == "aiplatform.eu.rep.googleapis.com"
 
 
-async def test_token_se_reutiliza_mientras_es_valido(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("building_call.llm.vertex._refrescar", lambda c: c.refresh(None))
-    credenciales = CredencialesFalsas()
+async def test_token_is_reused_while_valid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("building_call.llm.vertex._refresh", lambda c: c.refresh(None))
+    credentials = FakeCredentials()
 
-    def manejador(_peticion: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=_respuesta('{"intencion": "x"}'))
+    def handler(_http_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_response('{"intencion": "x"}'))
 
-    llm = _modelo(manejador, credenciales)
+    llm = _model(handler, credentials)
     for _ in range(3):
-        await llm.extraer("s", "u", ESQUEMA)
-    assert credenciales.refrescos == 1
+        await llm.extract("s", "u", SCHEMA)
+    assert credentials.refreshes == 1
 
-    credenciales.token = None  # caduca
-    await llm.extraer("s", "u", ESQUEMA)
-    assert credenciales.refrescos == 2
+    credentials.token = None  # caduca
+    await llm.extract("s", "u", SCHEMA)
+    assert credentials.refreshes == 2
 
 
-async def test_error_http_y_respuesta_vacia(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("building_call.llm.vertex._refrescar", lambda c: c.refresh(None))
-    respuestas = iter(
+async def test_http_error_and_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("building_call.llm.vertex._refresh", lambda c: c.refresh(None))
+    responses = iter(
         [
             httpx.Response(429, json={"error": {"code": 429, "message": "Resource exhausted"}}),
             httpx.Response(200, json={"candidates": [{"finishReason": "SAFETY"}]}),
         ]
     )
-    llm = _modelo(lambda _p: next(respuestas), CredencialesFalsas())
+    llm = _model(lambda _p: next(responses), FakeCredentials())
     with pytest.raises(LLMError, match="429"):
-        await llm.extraer("s", "u", ESQUEMA)
+        await llm.extract("s", "u", SCHEMA)
     with pytest.raises(LLMError, match="no devolvió contenido"):
-        await llm.extraer("s", "u", ESQUEMA)
+        await llm.extract("s", "u", SCHEMA)
 
 
-async def test_gemini_3_no_envia_thinking_budget(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("building_call.llm.vertex._refrescar", lambda c: c.refresh(None))
-    cuerpos: list[dict[str, Any]] = []
+async def test_gemini_3_does_not_send_thinking_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("building_call.llm.vertex._refresh", lambda c: c.refresh(None))
+    bodies: list[dict[str, Any]] = []
 
-    def manejador(peticion: httpx.Request) -> httpx.Response:
-        cuerpos.append(json.loads(peticion.content))
-        return httpx.Response(200, json=_respuesta('{"intencion": "x"}'))
+    def handler(request_body: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request_body.content))
+        return httpx.Response(200, json=_response('{"intencion": "x"}'))
 
-    await _modelo(manejador, CredencialesFalsas(), "gemini-3.1-flash-lite").extraer(
-        "s", "u", ESQUEMA
+    await _model(handler, FakeCredentials(), "gemini-3.1-flash-lite").extract(
+        "s", "u", SCHEMA
     )
-    assert "thinkingConfig" not in cuerpos[0]["generationConfig"]
+    assert "thinkingConfig" not in bodies[0]["generationConfig"]

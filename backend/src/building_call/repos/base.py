@@ -4,56 +4,56 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from building_call.domain.configuracion import ConfiguracionEfectiva
-from building_call.domain.entidades import (
-    Administrador,
-    EntradaHistorialIncidencia,
-    Equipo,
-    Especialista,
-    Finca,
-    Incidencia,
-    Llamada,
-    Vivienda,
+from building_call.domain.config import EffectiveConfig
+from building_call.domain.entities import (
+    Administrator,
+    Call,
+    Equipment,
+    Estate,
+    Home,
+    Incident,
+    IncidentHistoryEntry,
+    Specialist,
 )
 
 
-class Repositorio(Protocol):
-    async def listar_fincas(self) -> list[Finca]: ...
+class Repository(Protocol):
+    async def list_estates(self) -> list[Estate]: ...
 
-    async def obtener_finca(self, finca_id: str) -> Finca | None: ...
+    async def get_estate(self, estate_id: str) -> Estate | None: ...
 
-    async def obtener_administrador(self, administrador_id: str) -> Administrador | None: ...
+    async def get_administrator(self, administrator_id: str) -> Administrator | None: ...
 
-    async def viviendas_de(self, finca_id: str) -> list[Vivienda]: ...
+    async def homes_of(self, estate_id: str) -> list[Home]: ...
 
-    async def especialistas_de(self, administrador_id: str) -> list[Especialista]: ...
+    async def specialists_of(self, administrator_id: str) -> list[Specialist]: ...
 
-    async def equipos_de(self, finca_id: str) -> list[Equipo]: ...
+    async def equipment_of(self, estate_id: str) -> list[Equipment]: ...
 
-    async def configuracion_efectiva(
-        self, finca_id: str
-    ) -> tuple[ConfiguracionEfectiva, str | None]:
+    async def effective_config(
+        self, estate_id: str
+    ) -> tuple[EffectiveConfig, str | None]:
         """Devuelve la configuración resuelta y el id de la versión de finca aplicada."""
         ...
 
-    async def guardar_llamada(self, llamada: Llamada) -> None: ...
+    async def save_call(self, call: Call) -> None: ...
 
-    async def guardar_incidencia(self, incidencia: Incidencia) -> None: ...
+    async def save_incident(self, incident: Incident) -> None: ...
 
-    async def listar_incidencias(self) -> list[Incidencia]: ...
+    async def list_incidents(self) -> list[Incident]: ...
 
-    async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None: ...
+    async def get_incident(self, incident_id: str) -> Incident | None: ...
 
-    async def aplicar_accion_incidencia(
-        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    async def apply_incident_action(
+        self, before: Incident, after: Incident, utterance: IncidentHistoryEntry
     ) -> bool:
-        """Guarda `despues` y su entrada de historial a la vez (todo o nada). Si la incidencia ya
-        no está como `antes` (estado o especialista), alguien actuó mientras tanto: no toca nada
+        """Guarda `after` y su entrada de historial a la vez (todo o nada). Si la incidencia ya
+        no está como `before` (estado o especialista), alguien actuó mientras tanto: no toca nada
         y devuelve False."""
         ...
 
-    async def listar_historial_incidencia(
-        self, incidencia_id: str
-    ) -> list[EntradaHistorialIncidencia]:
+    async def list_incident_history(
+        self, incident_id: str
+    ) -> list[IncidentHistoryEntry]:
         """Las acciones sobre una incidencia, de la más antigua a la más reciente."""
         ...

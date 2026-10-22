@@ -20,47 +20,47 @@ import httpx
 import jwt
 
 #: Inquilino de las cuentas personales de Microsoft (outlook.com, hotmail, live)
-TENANT_CUENTAS_PERSONALES = "9188040d-6c67-4c5b-b112-36a304b66dad"
+PERSONAL_ACCOUNTS_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad"
 
 
-class ErrorOidc(Exception):
+class OidcError(Exception):
     """El proveedor o el token no son válidos: el acceso se rechaza."""
 
 
 @dataclass(frozen=True)
-class Proveedor:
-    nombre: str
-    etiqueta: str
-    autorizacion_url: str
+class Provider:
+    name: str
+    label: str
+    authorization_url: str
     token_url: str
     jwks_url: str
     client_id: str
     client_secret: str
 
-    def emisor_valido(self, claims: dict[str, Any]) -> bool:
+    def valid_issuer(self, claims: dict[str, Any]) -> bool:
         iss = claims.get("iss")
-        if self.nombre == "google":
+        if self.name == "google":
             return iss in ("https://accounts.google.com", "accounts.google.com")
         # Microsoft "common": el emisor lleva el inquilino del propio token
         tid = claims.get("tid")
         return bool(tid) and iss == f"https://login.microsoftonline.com/{tid}/v2.0"
 
-    def correo_verificado(self, claims: dict[str, Any]) -> str | None:
-        correo = claims.get("email")
-        if not isinstance(correo, str) or not correo:
+    def verified_email(self, claims: dict[str, Any]) -> str | None:
+        email = claims.get("email")
+        if not isinstance(email, str) or not email:
             return None
-        if self.nombre == "google":
-            return correo.lower() if claims.get("email_verified") is True else None
+        if self.name == "google":
+            return email.lower() if claims.get("email_verified") is True else None
         # En un inquilino de empresa el correo lo escribe su administrador: no prueba nada
-        if claims.get("tid") == TENANT_CUENTAS_PERSONALES or claims.get("xms_edov") is True:
-            return correo.lower()
+        if claims.get("tid") == PERSONAL_ACCOUNTS_TENANT or claims.get("xms_edov") is True:
+            return email.lower()
         return None
 
 
-def proveedores_configurados(s: Any) -> dict[str, Proveedor]:
-    salida: dict[str, Proveedor] = {}
+def configured_providers(s: Any) -> dict[str, Provider]:
+    output: dict[str, Provider] = {}
     if s.google_client_id and s.google_client_secret:
-        salida["google"] = Proveedor(
+        output["google"] = Provider(
             "google",
             "Google",
             "https://accounts.google.com/o/oauth2/v2/auth",
@@ -71,7 +71,7 @@ def proveedores_configurados(s: Any) -> dict[str, Proveedor]:
         )
     if s.microsoft_client_id and s.microsoft_client_secret:
         base = "https://login.microsoftonline.com/common"
-        salida["microsoft"] = Proveedor(
+        output["microsoft"] = Provider(
             "microsoft",
             "Microsoft",
             f"{base}/oauth2/v2.0/authorize",
@@ -80,49 +80,49 @@ def proveedores_configurados(s: Any) -> dict[str, Proveedor]:
             s.microsoft_client_id,
             s.microsoft_client_secret,
         )
-    return salida
+    return output
 
 
 @dataclass(frozen=True)
-class Identidad:
-    proveedor: str
-    sujeto: str
-    correo_verificado: str | None
-    correo: str | None
-    nombre: str | None
+class Identity:
+    provider: str
+    subject: str
+    verified_email: str | None
+    email: str | None
+    name: str | None
 
 
 @dataclass(frozen=True)
-class Intento:
+class Attempt:
     """Lo que se guarda (firmado) entre la ida al proveedor y la vuelta."""
 
     state: str
     nonce: str
-    verificador: str
+    verifier: str
 
     @classmethod
-    def nuevo(cls) -> Intento:
+    def fresh(cls) -> Attempt:
         return cls(secrets.token_urlsafe(24), secrets.token_urlsafe(24), secrets.token_urlsafe(48))
 
     @property
-    def reto(self) -> str:
-        digest = hashlib.sha256(self.verificador.encode()).digest()
+    def challenge(self) -> str:
+        digest = hashlib.sha256(self.verifier.encode()).digest()
         return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-def url_autorizacion(p: Proveedor, intento: Intento, retorno: str) -> str:
+def authorization_url(p: Provider, attempt: Attempt, callback: str) -> str:
     return (
-        p.autorizacion_url
+        p.authorization_url
         + "?"
         + urlencode(
             {
                 "client_id": p.client_id,
                 "response_type": "code",
-                "redirect_uri": retorno,
+                "redirect_uri": callback,
                 "scope": "openid email profile",
-                "state": intento.state,
-                "nonce": intento.nonce,
-                "code_challenge": intento.reto,
+                "state": attempt.state,
+                "nonce": attempt.nonce,
+                "code_challenge": attempt.challenge,
                 "code_challenge_method": "S256",
                 "prompt": "select_account",
             }
@@ -130,63 +130,63 @@ def url_autorizacion(p: Proveedor, intento: Intento, retorno: str) -> str:
     )
 
 
-def verificar_id_token(p: Proveedor, token: str, clave: Any, nonce: str) -> Identidad:
+def verify_id_token(p: Provider, token: str, key: Any, nonce: str) -> Identity:
     try:
         claims = jwt.decode(
             token,
-            clave,
+            key,
             algorithms=["RS256"],
             audience=p.client_id,
             options={"require": ["exp", "iat", "sub", "aud", "iss"]},
             leeway=60,
         )
     except jwt.PyJWTError as e:
-        raise ErrorOidc(f"id_token no válido: {e}") from e
-    if not p.emisor_valido(claims):
-        raise ErrorOidc("emisor del id_token no válido")
+        raise OidcError(f"id_token no válido: {e}") from e
+    if not p.valid_issuer(claims):
+        raise OidcError("emisor del id_token no válido")
     if not secrets.compare_digest(str(claims.get("nonce", "")), nonce):
-        raise ErrorOidc("nonce del id_token no coincide")
-    correo = claims.get("email") if isinstance(claims.get("email"), str) else None
-    return Identidad(
-        proveedor=p.nombre,
-        sujeto=str(claims["sub"]),
-        correo_verificado=p.correo_verificado(claims),
-        correo=correo.lower() if correo else None,
-        nombre=claims.get("name") if isinstance(claims.get("name"), str) else None,
+        raise OidcError("nonce del id_token no coincide")
+    email = claims.get("email") if isinstance(claims.get("email"), str) else None
+    return Identity(
+        provider=p.name,
+        subject=str(claims["sub"]),
+        verified_email=p.verified_email(claims),
+        email=email.lower() if email else None,
+        name=claims.get("name") if isinstance(claims.get("name"), str) else None,
     )
 
 
-class ClienteOidc:
+class OidcClient:
     """Habla con el proveedor: canjea el código y obtiene la clave pública del token."""
 
     def __init__(self) -> None:
         self._jwks: dict[str, jwt.PyJWKClient] = {}
 
-    async def canjear(self, p: Proveedor, codigo: str, verificador: str, retorno: str) -> str:
+    async def exchange(self, p: Provider, code: str, verifier: str, callback: str) -> str:
         async with httpx.AsyncClient(timeout=15) as http:
             r = await http.post(
                 p.token_url,
                 data={
                     "grant_type": "authorization_code",
-                    "code": codigo,
-                    "redirect_uri": retorno,
+                    "code": code,
+                    "redirect_uri": callback,
                     "client_id": p.client_id,
                     "client_secret": p.client_secret,
-                    "code_verifier": verificador,
+                    "code_verifier": verifier,
                 },
                 headers={"Accept": "application/json"},
             )
         if r.status_code != 200:
-            raise ErrorOidc(f"el proveedor rechazó el código ({r.status_code})")
+            raise OidcError(f"el proveedor rechazó el código ({r.status_code})")
         token = r.json().get("id_token")
         if not isinstance(token, str):
-            raise ErrorOidc("el proveedor no devolvió id_token")
+            raise OidcError("el proveedor no devolvió id_token")
         return token
 
-    async def clave(self, p: Proveedor, token: str) -> Any:
-        cliente = self._jwks.setdefault(p.nombre, jwt.PyJWKClient(p.jwks_url, cache_keys=True))
+    async def key(self, p: Provider, token: str) -> Any:
+        client = self._jwks.setdefault(p.name, jwt.PyJWKClient(p.jwks_url, cache_keys=True))
         try:
             # PyJWKClient descarga con urllib (bloqueante): fuera del bucle de eventos
-            return (await asyncio.to_thread(cliente.get_signing_key_from_jwt, token)).key
+            return (await asyncio.to_thread(client.get_signing_key_from_jwt, token)).key
         except jwt.PyJWTError as e:
-            raise ErrorOidc(f"clave de firma desconocida: {e}") from e
+            raise OidcError(f"clave de firma desconocida: {e}") from e

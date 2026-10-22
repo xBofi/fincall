@@ -11,10 +11,10 @@ __pycache__/
 node_modules/
 dist/
 frontend/dist/
-backend/evals/audio_sintetico/
+backend/evals/synthetic_audio/
 backend/.audio/
 backend/.voces/
-backend/evals/voz_resultados/
+backend/evals/voice_results/
 backend/*credenciales*.json
 backend/gcp-*.json
 

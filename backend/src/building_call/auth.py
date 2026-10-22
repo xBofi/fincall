@@ -8,6 +8,6 @@ from __future__ import annotations
 import hashlib
 
 
-def hash_token_sesion(token: str) -> str:
+def hash_session_token(token: str) -> str:
     """Devuelve el digest persistible de un token opaco de sesión."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()

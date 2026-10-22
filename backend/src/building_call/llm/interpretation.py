@@ -1,0 +1,214 @@
+"""Interpretación de un turno del vecino: una sola llamada al LLM por turno.
+
+El modelo extrae todo lo que el vecino haya dicho (aunque no sea lo que se le preguntó), una
+intención global y, si el nodo lo pide, la clasificación de la incidencia. El código decide qué
+hacer con ello (bóveda, 04 Arquitectura).
+
+Latencia (medido con qwen3.5:4b en RTX 4070 SUPER, 2026-08-28): claves largas + nulos = 71 tokens
+de salida ≈ 1 270 ms; claves cortas y solo claves con valor = 15 tokens ≈ 440 ms. El prompt de
+sistema es constante por tarea para aprovechar la caché KV de Ollama.
+"""
+
+from __future__ import annotations
+
+from time import perf_counter
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field
+
+from building_call.domain.config import URGENCIES
+from building_call.domain.entities import WORK_TYPES
+from building_call.llm import wire
+from building_call.llm.base import LanguageModel
+from building_call.llm.prompts import described_catalog
+
+INTERPRETATION_VERSION = "interpretacion-v7"
+
+Intent = Literal[
+    "continue",  # responde a lo preguntado o aporta datos
+    "repeat",  # no ha entendido, pide que se repita
+    "correct",  # corrige un dato dado antes
+    "human",  # quiere hablar con una persona
+    "hang_up",  # despedida o quiere terminar
+    "out_of_scope",  # pide algo que el asistente no gestiona
+    "question",  # hace una pregunta al asistente (¿esto se graba?, ¿cuánto tardan?)
+]
+
+INTENTS: tuple[str, ...] = (
+    "continue",
+    "repeat",
+    "correct",
+    "human",
+    "hang_up",
+    "out_of_scope",
+    "question",
+)
+
+DATA_FIELDS: tuple[str, ...] = ("address", "entrance", "floor", "door", "name", "problem")
+
+_EMPTY_MARKERS = {
+    "no especificado", "no especificada", "desconocido", "desconocida", "ninguno", "ninguna",
+    "null", "none", "n/a", "na", "sin especificar", "no indicado", "no dice", "no menciona",
+    "vacio", "vacío", "-", "?", "no aplica",
+}  # fmt: skip
+
+# Claves del JSON del modelo -> nombres del dominio, en `wire` (medido: las claves
+# abreviadas bajan la exactitud de 98% a 82%)
+_KEYS: dict[str, str] = wire.KEYS
+
+
+class Interpretation(BaseModel):
+    intent: Intent = "continue"
+    confirms: bool | None = None
+    address: str | None = None
+    entrance: str | None = None
+    floor: str | None = None
+    door: str | None = None
+    name: str | None = None
+    problem: str | None = None
+    question: str | None = None
+    # Solo cuando se pide clasificar en la misma llamada
+    category: str | None = None
+    urgency: str | None = None
+    summary: str | None = None
+    work_type: str | None = None
+    equipment: str | None = None
+    # Acepta lo dicho pero discrepa de cómo se va a resolver: no es una corrección de datos
+    objection: str | None = None
+    # Métrica: milisegundos de la llamada al modelo (0 si no se llamó)
+    llm_ms: int = Field(default=0, exclude=True)
+    origin: Literal["llm", "deterministic"] = Field(default="llm", exclude=True)
+
+    def present_fields(self) -> list[str]:
+        return [c for c in DATA_FIELDS if getattr(self, c) not in (None, "")]
+
+
+BASE_SYSTEM = """Eres el módulo de comprensión de un asistente telefónico de incidencias de comunidades de vecinos (España). Extrae SOLO lo que el vecino dice explícitamente en su último mensaje; no inventes.
+
+Claves:
+- intencion: continuar (responde o aporta datos; es el valor por defecto, puedes omitirla) | repetir (pide repetir, no ha entendido) | corregir (rectifica un dato anterior: "no, era el cuarto", "me he equivocado") | humano (quiere hablar con una persona) | colgar (se despide o quiere terminar) | fuera_ambito (pide algo ajeno a incidencias de la finca: cuotas, juntas, otros vecinos) | pregunta (pregunta al asistente sin aportar datos: "¿esto se graba?", "¿cuánto tardan?").
+- confirma: true/false solo si responde a una pregunta de sí/no ("eso es", "correcto" = true; "no", "no es..." = false).
+- direccion: calle y número de la finca, tal cual los dice.
+- portal, piso, puerta: si menciona la vivienda. Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número. Si corrige la vivienda, da siempre el piso y la puerta buenos completos, aunque solo cambie uno.
+- nombre: nombre con el que se presenta, sin frases.
+- problema: solo si cuenta qué pasa (una avería o una solicitud). Una frase cortada sin sentido, una dirección o una vivienda no son un problema. La incidencia o solicitud en máximo 12 palabras, con sus palabras y conservando SIEMPRE dónde ocurre si lo dice (planta, zona, portal): "luz del pasillo del segundo no funciona", no "luz no funciona".
+- pregunta: la pregunta que hace al asistente, si la hace.
+- objecion: si acepta pero pone una pega a cómo se va a resolver ("sí, pero eso no lo arregla un electricista"), la pega en pocas palabras. No es una objeción corregir un dato."""
+
+_CLASSIFY_SYSTEM = """
+- categoria: categoría de la incidencia si describe una, exactamente una de: {catalog}. La decide el elemento que falla, nunca el sitio donde está ni lo que hay al lado: "el enchufe que hay junto al ascensor no va" es electricidad; "grieta en la pared de los buzones" es albanileria. Si no nombra el elemento que falla, "no_clasificable": no lo deduzcas del verbo aunque suela ir con uno ("se ha parado", "no va", "se ha roto", "hace ruido" no dicen qué). Si lo que falla no tiene categoría propia en el catálogo (gas, incendio, plagas…), "no_clasificable": nunca la más parecida.
+- urgencia: urgencia si describe una incidencia: baja (molestia sin riesgo ni daño: bombilla fundida, goteo leve) | media (afecta al uso normal: sin luz en zonas comunes, puerta que no cierra) | alta (daño en curso o servicio esencial interrumpido: inundación, ascensor averiado, sin agua, cascotes cayendo) | emergencia (riesgo inmediato para personas: alguien atrapado, olor a gas, incendio).
+- actuacion: qué pide la incidencia, si describe una: reparacion (arreglar algo que se ha estropeado; es el valor por defecto, puedes omitirla) | reposicion (cambiar algo entero o una obra nueva) | siniestro (vandalismo, robo, daños por tormenta, golpe de un tercero: va al seguro) | convivencia (ruidos, molestias o conflictos con vecinos) | privativo (dentro de una vivienda particular, no de la comunidad)."""
+
+_EQUIPMENT_SYSTEM = """
+- equipo: si la incidencia afecta a uno de los equipos de esta finca, su id, exactamente uno de: {equipment_list}. Si nombra el tipo de equipo ("el ascensor", "el portero") y en la finca solo hay uno de ese tipo, es ese. Si no afecta a ninguno, omítela."""
+
+FORMAT = """
+
+Formato: un objeto JSON en UNA sola línea, sin espacios ni saltos, incluyendo SOLO las claves con valor (nunca escribas null). Ejemplos: {"piso":"3","puerta":"B"}  {"intencion":"humano"}  {"confirma":false,"direccion":"Calle Mayor 12"}  {"nombre":"Ana","problema":"no hay luz en la escalera"}"""
+
+
+def described_equipment(equipment_list: list[tuple[str, str]]) -> str:
+    """'eq-1 (portero automático Fermax, portal); eq-2 (ascensor Orona)' para los prompts."""
+    return "; ".join(f"{i} ({d})" for i, d in equipment_list)
+
+
+def interpretation_system_prompt(
+    catalog: list[str] | None = None, equipment_list: list[tuple[str, str]] | None = None
+) -> str:
+    if catalog:
+        system = BASE_SYSTEM + _CLASSIFY_SYSTEM.format(catalog=described_catalog(catalog))
+        if equipment_list:
+            system += _EQUIPMENT_SYSTEM.format(equipment_list=described_equipment(equipment_list))
+        return system + FORMAT
+    return BASE_SYSTEM + FORMAT
+
+
+def _schema(
+    catalog: list[str] | None, equipment_list: list[tuple[str, str]] | None = None
+) -> dict[str, Any]:
+    # Lo que ve el modelo: claves y códigos en español (`wire`)
+    props: dict[str, Any] = {
+        "intencion": {"type": "string", "enum": list(wire.INTENTS)},
+        "confirma": {"type": ["boolean", "null"]},
+        **{
+            k: {"type": ["string", "null"]}
+            for k in (
+                "direccion",
+                "portal",
+                "piso",
+                "puerta",
+                "nombre",
+                "problema",
+                "pregunta",
+                "objecion",
+            )
+        },
+    }
+    if catalog:
+        props["categoria"] = {"type": "string", "enum": [wire.to_model(c) for c in catalog]}
+        props["urgencia"] = {"type": "string", "enum": list(wire.URGENCIES)}
+        props["actuacion"] = {"type": "string", "enum": list(wire.WORK_TYPES)}
+        if equipment_list:
+            props["equipo"] = {"type": "string", "enum": [i for i, _ in equipment_list]}
+    return {"title": "interpretation", "type": "object", "properties": props, "required": []}
+
+
+def normalize_interpretation(data: dict[str, Any], llm_ms: int = 0) -> Interpretation:
+    read = wire.read(data)
+    clean: dict[str, Any] = {key: read.get(key) for key in _KEYS.values() if key != "reply"}
+    if clean.get("intent") not in INTENTS:
+        clean["intent"] = "continue"
+    c = clean.get("confirms")
+    if isinstance(c, str):
+        c = {"true": True, "false": False}.get(c.strip().lower())
+    clean["confirms"] = c if isinstance(c, bool) else None
+    for key in (
+        *DATA_FIELDS,
+        "question",
+        "summary",
+        "category",
+        "urgency",
+        "work_type",
+        "equipment",
+        "objection",
+    ):
+        v = clean.get(key)
+        clean[key] = (
+            str(v).strip() if isinstance(v, str | int | float) and str(v).strip() else None
+        )
+        # Marcadores de "no lo sé" que el modelo devuelve como si fueran datos
+        if clean[key] and clean[key].lower() in _EMPTY_MARKERS:
+            clean[key] = None
+    if clean["urgency"] not in URGENCIES:
+        clean["urgency"] = None
+    if clean["work_type"] not in WORK_TYPES:
+        clean["work_type"] = None
+    return Interpretation(**clean, llm_ms=llm_ms, origin="llm")
+
+
+async def interpret(
+    llm: LanguageModel,
+    last_question: str | None,
+    utterance: str,
+    node: str,
+    catalog: list[str] | None = None,
+    heard_text: str | None = None,
+    equipment_list: list[tuple[str, str]] | None = None,
+) -> Interpretation:
+    """Una llamada al modelo. `catalog` añade la clasificación de la incidencia a la misma llamada.
+    `heard_text`: lo que llegó a sonar del último mensaje, solo si el vecino lo cortó (ledger).
+    `equipment_list`: (id, descripción) de los equipos de la finca, para saber a cuál afecta."""
+    user = f'Pregunta del asistente: "{last_question or "(inicio)"}"\n'
+    if heard_text is not None:
+        user += f'El vecino interrumpió al asistente; solo llegó a oír: "{heard_text}"\n'
+    user += f'Respuesta del vecino: """{utterance}"""'
+    start = perf_counter()
+    data = await llm.extract(
+        interpretation_system_prompt(catalog, equipment_list),
+        user,
+        _schema(catalog, equipment_list),
+        format_instruction="",
+    )
+    ms = int((perf_counter() - start) * 1000)
+    return normalize_interpretation(data, ms)

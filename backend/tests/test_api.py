@@ -1,120 +1,120 @@
 from __future__ import annotations
 
 import pytest
-from conftest import sesion_de_prueba
+from conftest import make_session
 from httpx import ASGITransport, AsyncClient
 
-from building_call.api.main import crear_app
-from building_call.graph.nodos import Dependencias
-from building_call.stt import Transcripcion
+from building_call.api.main import create_app
+from building_call.graph.nodes import Dependencies
+from building_call.stt import Transcript
 
 
-class STTFalso:
-    nombre = "falso/stt"
+class FakeSTT:
+    name = "falso/stt"
 
-    def __init__(self, texto: str = "Calle Mayor 12") -> None:
-        self.texto = texto
+    def __init__(self, text: str = "Calle Mayor 12") -> None:
+        self.text = text
 
-    def disponible(self) -> bool:
+    def available(self) -> bool:
         return True
 
-    async def transcribir(self, audio: bytes, mime: str) -> Transcripcion:
-        return Transcripcion(
-            texto=self.texto, ms=42, modelo=self.nombre, detalle={"bytes": len(audio)}
+    async def transcribe(self, audio: bytes, mime: str) -> Transcript:
+        return Transcript(
+            text=self.text, ms=42, model=self.name, detail={"bytes": len(audio)}
         )
 
 
 @pytest.fixture
-async def cliente(deps: Dependencias):
-    app = crear_app(deps, stt=STTFalso())
+async def client(deps: Dependencies):
+    app = create_app(deps, stt=FakeSTT())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
+        c.cookies.set("bc_session", make_session(deps.repo))  # type: ignore[arg-type]
         yield c
 
 
-async def test_salud(cliente: AsyncClient) -> None:
-    r = await cliente.get("/api/salud")
+async def test_health(client: AsyncClient) -> None:
+    r = await client.get("/api/health")
     assert r.status_code == 200
-    cuerpo = r.json()
-    assert cuerpo["grafos"] == ["estandar"]
-    assert cuerpo["stt_disponible"] is True
-    assert cuerpo["umbrales_ms"]["objetivo"] == 1200
+    body = r.json()
+    assert body["graphs"] == ["standard"]
+    assert body["stt_available"] is True
+    assert body["thresholds_ms"]["target"] == 1200
 
 
-async def test_fincas_incluye_viviendas(cliente: AsyncClient) -> None:
-    r = await cliente.get("/api/fincas")
-    fincas = r.json()
-    assert {f["id"] for f in fincas} == {"finca-mayor-12", "finca-alameda-5"}
-    assert "3º B" in next(f for f in fincas if f["id"] == "finca-mayor-12")["viviendas"]
+async def test_estates_include_homes(client: AsyncClient) -> None:
+    r = await client.get("/api/estates")
+    estates = r.json()
+    assert {f["id"] for f in estates} == {"finca-mayor-12", "finca-alameda-5"}
+    assert "3º B" in next(f for f in estates if f["id"] == "finca-mayor-12")["homes"]
 
 
-async def test_conversacion_por_api(cliente: AsyncClient, repo: object) -> None:
-    r = await cliente.post("/api/llamadas", json={"telefono_llamante": "+34600111222"})
+async def test_conversation_via_api(client: AsyncClient, repo: object) -> None:
+    r = await client.post("/api/calls", json={"caller_phone": "+34600111222"})
     assert r.status_code == 201
-    llamada_id = r.json()["llamada_id"]
-    assert r.json()["esperando_usuario"] is True
-    assert r.json()["turno"] == 0
+    call_id = r.json()["call_id"]
+    assert r.json()["awaiting_user"] is True
+    assert r.json()["turn"] == 0
 
-    for texto in [
+    for text in [
         "Calle Mayor 12",
         "sí",
         "4 A",
         "No funciona el enchufe de la cocina",
         "sí",
     ]:
-        r = await cliente.post(f"/api/llamadas/{llamada_id}/mensajes", json={"texto": texto})
+        r = await client.post(f"/api/calls/{call_id}/messages", json={"text": text})
         assert r.status_code == 200
-    vista = r.json()
-    assert vista["finalizada"] is True
-    assert vista["turno"] == 5
-    assert vista["datos"]["categoria"] == "electricidad"
-    assert vista["datos"]["incidencia_id"]
-    assert "servidor_ms" in vista["tiempos"]
+    view = r.json()
+    assert view["finished"] is True
+    assert view["turn"] == 5
+    assert view["data"]["category"] == "electrical"
+    assert view["data"]["incident_id"]
+    assert "server_ms" in view["timings"]
 
-    r = await cliente.get("/api/incidencias")
+    r = await client.get("/api/incidents")
     assert len(r.json()) == 1
-    llamada = repo.llamadas[llamada_id]  # type: ignore[attr-defined]
-    assert llamada.estado == "finalizada"
-    assert llamada.finalizada_en is not None
-    assert llamada.requiere_revision is False
+    call = repo.calls[call_id]  # type: ignore[attr-defined]
+    assert call.state == "finished"
+    assert call.finished_at is not None
+    assert call.needs_review is False
 
 
-async def test_turno_por_audio_usa_stt_del_servidor(cliente: AsyncClient) -> None:
-    llamada_id = (await cliente.post("/api/llamadas", json={})).json()["llamada_id"]
-    r = await cliente.post(
-        f"/api/llamadas/{llamada_id}/audio",
-        files={"fichero": ("turno.webm", b"\x1a\x45\xdf\xa3 audio falso", "audio/webm")},
+async def test_audio_turn_uses_server_stt(client: AsyncClient) -> None:
+    call_id = (await client.post("/api/calls", json={})).json()["call_id"]
+    r = await client.post(
+        f"/api/calls/{call_id}/audio",
+        files={"file": ("turn.webm", b"\x1a\x45\xdf\xa3 audio falso", "audio/webm")},
         data={"mime": "audio/webm"},
     )
     assert r.status_code == 200
-    vista = r.json()
-    assert vista["transcripcion"] == "Calle Mayor 12"
-    assert vista["tiempos"]["stt_ms"] == 42
-    assert vista["datos"]["intentos_finca"] == 0
-    assert "Calle Mayor 12" in vista["mensajes_bot"][0]
+    view = r.json()
+    assert view["transcript"] == "Calle Mayor 12"
+    assert view["timings"]["stt_ms"] == 42
+    assert view["data"]["estate_attempts"] == 0
+    assert "Calle Mayor 12" in view["bot_messages"][0]
 
 
-async def test_metricas_cliente_y_agregados(cliente: AsyncClient) -> None:
-    llamada_id = (await cliente.post("/api/llamadas", json={})).json()["llamada_id"]
-    await cliente.post(f"/api/llamadas/{llamada_id}/mensajes", json={"texto": "Calle Mayor 12"})
-    r = await cliente.post(
-        f"/api/llamadas/{llamada_id}/metricas",
-        json={"turno": 1, "respuesta_ms": 950, "vad_silencio_ms": 550, "tts_inicio_ms": 80},
+async def test_client_metrics_and_aggregates(client: AsyncClient) -> None:
+    call_id = (await client.post("/api/calls", json={})).json()["call_id"]
+    await client.post(f"/api/calls/{call_id}/messages", json={"text": "Calle Mayor 12"})
+    r = await client.post(
+        f"/api/calls/{call_id}/metrics",
+        json={"turn": 1, "response_ms": 950, "vad_silence_ms": 550, "tts_start_ms": 80},
     )
     assert r.status_code == 200
-    assert r.json()["calificacion"] == "objetivo"
-    r = await cliente.get(f"/api/llamadas/{llamada_id}/metricas")
-    agregados = r.json()["agregados"]
-    assert agregados["turnos"] == 2  # saludo + primer turno
-    assert agregados["respuesta_ms"]["p50"] == 950
-    r = await cliente.get("/api/metricas")
-    assert r.json()["agregados"]["calificaciones"]["objetivo"] == 1
-    r = await cliente.post(
-        f"/api/llamadas/{llamada_id}/metricas", json={"turno": 99, "respuesta_ms": 1}
+    assert r.json()["rating"] == "target"
+    r = await client.get(f"/api/calls/{call_id}/metrics")
+    aggregates = r.json()["aggregates"]
+    assert aggregates["turns"] == 2  # saludo + primer turno
+    assert aggregates["response_ms"]["p50"] == 950
+    r = await client.get("/api/metrics")
+    assert r.json()["aggregates"]["ratings"]["target"] == 1
+    r = await client.post(
+        f"/api/calls/{call_id}/metrics", json={"turn": 99, "response_ms": 1}
     )
     assert r.status_code == 404
 
 
-async def test_llamada_inexistente_404(cliente: AsyncClient) -> None:
-    r = await cliente.post("/api/llamadas/nope/mensajes", json={"texto": "hola"})
+async def test_nonexistent_call_404(client: AsyncClient) -> None:
+    r = await client.post("/api/calls/nope/messages", json={"text": "hola"})
     assert r.status_code == 404

@@ -48,13 +48,13 @@ Usa `gh auth login` con un token fine-grained limitado al repositorio `<private-
 docker compose up -d db                       # PostgreSQL 17 (127.0.0.1:5433, datos en volumen)
 cd backend
 uv run alembic upgrade head                   # esquema
-uv run python -m building_call.repos.semilla  # fincas y administradores de demostración
+uv run python -m building_call.repos.seed  # fincas y administradores de demostración
 uv run building-call                          # API en :8000 (lee backend/.env)
 cd ../frontend; corepack pnpm run dev         # consola en :5173
 ```
 
 Pila completa en contenedores: `docker compose up -d` (web en `http://localhost:8080`, Ollama sigue en el host).
-Con `backend/.env` en `BC_REPOSITORIO=postgres` y `BC_DATABASE_URL=postgresql+asyncpg://building_call:<contraseña>@127.0.0.1:5433/building_call`.
+Con `backend/.env` en `BC_REPOSITORY=postgres` y `BC_DATABASE_URL=postgresql+asyncpg://building_call:<contraseña>@127.0.0.1:5433/building_call`.
 
 ### Acceso a la consola operativa
 
@@ -92,12 +92,12 @@ de ngrok: hay que pulsar *Visit Site* una vez para que las peticiones de la apli
 ### Telefonía
 
 El asistente puede atender un número real (Twilio Media Streams; proveedor Provisional). Con las
-credenciales y una URL https pública, `uv run python -m building_call.telefonia.configurar` deja el
+credenciales y una URL https pública, `uv run python -m building_call.telephony.configure` deja el
 número apuntando a la API. Guía completa en `docs/TELEFONIA.md`.
 
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
 bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);
-todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESION_SECRETO` firma las URLs con las que
-se descargan las grabaciones: es **obligatorio** (mínimo 32 caracteres) con `BC_REPOSITORIO=postgres` y la API
+todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESSION_SECRET` firma las URLs con las que
+se descargan las grabaciones: es **obligatorio** (mínimo 32 caracteres) con `BC_REPOSITORY=postgres` y la API
 se niega a arrancar sin él; genéralo con `python -c "import secrets; print(secrets.token_urlsafe(48))"`.

@@ -1,0 +1,46 @@
+{"request": "Hay una fuga de agua en el baño y está inundando el suelo", "category": "plumbing", "urgencies": ["high", "emergency"]}
+{"request": "El ascensor se ha quedado parado entre dos plantas y hay una señora dentro", "category": "elevator", "urgencies": ["high", "emergency"]}
+{"request": "No funciona la luz del portal y las escaleras están a oscuras", "category": "electrical", "urgencies": ["medium", "high"]}
+{"request": "La bombilla del descansillo del segundo lleva una semana fundida", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "Gotea un poco el grifo del patio comunitario", "category": "plumbing", "urgencies": ["low"]}
+{"request": "La puerta del portal no cierra bien y se queda abierta por la noche", "category": "locksmith", "urgencies": ["medium", "high"]}
+{"request": "Se me ha quedado la llave dentro y no puedo entrar al trastero", "category": "locksmith", "urgencies": ["medium", "low"]}
+{"request": "La basura del portal lleva días sin recogerse y huele fatal", "category": "cleaning", "urgencies": ["medium", "low"]}
+{"request": "Hay una grieta grande en la fachada y se están cayendo cascotes a la acera", "category": "masonry", "urgencies": ["high", "emergency"]}
+{"request": "Se ha desprendido un azulejo en la entrada", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "Quiero pedir una copia del acta de la última junta", "category": "administrative", "urgencies": ["low"]}
+{"request": "Huele a gas en el rellano del tercero", "category": "unclassifiable", "urgencies": ["emergency", "high"]}
+{"request": "He visto un ovni en la azotea", "category": "unclassifiable", "urgencies": ["low"]}
+{"request": "El ascensor hace un ruido raro pero funciona", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "Salta el diferencial de la comunidad cada dos por tres y nos quedamos sin luz en el garaje", "category": "electrical", "urgencies": ["medium", "high"]}
+{"request": "El interfono de mi piso no suena cuando llaman", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "El interruptor de la luz que está al lado del ascensor no funciona", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "Junto a la puerta del ascensor hay una mancha de humedad en la pared", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "Está parado", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "El ascensor tarda mucho en venir", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "Los botones del ascensor no se iluminan pero el ascensor funciona", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "Se ha fundido la bombilla del rellano, la que está enfrente del ascensor", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "El portero automático no funciona, no se oye cuando llaman", "category": ["electrical", "unclassifiable"], "urgencies": ["low", "medium"]}
+{"request": "Se ha parado otra vez", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "Hay pintadas en la fachada del edificio", "category": "painting", "urgencies": ["low"]}
+{"request": "Los setos del jardín comunitario invaden la acera", "category": "gardening", "urgencies": ["low", "medium"]}
+{"request": "La tubería que pasa junto al cuarto de contadores de la luz gotea", "category": "plumbing", "urgencies": ["low", "medium", "high"]}
+{"request": "Hay mucha basura acumulada junto al ascensor", "category": "cleaning", "urgencies": ["low", "medium"]}
+{"request": "El ascensor del portal dos no se mueve y tiene las puertas abiertas", "category": "elevator", "urgencies": ["medium", "high"]}
+{"request": "Se ha soltado una baldosa del portal y alguien puede tropezar", "category": "masonry", "urgencies": ["medium", "high"]}
+{"request": "Quiero saber cuándo es la próxima junta de vecinos", "category": "administrative", "urgencies": ["low"]}
+{"request": "La cerradura del trastero comunitario está rota", "category": "locksmith", "urgencies": ["low", "medium"]}
+{"request": "Ya no funciona, otra vez lo mismo", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "El timbre de mi puerta no suena", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "Sale agua por debajo de la puerta del cuarto de basuras", "category": "plumbing", "urgencies": ["medium", "high"]}
+{"request": "Hay muchas cucarachas en el portal por la noche", "category": "unclassifiable", "urgencies": ["medium", "low", "high"]}
+{"request": "La puerta del portal no cierra y se queda abierta", "category": "locksmith", "urgencies": ["medium", "high"]}
+{"request": "Hay una mancha de humedad en el techo del rellano del tercero", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "El ascensor va dando tirones al subir", "category": "elevator", "urgencies": ["medium", "high"]}
+{"request": "El mando del garaje no abre la puerta", "category": "locksmith", "urgencies": ["low", "medium"]}
+{"request": "Necesito un certificado de estar al corriente de pago", "category": "administrative", "urgencies": ["low"]}
+{"request": "Se ha caído una rama grande del árbol del patio", "category": "gardening", "urgencies": ["medium", "high"]}
+{"request": "Sale humo del cuarto de contadores de la luz", "category": ["electrical", "unclassifiable"], "urgencies": ["emergency"]}
+{"request": "Hay un incendio en el garaje comunitario", "category": "unclassifiable", "urgencies": ["emergency"]}
+{"request": "Huele mucho a gas en el portal, creo que hay una fuga", "category": ["unclassifiable", "plumbing"], "urgencies": ["emergency"]}
+{"request": "Un niño se ha quedado atrapado en el ascensor", "category": "elevator", "urgencies": ["emergency", "high"]}

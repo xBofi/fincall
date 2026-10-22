@@ -1,0 +1,18 @@
+[
+  {
+    "model": "vertex:gemini-3.5-flash-lite",
+    "interpretation": {
+      "accuracy": 1.0,
+      "n": 492,
+      "p50_ms": 705,
+      "p95_ms": 924
+    },
+    "classification": {
+      "category": 1.0,
+      "urgency": 1.0,
+      "n": 138,
+      "p50_ms": 752.3148000000219,
+      "p95_ms": 898.2500000001892
+    }
+  }
+]

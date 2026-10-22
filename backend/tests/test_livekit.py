@@ -6,86 +6,86 @@ import asyncio
 from typing import Any
 
 import pytest
-from conftest import sesion_de_prueba
+from conftest import make_session
 from httpx import ASGITransport, AsyncClient
 
-from building_call.api.main import crear_app
-from building_call.graph.ledger import corte_por_palabras
-from building_call.graph.nodos import Dependencias
+from building_call.api.main import create_app
+from building_call.graph.ledger import cut_by_words
+from building_call.graph.nodes import Dependencies
 from building_call.settings import settings
-from building_call.voz.control import ControlLlamada, solo_muletillas
+from building_call.voice.control import CallControl, only_fillers
 
-SECRETO = "secreto-del-agente-con-largo-suficiente-0123456789"
+SECRET = "secreto-del-agente-con-largo-suficiente-0123456789"
 
 
 @pytest.fixture
-def con_livekit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "agente_secreto", SECRETO)
+def with_livekit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "agent_secret", SECRET)
     monkeypatch.setattr(settings, "livekit_url", "ws://localhost:7880")
     monkeypatch.setattr(settings, "livekit_api_key", "devkey")
     monkeypatch.setattr(settings, "livekit_api_secret", "secret-de-desarrollo-con-largo-suficiente")
 
 
 @pytest.fixture
-async def app(deps: Dependencias, con_livekit: None):  # noqa: ARG001
-    return crear_app(deps, fabrica_streaming=None)
+async def app(deps: Dependencies, with_livekit: None):  # noqa: ARG001
+    return create_app(deps, streaming_factory=None)
 
 
-async def test_el_agente_conversa_con_su_secreto(app) -> None:  # type: ignore[no-untyped-def]
-    cabeceras = {"Authorization": f"Bearer {SECRETO}"}
+async def test_the_agent_talks_with_its_secret(app) -> None:  # type: ignore[no-untyped-def]
+    headers = {"Authorization": f"Bearer {SECRET}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/api/llamadas", json={}, headers=cabeceras)
+        r = await c.post("/api/calls", json={}, headers=headers)
         assert r.status_code == 201
-        vista = r.json()
-        assert vista["piezas"] and vista["piezas"][-1]["importancia"] == "pregunta"
+        view = r.json()
+        assert view["pieces"] and view["pieces"][-1]["importance"] == "question"
         r = await c.post(
-            f"/api/llamadas/{vista['llamada_id']}/mensajes",
-            json={"texto": "Calle Mayor 12"},
-            headers=cabeceras,
+            f"/api/calls/{view['call_id']}/messages",
+            json={"text": "Calle Mayor 12"},
+            headers=headers,
         )
-        assert r.status_code == 200 and r.json()["turno"] == 1
+        assert r.status_code == 200 and r.json()["turn"] == 1
 
 
-async def test_secreto_incorrecto_o_sin_configurar_no_entra(
+async def test_wrong_or_unset_secret_does_not_get_in(
     app, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # type: ignore[no-untyped-def]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/api/llamadas", json={}, headers={"Authorization": "Bearer otro"})
+        r = await c.post("/api/calls", json={}, headers={"Authorization": "Bearer otro"})
         assert r.status_code == 401
-        monkeypatch.setattr(settings, "agente_secreto", "")
-        r = await c.post("/api/llamadas", json={}, headers={"Authorization": "Bearer "})
+        monkeypatch.setattr(settings, "agent_secret", "")
+        r = await c.post("/api/calls", json={}, headers={"Authorization": "Bearer "})
         assert r.status_code == 401
 
 
-async def test_la_consola_pide_token_de_sala(app, deps: Dependencias) -> None:  # type: ignore[no-untyped-def]
+async def test_the_console_requests_a_room_token(app, deps: Dependencies) -> None:  # type: ignore[no-untyped-def]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/api/livekit/token", json={"llamada_id": "llam-1"})
+        r = await c.post("/api/livekit/token", json={"call_id": "llam-1"})
         assert r.status_code == 401
-        c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
-        r = await c.post("/api/livekit/token", json={"llamada_id": "llam-1"})
+        c.cookies.set("bc_session", make_session(deps.repo))  # type: ignore[arg-type]
+        r = await c.post("/api/livekit/token", json={"call_id": "llam-1"})
         assert r.status_code == 200
-        cuerpo = r.json()
-        assert cuerpo["url"] == "ws://localhost:7880"
-        assert cuerpo["sala"].startswith("consola-")
+        body = r.json()
+        assert body["url"] == "ws://localhost:7880"
+        assert body["room"].startswith("consola-")
         from livekit import api
 
         claims = api.TokenVerifier("devkey", "secret-de-desarrollo-con-largo-suficiente").verify(
-            cuerpo["token"]
+            body["token"]
         )
-        assert claims.video.room == cuerpo["sala"] and claims.video.room_join
-        despacho = claims.room_config.agents[0]
-        assert despacho.agent_name == "fincall"
-        assert '"llamada_id": "llam-1"' in despacho.metadata
+        assert claims.video.room == body["room"] and claims.video.room_join
+        dispatch = claims.room_config.agents[0]
+        assert dispatch.agent_name == "fincall"
+        assert '"call_id": "llam-1"' in dispatch.metadata
 
 
-async def test_el_despacho_usa_el_nombre_de_agente_configurado(
-    app, deps: Dependencias, monkeypatch: pytest.MonkeyPatch
+async def test_the_dispatch_uses_the_configured_agent_name(
+    app, deps: Dependencies, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # type: ignore[no-untyped-def]
     """Otro agente (pruebas, banco) puede convivir con el de la consola en el mismo LiveKit."""
-    monkeypatch.setattr(settings, "livekit_agente", "fincall-pruebas")
+    monkeypatch.setattr(settings, "livekit_agent", "fincall-pruebas")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
-        r = await c.post("/api/livekit/token", json={"llamada_id": "llam-1"})
+        c.cookies.set("bc_session", make_session(deps.repo))  # type: ignore[arg-type]
+        r = await c.post("/api/livekit/token", json={"call_id": "llam-1"})
         from livekit import api
 
         claims = api.TokenVerifier("devkey", "secret-de-desarrollo-con-largo-suficiente").verify(
@@ -94,79 +94,79 @@ async def test_el_despacho_usa_el_nombre_de_agente_configurado(
         assert claims.room_config.agents[0].agent_name == "fincall-pruebas"
 
 
-async def test_token_sin_livekit_configurado(
-    deps: Dependencias, monkeypatch: pytest.MonkeyPatch
+async def test_token_without_livekit_configured(
+    deps: Dependencies, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(settings, "livekit_api_key", "")
-    app = crear_app(deps, fabrica_streaming=None)
+    app = create_app(deps, streaming_factory=None)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        c.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]
-        r = await c.post("/api/livekit/token", json={"llamada_id": "llam-1"})
+        c.cookies.set("bc_session", make_session(deps.repo))  # type: ignore[arg-type]
+        r = await c.post("/api/livekit/token", json={"call_id": "llam-1"})
         assert r.status_code == 503
 
 
 # ----------------------------------------------------------------- lo que oyó, por palabras
 
 
-def test_corte_por_palabras_ignora_puntuacion_y_espacios() -> None:
-    texto = "Le resumo: gotea el grifo. ¿Es correcto?"
+def test_cut_by_words_ignores_punctuation_and_spaces() -> None:
+    text = "Le resumo: gotea el grifo. ¿Es correcto?"
     # LiveKit devuelve las palabras sincronizadas con el audio, no el texto exacto
-    assert texto[: corte_por_palabras(texto, "Le resumo gotea")] == "Le resumo: gotea"
-    assert corte_por_palabras(texto, "") == 0
-    assert corte_por_palabras(texto, "Le resumo: gotea el grifo. ¿Es correcto?") == len(texto)
+    assert text[: cut_by_words(text, "Le resumo gotea")] == "Le resumo: gotea"
+    assert cut_by_words(text, "") == 0
+    assert cut_by_words(text, "Le resumo: gotea el grifo. ¿Es correcto?") == len(text)
 
 
 # ----------------------------------------------------------------- control de la llamada
 
 
-def test_control_cuelga_tras_el_cierre_oido() -> None:
-    control = ControlLlamada("llam-1")
-    control.nuevo_turno({"turno": 4, "finalizada": True, "mensajes_bot": ["Hasta luego."]})
-    assert control.al_terminar_de_hablar({"piezas": []}) == ("colgar", [])
+def test_control_hangs_up_after_the_heard_closing() -> None:
+    control = CallControl("llam-1")
+    control.new_turn({"turn": 4, "finished": True, "bot_messages": ["Hasta luego."]})
+    assert control.on_finished_speaking({"pieces": []}) == ("hang_up", [])
 
 
-def test_control_repite_el_aviso_cortado_antes_de_colgar() -> None:
-    control = ControlLlamada("llam-1")
-    control.nuevo_turno({"turno": 4, "finalizada": True, "mensajes_bot": ["..."]})
-    entrega = {
-        "piezas": [
+def test_control_repeats_the_cut_notice_before_hanging_up() -> None:
+    control = CallControl("llam-1")
+    control.new_turn({"turn": 4, "finished": True, "bot_messages": ["..."]})
+    delivery = {
+        "pieces": [
             {
-                "importancia": "aviso",
-                "estado": "entregada",
-                "texto": "He registrado su incidencia.",
+                "importance": "notice",
+                "state": "delivered",
+                "text": "He registrado su incidencia.",
             },
-            {"importancia": "aviso", "estado": "no_oida", "texto": "Le llamará a este número."},
-            {"importancia": "cortesia", "estado": "no_entregada", "texto": "Hasta luego."},
+            {"importance": "notice", "state": "not_heard", "text": "Le llamará a este número."},
+            {"importance": "courtesy", "state": "not_delivered", "text": "Hasta luego."},
         ]
     }
-    assert control.al_terminar_de_hablar(entrega) == (
-        "repetir_y_colgar",
+    assert control.on_finished_speaking(delivery) == (
+        "repeat_and_hang_up",
         ["Le llamará a este número."],
     )
 
 
-def test_control_sigue_si_la_llamada_no_ha_terminado() -> None:
-    control = ControlLlamada("llam-1")
-    control.nuevo_turno({"turno": 1, "finalizada": False, "mensajes_bot": ["¿Es correcto?"]})
-    assert control.al_terminar_de_hablar({"piezas": []}) == ("seguir", [])
+def test_control_continues_if_the_call_has_not_ended() -> None:
+    control = CallControl("llam-1")
+    control.new_turn({"turn": 1, "finished": False, "bot_messages": ["¿Es correcto?"]})
+    assert control.on_finished_speaking({"pieces": []}) == ("proceed", [])
 
 
-async def test_el_agente_adelanta_la_interpretacion_con_el_parcial(app, deps: Dependencias) -> None:  # type: ignore[no-untyped-def]
-    cabeceras = {"Authorization": f"Bearer {SECRETO}"}
+async def test_the_agent_starts_interpretation_early_with_the_partial(app, deps: Dependencies) -> None:  # type: ignore[no-untyped-def]
+    headers = {"Authorization": f"Bearer {SECRET}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        llamada_id = (await c.post("/api/llamadas", json={}, headers=cabeceras)).json()[
-            "llamada_id"
+        call_id = (await c.post("/api/calls", json={}, headers=headers)).json()[
+            "call_id"
         ]
         r = await c.post(
-            f"/api/llamadas/{llamada_id}/parcial", json={"texto": "Vivo en la"}, headers=cabeceras
+            f"/api/calls/{call_id}/partial", json={"text": "Vivo en la"}, headers=headers
         )
         assert r.status_code == 202
-        assert deps.especulaciones.get(llamada_id)
+        assert deps.speculations.get(call_id)
 
 
-async def test_el_agente_pide_el_vocabulario_de_las_fincas(app) -> None:  # type: ignore[no-untyped-def]
+async def test_the_agent_requests_the_estates_vocabulary(app) -> None:  # type: ignore[no-untyped-def]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.get("/api/voz/vocabulario", headers={"Authorization": f"Bearer {SECRETO}"})
+        r = await c.get("/api/voice/vocabulary", headers={"Authorization": f"Bearer {SECRET}"})
         assert r.status_code == 200
         assert "Calle Mayor 12" in " ".join(r.json())
 
@@ -175,154 +175,154 @@ async def test_el_agente_pide_el_vocabulario_de_las_fincas(app) -> None:  # type
 
 
 class _Msg:
-    def __init__(self, id: str, role: str, texto: str) -> None:  # noqa: A002
-        self.id, self.role, self.text_content = id, role, texto
+    def __init__(self, id: str, role: str, text: str) -> None:  # noqa: A002
+        self.id, self.role, self.text_content = id, role, text
 
 
-class _ApiFalsa:
-    """Registra el orden de las llamadas; `turno` tarda lo que se le diga."""
+class _FakeApi:
+    """Registra el orden de las llamadas; `turn` tarda lo que se le diga."""
 
-    def __init__(self, espera_s: float = 0.0) -> None:
-        self.llamadas: list[tuple[str, Any]] = []
-        self.espera_s = espera_s
+    def __init__(self, wait_s: float = 0.0) -> None:
+        self.calls: list[tuple[str, Any]] = []
+        self.wait_s = wait_s
         self.n = 0
 
-    async def turno(self, llamada_id: str, texto: str) -> dict[str, Any]:
-        self.llamadas.append(("turno", texto))
-        await asyncio.sleep(self.espera_s)
+    async def turn(self, call_id: str, text: str) -> dict[str, Any]:
+        self.calls.append(("turn", text))
+        await asyncio.sleep(self.wait_s)
         self.n += 1
-        return {"turno": self.n, "finalizada": False, "mensajes_bot": [f"respuesta {self.n}"]}
+        return {"turn": self.n, "finished": False, "bot_messages": [f"respuesta {self.n}"]}
 
-    async def entrega(
-        self, llamada_id: str, turno: int, interrumpida: bool, texto: str, ratio: float
+    async def delivery(
+        self, call_id: str, turn: int, interrupted: bool, text: str, ratio: float
     ) -> dict[str, Any]:
-        self.llamadas.append(("entrega", (turno, interrumpida, texto)))
+        self.calls.append(("delivery", (turn, interrupted, text)))
         return {}
 
 
-async def test_control_junta_lo_que_el_vecino_dijo_y_aun_no_se_ha_enviado() -> None:
+async def test_control_joins_what_the_caller_said_and_was_not_sent_yet() -> None:
     """AssemblyAI parte "Sí, eso es" en dos finales si el vecino hace una pausa: lo que no se
     mandó a la API va en un solo turno, y lo ya mandado no se repite. Lo que se quedó esperando
     (LiveKit canceló la generación antes de enviarlo) sigue pendiente."""
-    api = _ApiFalsa()
-    control = ControlLlamada("llam-1")
+    api = _FakeApi()
+    control = CallControl("llam-1")
     items = [_Msg("u1", "user", "Sí."), _Msg("a1", "assistant", "¿Es correcto?")]
-    assert control.por_enviar(items) == "Sí."
-    await control.enviar_turno(api, "Sí.")
+    assert control.to_send(items) == "Sí."
+    await control.send_turn(api, "Sí.")
     items += [_Msg("u2", "user", "Eso es.")]
-    assert control.por_enviar(items) == "Eso es."  # no se llegó a enviar
+    assert control.to_send(items) == "Eso es."  # no se llegó a enviar
     items += [_Msg("u3", "user", "Del techo.")]
-    assert control.por_enviar(items) == "Eso es. Del techo."
-    await control.enviar_turno(api, "Eso es. Del techo.")
-    assert control.por_enviar(items) == ""
+    assert control.to_send(items) == "Eso es. Del techo."
+    await control.send_turn(api, "Eso es. Del techo.")
+    assert control.to_send(items) == ""
 
 
-async def test_un_turno_que_no_llego_a_sonar_se_declara_antes_del_siguiente() -> None:
+async def test_a_turn_that_never_played_is_declared_before_the_next() -> None:
     """Si el vecino habla antes de que suene la respuesta, LiveKit no informa de esa respuesta.
     El grafo tiene que saber que no se oyó antes de interpretar lo siguiente (si no, un "eso
     es" confirmaría un resumen que el vecino no ha escuchado)."""
-    api = _ApiFalsa()
-    control = ControlLlamada("llam-1")
-    control.nuevo_turno({"turno": 0, "mensajes_bot": ["Hola, ¿en qué finca?"]})
-    control.informe()  # el saludo sí sonó
-    await control.enviar_turno(api, "Calle Mayor 12")  # su respuesta no llega a sonar
-    await control.enviar_turno(api, "sí")
-    assert api.llamadas == [
-        ("turno", "Calle Mayor 12"),
-        ("entrega", (1, True, "")),
-        ("turno", "sí"),
+    api = _FakeApi()
+    control = CallControl("llam-1")
+    control.new_turn({"turn": 0, "bot_messages": ["Hola, ¿en qué finca?"]})
+    control.report()  # el saludo sí sonó
+    await control.send_turn(api, "Calle Mayor 12")  # su respuesta no llega a sonar
+    await control.send_turn(api, "sí")
+    assert api.calls == [
+        ("turn", "Calle Mayor 12"),
+        ("delivery", (1, True, "")),
+        ("turn", "sí"),
     ]
 
 
-async def test_lo_que_sono_no_se_declara_como_no_reproducido() -> None:
-    api = _ApiFalsa()
-    control = ControlLlamada("llam-1")
-    await control.enviar_turno(api, "Calle Mayor 12")
-    assert control.informe() == (1, "respuesta 1")  # LiveKit avisa de que sonó
-    await control.enviar_turno(api, "sí")
-    assert [x[0] for x in api.llamadas] == ["turno", "turno"]
+async def test_what_played_is_not_declared_as_not_played() -> None:
+    api = _FakeApi()
+    control = CallControl("llam-1")
+    await control.send_turn(api, "Calle Mayor 12")
+    assert control.report() == (1, "respuesta 1")  # LiveKit avisa de que sonó
+    await control.send_turn(api, "sí")
+    assert [x[0] for x in api.calls] == ["turn", "turn"]
 
 
-def _secuencia(*estados: bool):  # type: ignore[no-untyped-def]
+def _sequence(*states: bool):  # type: ignore[no-untyped-def]
     """`hablando()` que devuelve estos estados y luego repite el último."""
-    restantes = list(estados)
+    remaining = list(states)
 
-    def hablando() -> bool:
-        return restantes.pop(0) if len(restantes) > 1 else restantes[0]
+    def speaking() -> bool:
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
 
-    return hablando
+    return speaking
 
 
-async def test_si_el_vecino_sigue_hablando_al_cerrar_el_turno_se_espera() -> None:
+async def test_if_the_caller_keeps_talking_when_the_turn_closes_it_waits() -> None:
     """AssemblyAI cerró el turno en una pausa pero el vecino ya ha vuelto a hablar: no se manda
     nada hasta que lleve un rato callado. Las pausas cortas (comas) no cuentan. Si en ese tiempo
     llega su siguiente turno, LiveKit cancela esta espera y el texto va junto con el siguiente
-    (`por_enviar`)."""
-    control = ControlLlamada("llam-1")
-    control.al_cerrar_turno(vecino_hablando=True)
-    estados = [True] * 5 + [False] * 2 + [True] * 5 + [False]
-    consultas = 0
+    (`to_send`)."""
+    control = CallControl("llam-1")
+    control.on_turn_closed(caller_speaking=True)
+    states = [True] * 5 + [False] * 2 + [True] * 5 + [False]
+    queries = 0
 
-    def hablando() -> bool:
-        nonlocal consultas
-        consultas += 1
-        return estados[min(consultas, len(estados)) - 1]
+    def speaking() -> bool:
+        nonlocal queries
+        queries += 1
+        return states[min(queries, len(states)) - 1]
 
-    espera = control.esperar_antes_de_enviar("Sí.", hablando, espera_final_s=0.05, paso_s=0.01)
-    assert await espera is True
-    assert consultas >= len(estados)  # la pausa de dos consultas no acabó la espera
+    wait = control.wait_before_sending("Sí.", speaking, final_wait_s=0.05, step_s=0.01)
+    assert await wait is True
+    assert queries >= len(states)  # la pausa de dos consultas no acabó la espera
     # El cierre ya se ha consumido: el turno siguiente no espera
-    assert await control.esperar_antes_de_enviar("Sí.", hablando) is False
+    assert await control.wait_before_sending("Sí.", speaking) is False
 
 
-async def test_un_cierre_en_silencio_con_contenido_no_espera_nada() -> None:
-    control = ControlLlamada("llam-1")
-    control.al_cerrar_turno(vecino_hablando=False)
+async def test_a_silent_close_with_content_waits_for_nothing() -> None:
+    control = CallControl("llam-1")
+    control.on_turn_closed(caller_speaking=False)
 
     def nunca() -> bool:
         raise AssertionError("no debe consultarse")
 
-    assert await control.esperar_antes_de_enviar("Piso 1, puerta B.", nunca) is False
+    assert await control.wait_before_sending("Piso 1, puerta B.", nunca) is False
 
 
-async def test_la_espera_tiene_tope_si_el_ruido_no_para() -> None:
-    control = ControlLlamada("llam-1")
-    control.al_cerrar_turno(vecino_hablando=True)
+async def test_the_wait_is_capped_if_the_noise_does_not_stop() -> None:
+    control = CallControl("llam-1")
+    control.on_turn_closed(caller_speaking=True)
     t0 = asyncio.get_running_loop().time()
-    espera = control.esperar_antes_de_enviar(
-        "Sí.", lambda: True, maximo_s=0.05, espera_final_s=0, paso_s=0.01
+    wait = control.wait_before_sending(
+        "Sí.", lambda: True, max_s=0.05, final_wait_s=0, step_s=0.01
     )
-    assert await espera is True
+    assert await wait is True
     assert asyncio.get_running_loop().time() - t0 < 0.5
 
 
-async def test_solo_muletillas_espera_a_ver_si_el_vecino_sigue() -> None:
+async def test_only_fillers_waits_to_see_if_the_caller_continues() -> None:
     """ "Ah, vale, perdón." y una pausa: lo normal es que siga ("pues piso uno, puerta A"). Se
     da un margen corto para que vuelva a hablar; si no habla, se manda tal cual."""
-    control = ControlLlamada("llam-1")
-    hablando = _secuencia(False, False, True, True, False)
-    assert await control.esperar_antes_de_enviar(
-        "Ah, vale, perdón.", hablando, espera_final_s=0, paso_s=0.001
+    control = CallControl("llam-1")
+    speaking = _sequence(False, False, True, True, False)
+    assert await control.wait_before_sending(
+        "Ah, vale, perdón.", speaking, final_wait_s=0, step_s=0.001
     )
     t0 = asyncio.get_running_loop().time()
-    callado = control.esperar_antes_de_enviar("Mira.", lambda: False, espera_muletilla_s=0.05)
-    assert await callado is True
+    silent = control.wait_before_sending("Mira.", lambda: False, filler_wait_s=0.05)
+    assert await silent is True
     assert asyncio.get_running_loop().time() - t0 < 0.5
 
 
-async def test_cuando_el_vecino_calla_se_da_tiempo_a_que_llegue_su_turno() -> None:
+async def test_when_the_caller_goes_quiet_their_turn_is_given_time_to_arrive() -> None:
     """El VAD da la voz por acabada antes de que AssemblyAI cierre el turno: si se mandara en
     ese instante, el resto llegaría como otro turno."""
-    control = ControlLlamada("llam-1")
-    control.al_cerrar_turno(vecino_hablando=True)
+    control = CallControl("llam-1")
+    control.on_turn_closed(caller_speaking=True)
     t0 = asyncio.get_running_loop().time()
-    espera = control.esperar_antes_de_enviar("Sí.", _secuencia(True, False), espera_final_s=0.05)
-    assert await espera is True
+    wait = control.wait_before_sending("Sí.", _sequence(True, False), final_wait_s=0.05)
+    assert await wait is True
     assert asyncio.get_running_loop().time() - t0 >= 0.05
 
 
 @pytest.mark.parametrize(
-    ("texto", "esperado"),
+    ("text", "expected"),
     [
         ("Ah, vale, perdón.", True),
         ("Mira.", True),
@@ -343,45 +343,45 @@ async def test_cuando_el_vecino_calla_se_da_tiempo_a_que_llegue_su_turno() -> No
         ("", False),
     ],
 )
-def test_solo_muletillas(texto: str, esperado: bool) -> None:
-    assert solo_muletillas(texto) is esperado
+def test_only_fillers(text: str, expected: bool) -> None:
+    assert only_fillers(text) is expected
 
 
-async def test_los_turnos_van_en_orden_aunque_livekit_cancele_el_primero() -> None:
+async def test_turns_stay_in_order_even_if_livekit_cancels_the_first() -> None:
     """LiveKit cancela la generación en curso cuando llega otro turno del vecino. La petición a
     la API no se corta (el grafo ya la está procesando) y la siguiente espera a que acabe."""
-    api = _ApiFalsa(espera_s=0.05)
-    control = ControlLlamada("llam-1")
-    primero = asyncio.ensure_future(control.enviar_turno(api, "Sí."))
+    api = _FakeApi(wait_s=0.05)
+    control = CallControl("llam-1")
+    primero = asyncio.ensure_future(control.send_turn(api, "Sí."))
     await asyncio.sleep(0.01)
     primero.cancel()
-    vista = await control.enviar_turno(api, "Eso es.")
-    turnos = [x for x in api.llamadas if x[0] == "turno"]
-    assert turnos == [("turno", "Sí."), ("turno", "Eso es.")]
-    assert ("entrega", (1, True, "")) in api.llamadas  # la respuesta 1 nunca sonó
-    assert vista["turno"] == 2 and control.turno == 2 and control.texto == "respuesta 2"
+    view = await control.send_turn(api, "Eso es.")
+    turns = [x for x in api.calls if x[0] == "turn"]
+    assert turns == [("turn", "Sí."), ("turn", "Eso es.")]
+    assert ("delivery", (1, True, "")) in api.calls  # la respuesta 1 nunca sonó
+    assert view["turn"] == 2 and control.turn == 2 and control.text == "respuesta 2"
 
 
-async def test_un_turno_cancelado_que_falla_queda_en_el_log_y_no_bloquea_el_siguiente(
+async def test_a_cancelled_failing_turn_is_logged_and_does_not_block_the_next(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Si LiveKit cancela la generación y luego la API falla, nadie espera ya esa petición: el
     error se registra (no se pierde en silencio) y el turno siguiente sale igual."""
 
-    class _ApiQueFalla(_ApiFalsa):
-        async def turno(self, llamada_id: str, texto: str) -> dict[str, Any]:
-            if texto == "Sí.":
+    class _FailingApi(_FakeApi):
+        async def turn(self, call_id: str, text: str) -> dict[str, Any]:
+            if text == "Sí.":
                 await asyncio.sleep(0.02)
                 raise RuntimeError("la API no responde")
-            return await super().turno(llamada_id, texto)
+            return await super().turn(call_id, text)
 
-    api = _ApiQueFalla()
-    control = ControlLlamada("llam-1")
-    primero = asyncio.ensure_future(control.enviar_turno(api, "Sí."))
+    api = _FailingApi()
+    control = CallControl("llam-1")
+    primero = asyncio.ensure_future(control.send_turn(api, "Sí."))
     await asyncio.sleep(0.005)
     primero.cancel()
-    with caplog.at_level("ERROR", logger="building_call.voz.control"):
-        vista = await control.enviar_turno(api, "Eso es.")
-    assert vista["mensajes_bot"] == ["respuesta 1"]
-    propios = [r for r in caplog.records if r.name == "building_call.voz.control"]
-    assert any(r.exc_info for r in propios)
+    with caplog.at_level("ERROR", logger="building_call.voice.control"):
+        view = await control.send_turn(api, "Eso es.")
+    assert view["bot_messages"] == ["respuesta 1"]
+    own = [r for r in caplog.records if r.name == "building_call.voice.control"]
+    assert any(r.exc_info for r in own)

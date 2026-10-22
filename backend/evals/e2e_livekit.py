@@ -1,16 +1,16 @@
-"""Banco de voz de punta a punta por LiveKit, con los mismos escenarios que `e2e_voz.py`.
+"""Banco de voz de punta a punta por LiveKit, con los mismos escenarios que `e2e_voice.py`.
 
 Un participante sintético entra en la sala, habla con la voz del sistema (WAV de Windows SAPI)
-y escucha al agente (`building_call.voz.agente`). Mide `respuesta_ms` como la consola: del fin de
-la voz del vecino al primer audio del bot. El escenario `interrupcion` corta el resumen y
+y escucha al agente (`building_call.voice.agent`). Mide `response_ms` como la consola: del fin de
+la voz del vecino al primer audio del bot. El escenario `barge_in` corta el resumen y
 comprueba el ledger de entrega.
 
-Uso (API con BC_AGENTE_SECRETO y LiveKit, agente arrancado, LiveKit en :7880):
-    uv run --extra voz python evals/e2e_livekit.py
-    uv run --extra voz python evals/e2e_livekit.py --solo interrupcion --verboso
+Uso (API con BC_AGENT_SECRET y LiveKit, agente arrancado, LiveKit en :7880):
+    uv run --extra voice python evals/e2e_livekit.py
+    uv run --extra voice python evals/e2e_livekit.py --solo interrupcion --verboso
 Contra una API y un agente de pruebas, sin tocar los de la consola (agente arrancado con
-BC_LIVEKIT_AGENTE=fincall-pruebas y BC_AGENTE_API_URL apuntando a esa API):
-    uv run --extra voz python evals/e2e_livekit.py --api http://127.0.0.1:8100
+BC_LIVEKIT_AGENT=fincall-pruebas y BC_AGENT_API_URL apuntando a esa API):
+    uv run --extra voice python evals/e2e_livekit.py --api http://127.0.0.1:8100
         --agente fincall-pruebas --etiqueta u3-base
 """
 
@@ -27,26 +27,26 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from e2e_voz import ESCENARIOS, _pcm_sin_silencio_final, sintetizar
+from e2e_voice import SCENARIOS, _pcm_without_trailing_silence, synthesize
 from livekit import api, rtc
 
-AQUI = Path(__file__).resolve().parent
-BASE = os.environ.get("BC_BANCO_API", "http://localhost:8000")
-AGENTE = os.environ.get("BC_LIVEKIT_AGENTE", "fincall")
-URL_LIVEKIT = os.environ.get("BC_LIVEKIT_URL", "ws://localhost:7880")
-CLAVE = os.environ.get("BC_LIVEKIT_API_KEY", "devkey")
-SECRETO_LK = os.environ.get("BC_LIVEKIT_API_SECRET", "secret")
-SECRETO_AGENTE = os.environ.get("BC_AGENTE_SECRETO", "")
+HERE = Path(__file__).resolve().parent
+BASE = os.environ.get("BC_TEST_BANK_API", "http://localhost:8000")
+AGENT = os.environ.get("BC_LIVEKIT_AGENT", "fincall")
+LIVEKIT_URL = os.environ.get("BC_LIVEKIT_URL", "ws://localhost:7880")
+KEY = os.environ.get("BC_LIVEKIT_API_KEY", "devkey")
+LK_SECRET = os.environ.get("BC_LIVEKIT_API_SECRET", "secret")
+AGENT_SECRET = os.environ.get("BC_AGENT_SECRET", "")
 
-TASA = 48000
-TRAMA_MS = 10
-UMBRAL_VOZ_BOT = 500  # RMS del audio del agente que cuenta como voz
-SILENCIO_FIN_BOT_S = 0.9  # el bot ha terminado de hablar tras este silencio
+RATE = 48000
+FRAME_MS = 10
+BOT_VOICE_THRESHOLD = 500  # RMS del audio del agente que cuenta como voz
+BOT_END_SILENCE_S = 0.9  # el bot ha terminado de hablar tras este silencio
 
-INTERRUPCION: dict[str, Any] = {
-    "nombre": "interrupcion",
+INTERRUPTION: dict[str, Any] = {
+    "name": "interrupcion",
     # Con la pregunta de detalle, el resumen llega tras el quinto turno
-    "turnos": [
+    "turns": [
         "Calle Mayor doce",
         "sí",
         "primero A",
@@ -54,84 +54,84 @@ INTERRUPCION: dict[str, Any] = {
         "una gota cada poco",
     ],
     # Tras el último turno el bot lee el resumen: se le corta y se dice "sí" a lo que no oyó
-    "cortar_con": "sí, sí",
-    "cortar_tras_s": 1.2,
+    "cut_with": "sí, sí",
+    "cut_after_s": 1.2,
 }
 
 
-class OidoBot:
+class BotEar:
     """Escucha al agente y anota cuándo empieza y termina de sonar."""
 
     def __init__(self) -> None:
-        self.inicio_voz: float | None = None
-        self.ultima_voz = 0.0
-        self.hablando = False
+        self.voice_start: float | None = None
+        self.last_voice = 0.0
+        self.speaking = False
 
-    async def escuchar(self, track: rtc.Track) -> None:
-        async for ev in rtc.AudioStream(track, sample_rate=TASA, num_channels=1):
-            datos = bytes(ev.frame.data)
-            if audioop.rms(datos, 2) > UMBRAL_VOZ_BOT:
-                ahora = time.monotonic()
-                if not self.hablando:
-                    self.hablando = True
-                    self.inicio_voz = ahora
-                self.ultima_voz = ahora
-            elif self.hablando and time.monotonic() - self.ultima_voz > SILENCIO_FIN_BOT_S:
-                self.hablando = False
+    async def listen(self, track: rtc.Track) -> None:
+        async for ev in rtc.AudioStream(track, sample_rate=RATE, num_channels=1):
+            data = bytes(ev.frame.data)
+            if audioop.rms(data, 2) > BOT_VOICE_THRESHOLD:
+                now = time.monotonic()
+                if not self.speaking:
+                    self.speaking = True
+                    self.voice_start = now
+                self.last_voice = now
+            elif self.speaking and time.monotonic() - self.last_voice > BOT_END_SILENCE_S:
+                self.speaking = False
 
-    async def esperar_fin(self, maximo_s: float = 30) -> None:
+    async def wait_for_end(self, max_s: float = 30) -> None:
         t0 = time.monotonic()
-        while (self.hablando or self.inicio_voz is None) and time.monotonic() - t0 < maximo_s:
+        while (self.speaking or self.voice_start is None) and time.monotonic() - t0 < max_s:
             await asyncio.sleep(0.05)
 
 
-class Boca:
+class Mouth:
     """Micrófono sintético: trozos de 10 ms en tiempo real, silencio cuando no habla."""
 
     def __init__(self) -> None:
-        self.fuente = rtc.AudioSource(TASA, 1)
-        self._cola: list[bytes] = []
-        self._muestras = TASA * TRAMA_MS // 1000
+        self.source = rtc.AudioSource(RATE, 1)
+        self._queue: list[bytes] = []
+        self._samples = RATE * FRAME_MS // 1000
 
-    def decir(self, pcm: bytes) -> None:
-        paso = self._muestras * 2
-        self._cola += [pcm[i : i + paso].ljust(paso, b"\0") for i in range(0, len(pcm), paso)]
+    def say(self, pcm: bytes) -> None:
+        step = self._samples * 2
+        self._queue += [pcm[i : i + step].ljust(step, b"\0") for i in range(0, len(pcm), step)]
 
-    def callada(self) -> bool:
-        return not self._cola
+    def silent(self) -> bool:
+        return not self._queue
 
-    async def bombear(self) -> None:
-        silencio = b"\0" * self._muestras * 2
-        siguiente = time.monotonic()
+    async def pump(self) -> None:
+        silence = b"\0" * self._samples * 2
+        upcoming = time.monotonic()
         while True:
-            datos = self._cola.pop(0) if self._cola else silencio
-            await self.fuente.capture_frame(rtc.AudioFrame(datos, TASA, 1, self._muestras))
-            siguiente += TRAMA_MS / 1000
-            await asyncio.sleep(max(0, siguiente - time.monotonic()))
+            data = self._queue.pop(0) if self._queue else silence
+            await self.source.capture_frame(rtc.AudioFrame(data, RATE, 1, self._samples))
+            upcoming += FRAME_MS / 1000
+            await asyncio.sleep(max(0, upcoming - time.monotonic()))
 
 
-def _a_48k(ruta: Path) -> bytes:
-    pcm, tasa = _pcm_sin_silencio_final(ruta)
-    return audioop.ratecv(pcm, 2, 1, tasa, TASA, None)[0]
+def _to_48k(path: Path) -> bytes:
+    pcm, rate = _pcm_without_trailing_silence(path)
+    return audioop.ratecv(pcm, 2, 1, rate, RATE, None)[0]
 
 
-async def ejecutar(
-    escenario: dict[str, Any], http: httpx.AsyncClient, verboso: bool, agente: str = AGENTE
+async def run(
+    scenario: dict[str, Any], http: httpx.AsyncClient, verbose: bool, agent: str = AGENT
 ) -> dict[str, Any]:
-    vista = (await http.post("/api/llamadas", json={"telefono_llamante": "+34600000000"})).json()
-    lid = vista["llamada_id"]
-    if verboso:
-        print(f"    llamada {lid}")
-    sala = f"banco-{lid}"
+    view = (await http.post("/api/calls", json={"caller_phone": "+34600000000"})).json()
+    cid = view["call_id"]
+    if verbose:
+        print(f"    llamada {cid}")
+    room = f"banco-{cid}"
     token = (
-        api.AccessToken(CLAVE, SECRETO_LK)
-        .with_identity(f"vecino-{lid}")
-        .with_grants(api.VideoGrants(room_join=True, room=sala))
+        api.AccessToken(KEY, LK_SECRET)
+        .with_identity(f"vecino-{cid}")
+        .with_grants(api.VideoGrants(room_join=True, room=room))
         .with_room_config(
             api.RoomConfiguration(
                 agents=[
                     api.RoomAgentDispatch(
-                        agent_name=agente, metadata=json.dumps({"llamada_id": lid})
+                        agent_name=agent, metadata=json.dumps({"call_id": cid})
                     )
                 ]
             )
@@ -139,136 +139,136 @@ async def ejecutar(
         .to_jwt()
     )
     room = rtc.Room()
-    oido, boca = OidoBot(), Boca()
-    tareas: list[asyncio.Task[Any]] = []
+    heard_text, mouth = BotEar(), Mouth()
+    tasks: list[asyncio.Task[Any]] = []
 
     @room.on("track_subscribed")
-    def _pista(track: rtc.Track, *_: Any) -> None:
+    def _track(track: rtc.Track, *_: Any) -> None:
         if track.kind == rtc.TrackKind.KIND_AUDIO:
-            tareas.append(asyncio.ensure_future(oido.escuchar(track)))
+            tasks.append(asyncio.ensure_future(heard_text.listen(track)))
 
-    await room.connect(URL_LIVEKIT, token)
-    pista = rtc.LocalAudioTrack.create_audio_track("microfono", boca.fuente)
+    await room.connect(LIVEKIT_URL, token)
+    track = rtc.LocalAudioTrack.create_audio_track("microphone", mouth.source)
     await room.local_participant.publish_track(
-        pista, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+        track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
     )
-    tareas.append(asyncio.ensure_future(boca.bombear()))
-    latencias: list[int] = []
+    tasks.append(asyncio.ensure_future(mouth.pump()))
+    latencies: list[int] = []
     try:
-        await oido.esperar_fin(40)  # el saludo
-        for texto in escenario["turnos"]:
-            await oido.esperar_fin()
-            boca.decir(_a_48k(sintetizar(texto)))
-            while not boca.callada():
+        await heard_text.wait_for_end(40)  # el saludo
+        for text in scenario["turns"]:
+            await heard_text.wait_for_end()
+            mouth.say(_to_48k(synthesize(text)))
+            while not mouth.silent():
                 await asyncio.sleep(0.01)
-            t_fin = time.monotonic()
-            oido.inicio_voz = None
-            while oido.inicio_voz is None and time.monotonic() - t_fin < 15:
+            t_end = time.monotonic()
+            heard_text.voice_start = None
+            while heard_text.voice_start is None and time.monotonic() - t_end < 15:
                 await asyncio.sleep(0.01)
-            if oido.inicio_voz is None:
+            if heard_text.voice_start is None:
                 return {
-                    "nombre": escenario["nombre"],
+                    "name": scenario["name"],
                     "ok": False,
-                    "motivo": f"sin voz tras {texto!r}",
+                    "reason": f"sin voz tras {text!r}",
                 }
-            latencias.append(int((oido.inicio_voz - t_fin) * 1000))
-        if corte := escenario.get("cortar_con"):
-            await asyncio.sleep(escenario["cortar_tras_s"])  # el resumen está sonando
-            boca.decir(_a_48k(sintetizar(corte)))
+            latencies.append(int((heard_text.voice_start - t_end) * 1000))
+        if cut := scenario.get("cut_with"):
+            await asyncio.sleep(scenario["cut_after_s"])  # el resumen está sonando
+            mouth.say(_to_48k(synthesize(cut)))
             await asyncio.sleep(6)
-            v = (await http.get(f"/api/llamadas/{lid}")).json()
-            return _comprobar_interrupcion(escenario, v, latencias, verboso)
-        await oido.esperar_fin()
+            v = (await http.get(f"/api/calls/{cid}")).json()
+            return _check_interruption(scenario, v, latencies, verbose)
+        await heard_text.wait_for_end()
         await asyncio.sleep(2)  # que el agente informe de la última entrega
     finally:
-        for t in tareas:
+        for t in tasks:
             t.cancel()
         await room.disconnect()
-    final = (await http.get(f"/api/llamadas/{lid}")).json()
-    if verboso:
-        _transcripcion(escenario, final, latencias)
-    datos = final["datos"]
-    fallos = []
-    for k, v in escenario["espera"].items():
+    final = (await http.get(f"/api/calls/{cid}")).json()
+    if verbose:
+        _transcript(scenario, final, latencies)
+    data = final["data"]
+    failures = []
+    for k, v in scenario["wait"].items():
         if k.endswith("~"):
-            if not str(datos.get(k[:-1]) or "").lower().startswith(str(v).lower()):
-                fallos.append(f"{k}: esperado ~{v!r}, obtenido {datos.get(k[:-1])!r}")
-        elif datos.get(k) != v:
-            fallos.append(f"{k}: esperado {v!r}, obtenido {datos.get(k)!r}")
+            if not str(data.get(k[:-1]) or "").lower().startswith(str(v).lower()):
+                failures.append(f"{k}: esperado ~{v!r}, obtenido {data.get(k[:-1])!r}")
+        elif data.get(k) != v:
+            failures.append(f"{k}: esperado {v!r}, obtenido {data.get(k)!r}")
     return {
-        "nombre": escenario["nombre"],
-        "ok": not fallos,
-        "motivo": "; ".join(fallos),
-        "latencias_ms": latencias,
+        "name": scenario["name"],
+        "ok": not failures,
+        "reason": "; ".join(failures),
+        "latencies_ms": latencies,
     }
 
 
-def _transcripcion(escenario: dict[str, Any], v: dict[str, Any], latencias: list[int]) -> None:
-    print(f"    guion: {escenario['turnos']}")
-    print(f"    latencias: {latencias}")
-    for h in v["historial"]:
-        print(f"    {h['rol'].upper():6} {h['texto']}")
+def _transcript(scenario: dict[str, Any], v: dict[str, Any], latencies: list[int]) -> None:
+    print(f"    guion: {scenario['turns']}")
+    print(f"    latencias: {latencies}")
+    for h in v["history"]:
+        print(f"    {h['role'].upper():6} {h['text']}")
 
 
-def _comprobar_interrupcion(
-    escenario: dict[str, Any], v: dict[str, Any], latencias: list[int], verboso: bool
+def _check_interruption(
+    scenario: dict[str, Any], v: dict[str, Any], latencies: list[int], verbose: bool
 ) -> dict[str, Any]:
-    traza = [t["accion"] for t in v["traza"]]
-    if verboso:
-        _transcripcion(escenario, v, latencias)
-        print(f"    entrega: {json.dumps(v.get('entrega_ultima'), ensure_ascii=False)[:400]}")
-    fallos = []
-    if v["datos"]["resultado"] == "incidencia_creada":
-        fallos.append("el sí sobre un resumen no oído confirmó la incidencia")
-    if "confirmacion_sin_oir" not in traza and "repetir_no_oido" not in traza:
-        fallos.append(f"no se repitió el resumen (traza: {traza[-4:]})")
+    trace = [t["action"] for t in v["trace"]]
+    if verbose:
+        _transcript(scenario, v, latencies)
+        print(f"    entrega: {json.dumps(v.get('last_delivery'), ensure_ascii=False)[:400]}")
+    failures = []
+    if v["data"]["result"] == "incident_created":
+        failures.append("el sí sobre un resumen no oído confirmó la incidencia")
+    if "confirmation_unheard" not in trace and "repeat_not_heard" not in trace:
+        failures.append(f"no se repitió el resumen (traza: {trace[-4:]})")
     return {
-        "nombre": escenario["nombre"],
-        "ok": not fallos,
-        "motivo": "; ".join(fallos),
-        "latencias_ms": latencias,
+        "name": scenario["name"],
+        "ok": not failures,
+        "reason": "; ".join(failures),
+        "latencies_ms": latencies,
     }
 
 
 async def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--solo")
-    ap.add_argument("--verboso", action="store_true")
-    ap.add_argument("--api", default=BASE, help="URL de la API (BC_BANCO_API)")
-    ap.add_argument("--agente", default=AGENTE, help="agente al que despachar (BC_LIVEKIT_AGENTE)")
-    ap.add_argument("--etiqueta", help="guarda también ultimo_e2e_livekit-<etiqueta>.json")
+    ap.add_argument("--only")
+    ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--api", default=BASE, help="URL de la API (BC_TEST_BANK_API)")
+    ap.add_argument("--agent", default=AGENT, help="agente al que despachar (BC_LIVEKIT_AGENT)")
+    ap.add_argument("--label", help="guarda también last_e2e_livekit-<etiqueta>.json")
     args = ap.parse_args()
-    if not SECRETO_AGENTE:
-        sys.exit("Falta BC_AGENTE_SECRETO (el banco entra en la API como el agente)")
-    escenarios = [
-        e for e in [*ESCENARIOS, INTERRUPCION] if not args.solo or e["nombre"] == args.solo
+    if not AGENT_SECRET:
+        sys.exit("Falta BC_AGENT_SECRET (el banco entra en la API como el agente)")
+    scenarios = [
+        e for e in [*SCENARIOS, INTERRUPTION] if not args.only or e["name"] == args.only
     ]
-    resultados = []
+    results = []
     async with httpx.AsyncClient(
-        base_url=args.api, headers={"Authorization": f"Bearer {SECRETO_AGENTE}"}, timeout=30
+        base_url=args.api, headers={"Authorization": f"Bearer {AGENT_SECRET}"}, timeout=30
     ) as http:
-        for e in escenarios:
-            print(f"== {e['nombre']}")
-            r = await ejecutar(e, http, args.verboso, args.agente)
-            resultados.append(r)
-            lat = sorted(r.get("latencias_ms", []))
+        for e in scenarios:
+            print(f"== {e['name']}")
+            r = await run(e, http, args.verbose, args.agent)
+            results.append(r)
+            lat = sorted(r.get("latencies_ms", []))
             print(
-                f"   {'OK ' if r['ok'] else 'FALLO'} {r.get('motivo', '')} | respuesta p50 "
+                f"   {'OK ' if r['ok'] else 'FAILURE'} {r.get('reason', '')} | respuesta p50 "
                 f"{lat[len(lat) // 2] if lat else '-'} ms max {lat[-1] if lat else '-'} ms"
             )
-    todas = sorted(x for r in resultados for x in r.get("latencias_ms", []))
+    todas = sorted(x for r in results for x in r.get("latencies_ms", []))
     if todas:
         p95 = todas[min(len(todas) - 1, round(0.95 * (len(todas) - 1)))]
         print(
             f"\nrespuesta_ms global: p50 {todas[len(todas) // 2]} ms, p95 {p95} ms (n={len(todas)})"
         )
-    ok = sum(1 for r in resultados if r["ok"])
-    print(f"{ok}/{len(resultados)} escenarios correctos")
-    salida = json.dumps(resultados, ensure_ascii=False, indent=2)
-    (AQUI / "ultimo_e2e_livekit.json").write_text(salida, encoding="utf-8")
-    if args.etiqueta:
-        (AQUI / f"ultimo_e2e_livekit-{args.etiqueta}.json").write_text(salida, encoding="utf-8")
-    sys.exit(0 if ok == len(resultados) else 1)
+    ok = sum(1 for r in results if r["ok"])
+    print(f"{ok}/{len(results)} escenarios correctos")
+    output = json.dumps(results, ensure_ascii=False, indent=2)
+    (HERE / "last_e2e_livekit.json").write_text(output, encoding="utf-8")
+    if args.label:
+        (HERE / f"last_e2e_livekit-{args.label}.json").write_text(output, encoding="utf-8")
+    sys.exit(0 if ok == len(results) else 1)
 
 
 if __name__ == "__main__":

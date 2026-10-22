@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 
-class ModeloLenguaje(Protocol):
-    nombre: str
+class LanguageModel(Protocol):
+    name: str
 
-    async def extraer(
+    async def extract(
         self,
-        sistema: str,
-        usuario: str,
-        esquema: dict[str, Any],
-        instruccion_formato: str | None = None,
+        system: str,
+        user: str,
+        schema: dict[str, Any],
+        format_instruction: str | None = None,
     ) -> dict[str, Any]:
-        """Devuelve un objeto JSON conforme a `esquema` (JSON Schema)."""
+        """Devuelve un objeto JSON conforme a `schema` (JSON Schema)."""
         ...
