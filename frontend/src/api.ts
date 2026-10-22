@@ -455,3 +455,104 @@ export const catalogos = {
   finca: (id: string) => pedir<FincaDetalle>(`/api/catalogos/fincas/${encodeURIComponent(id)}`),
   especialistas: () => pedir<EspecialistaCatalogo[]>('/api/catalogos/especialistas'),
 }
+
+// ---------------------------------------------------------------- bandeja del administrador
+
+export type EstadoIncidencia = 'pendiente' | 'asignada' | 'en_curso' | 'esperando_informacion' | 'resuelta' | 'cerrada'
+export type EstadoManual = 'en_curso' | 'esperando_informacion' | 'resuelta' | 'cerrada'
+
+export interface Incidencia {
+  id: string
+  llamada_id: string
+  finca_id: string
+  vivienda_id: string
+  descripcion: string
+  categoria: string
+  especialista_id: string | null
+  urgencia: 'baja' | 'media' | 'alta' | 'emergencia'
+  estado: EstadoIncidencia
+  creada_en: string
+  equipo_id: string | null
+  actuacion: string
+  sugerencia: string | null
+}
+
+export interface FilaBandeja extends Incidencia {
+  pendiente_administrador: boolean
+  finca_direccion: string | null
+  vivienda: string | null
+  especialista_nombre: string | null
+  motivo_revision: string | null
+}
+
+export interface EspecialistaBandeja {
+  id: string
+  administrador_id: string
+  nombre: string
+  categoria_principal: string
+  canal_contacto: string
+  destino: string
+}
+
+export interface EntradaHistorial {
+  id: string
+  accion: 'asignar' | 'cambiar_estado' | 'nota'
+  estado_anterior: EstadoIncidencia | null
+  estado_nuevo: EstadoIncidencia
+  usuario_id: string | null
+  usuario_nombre?: string | null
+  nota: string | null
+  detalle: Record<string, unknown>
+  cambiado_en: string
+}
+
+export interface DetalleIncidencia {
+  incidencia: Incidencia
+  pendiente_administrador: boolean
+  finca: { id: string; direccion: string } | null
+  vivienda: string | null
+  llamada: {
+    id: string
+    iniciada_en: string
+    telefono_llamante: string | null
+    nombre_declarado: string | null
+    resumen: string | null
+    transcripcion: Turno[]
+    resultado: string | null
+    motivo_revision: string | null
+  } | null
+  equipo: (EquipoCatalogo & { mantenedor: EspecialistaBandeja | null }) | null
+  especialista: EspecialistaBandeja | null
+  especialistas: EspecialistaBandeja[]
+  historial: EntradaHistorial[]
+}
+
+export interface FiltrosBandeja {
+  estado?: EstadoIncidencia
+  pendientes_administrador?: boolean
+  finca_id?: string
+  urgencia?: string
+}
+
+export interface ResultadoAccion {
+  incidencia: Incidencia
+  historial: EntradaHistorial
+  aviso?: string
+}
+
+const rutaIncidencia = (id: string, accion = '') => `/api/bandeja/incidencias/${encodeURIComponent(id)}${accion}`
+
+export const bandeja = {
+  listar: (f: FiltrosBandeja = {}) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== false && v !== '') q.set(k, String(v))
+    const s = q.toString()
+    return pedir<FilaBandeja[]>(`/api/bandeja/incidencias${s ? `?${s}` : ''}`)
+  },
+  detalle: (id: string) => pedir<DetalleIncidencia>(rutaIncidencia(id)),
+  asignar: (id: string, especialista_id: string, nota?: string) =>
+    pedir<ResultadoAccion>(rutaIncidencia(id, '/asignar'), json({ especialista_id, nota: nota || null })),
+  estado: (id: string, estado: EstadoManual, nota?: string) =>
+    pedir<ResultadoAccion>(rutaIncidencia(id, '/estado'), json({ estado, nota: nota || null })),
+  nota: (id: string, texto: string) => pedir<ResultadoAccion>(rutaIncidencia(id, '/nota'), json({ texto })),
+}

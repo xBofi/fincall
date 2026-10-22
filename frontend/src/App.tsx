@@ -12,6 +12,7 @@ import {
 import {
   api,
   auth,
+  bandeja,
   operaciones,
   telefonia,
   usuarios as apiUsuarios,
@@ -54,10 +55,11 @@ import {
 const GestionUsuarios = lazy(() => import('./components/GestionUsuarios').then((m) => ({ default: m.GestionUsuarios })))
 const SolicitudesAcceso = lazy(() => import('./components/SolicitudesAcceso').then((m) => ({ default: m.SolicitudesAcceso })))
 const PanelFlujo = lazy(() => import('./components/PanelFlujo').then((m) => ({ default: m.PanelFlujo })))
+const Bandeja = lazy(() => import('./components/Bandeja').then((m) => ({ default: m.Bandeja })))
 const PanelLatencia = lazy(() => import('./components/PanelLatencia').then((m) => ({ default: m.PanelLatencia })))
 
 type ModoStt = 'navegador' | 'servidor' | 'streaming' | 'livekit'
-type Pantalla = 'simular' | 'historial' | 'datos' | 'flujo' | 'latencia' | 'usuarios' | 'solicitudes'
+type Pantalla = 'simular' | 'historial' | 'bandeja' | 'datos' | 'flujo' | 'latencia' | 'usuarios' | 'solicitudes'
 
 /** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
 /** El barge-in (cortar al bot cuando el vecino habla) está siempre activo en la consola. */
@@ -100,6 +102,8 @@ export default function App() {
   const [pantalla, setPantalla] = useState<Pantalla>('simular')
   const [tel, setTel] = useState<EstadoTelefonia | null>(null)
   const [solicitudes, setSolicitudes] = useState(0)
+  // Incidencias que esperan una decisión del administrador (contador de la pestaña Bandeja)
+  const [pendientesBandeja, setPendientesBandeja] = useState(0)
 
   const refrescarOperaciones = useCallback(async () => {
     try {
@@ -115,6 +119,12 @@ export default function App() {
         apiUsuarios
           .listar()
           .then((todos) => setSolicitudes(todos.filter((u) => u.estado_acceso === 'solicitado').length))
+          .catch(() => undefined)
+      }
+      if (estado.usuario.rol === 'owner' || estado.usuario.rol === 'administrador') {
+        bandeja
+          .listar({ pendientes_administrador: true })
+          .then((filas) => setPendientesBandeja(filas.length))
           .catch(() => undefined)
       }
       const [resumen, lista] = await Promise.all([operaciones.resumen(), operaciones.llamadas()])
@@ -482,9 +492,22 @@ export default function App() {
 
   const yo = acceso.usuario
   const esOwner = yo.rol === 'owner'
+  const gestionaIncidencias = esOwner || yo.rol === 'administrador'
   const opcionesPantalla: { label: React.ReactNode; value: Pantalla }[] = [
     { label: 'Simular llamada', value: 'simular' },
     { label: 'Historial', value: 'historial' },
+    ...(gestionaIncidencias
+      ? [
+          {
+            label: (
+              <Badge count={pendientesBandeja} size="small" offset={[8, -2]}>
+                Bandeja
+              </Badge>
+            ),
+            value: 'bandeja' as Pantalla,
+          },
+        ]
+      : []),
     { label: 'Fincas y profesionales', value: 'datos' },
     { label: 'Flujo', value: 'flujo' },
     { label: 'Rendimiento', value: 'latencia' },
@@ -686,6 +709,10 @@ export default function App() {
         )}
 
         <Suspense fallback={<Spin className="ops-cargando" />}>
+        {pantalla === 'bandeja' && gestionaIncidencias && (
+          <Bandeja catalogo={catalogo} puedeActuar={gestionaIncidencias} onPendientes={setPendientesBandeja} />
+        )}
+
         {pantalla === 'usuarios' && esOwner && (
           <section className="ops-single"><GestionUsuarios yo={yo} /></section>
         )}

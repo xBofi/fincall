@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -117,3 +117,21 @@ class Incidencia(BaseModel):
     actuacion: Actuacion = "reparacion"
     # Para el administrador: por qué le llega y a quién se sugiere avisar
     sugerencia: str | None = None
+
+
+#: Qué hizo alguien con la incidencia desde la consola
+AccionIncidencia = Literal["asignar", "cambiar_estado", "nota"]
+
+
+class EntradaHistorialIncidencia(BaseModel):
+    """Una acción sobre la incidencia: quién, cuándo, de qué estado a cuál y por qué."""
+
+    id: str
+    incidencia_id: str
+    accion: AccionIncidencia
+    estado_anterior: EstadoIncidencia | None = None
+    estado_nuevo: EstadoIncidencia
+    usuario_id: str | None = None
+    nota: str | None = None
+    detalle: dict[str, Any] = Field(default_factory=dict)
+    cambiado_en: datetime

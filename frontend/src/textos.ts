@@ -125,6 +125,46 @@ export function calificar(ms: number | null | undefined): { nombre: string; colo
   return { nombre: 'muy lento', color: 'red' }
 }
 
+const ESTADOS_INCIDENCIA: Record<string, { texto: string; color: string }> = {
+  pendiente: { texto: 'Pendiente', color: 'orange' },
+  asignada: { texto: 'Asignada', color: 'blue' },
+  en_curso: { texto: 'En curso', color: 'processing' },
+  esperando_informacion: { texto: 'Esperando información', color: 'gold' },
+  resuelta: { texto: 'Resuelta', color: 'green' },
+  cerrada: { texto: 'Cerrada', color: 'default' },
+}
+
+export const estadoIncidencia = (e: string) => ESTADOS_INCIDENCIA[e] ?? { texto: capitalizar(e), color: 'default' }
+
+const ACTUACIONES: Record<string, string> = {
+  reparacion: 'Reparación',
+  reposicion: 'Reposición',
+  siniestro: 'Posible siniestro',
+  convivencia: 'Convivencia',
+  privativo: 'Zona privativa',
+}
+
+export const actuacion = (a: string | null | undefined): string => (a ? ACTUACIONES[a] ?? capitalizar(a) : '—')
+
+/** Por qué una incidencia espera al administrador: `actuacion:siniestro`, `objecion_vecino:…`… */
+export function motivoRevision(m: string | null | undefined): string | null {
+  if (!m) return null
+  const [codigo, ...resto] = m.split(':')
+  const valor = resto.join(':').trim()
+  switch (codigo) {
+    case 'actuacion':
+      return `No es una reparación: ${actuacion(valor).toLowerCase()}.`
+    case 'objecion_vecino':
+      return `El vecino discrepa del resumen: «${valor}».`
+    case 'especialista_inexistente':
+      return 'El profesional configurado para esta avería ya no existe.'
+    case 'sin_especialista_para_categoria':
+      return 'Ningún profesional cubre este tipo de avería.'
+    default:
+      return capitalizar(m)
+  }
+}
+
 export const ROLES: Record<string, string> = {
   owner: 'Propietario',
   administrador: 'Administrador',

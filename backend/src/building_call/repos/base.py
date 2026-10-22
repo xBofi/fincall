@@ -7,6 +7,7 @@ from typing import Protocol
 from building_call.domain.configuracion import ConfiguracionEfectiva
 from building_call.domain.entidades import (
     Administrador,
+    EntradaHistorialIncidencia,
     Equipo,
     Especialista,
     Finca,
@@ -40,3 +41,19 @@ class Repositorio(Protocol):
     async def guardar_incidencia(self, incidencia: Incidencia) -> None: ...
 
     async def listar_incidencias(self) -> list[Incidencia]: ...
+
+    async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None: ...
+
+    async def aplicar_accion_incidencia(
+        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    ) -> bool:
+        """Guarda `despues` y su entrada de historial a la vez (todo o nada). Si la incidencia ya
+        no está como `antes` (estado o especialista), alguien actuó mientras tanto: no toca nada
+        y devuelve False."""
+        ...
+
+    async def listar_historial_incidencia(
+        self, incidencia_id: str
+    ) -> list[EntradaHistorialIncidencia]:
+        """Las acciones sobre una incidencia, de la más antigua a la más reciente."""
+        ...

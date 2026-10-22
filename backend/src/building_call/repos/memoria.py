@@ -17,6 +17,7 @@ from building_call.domain.configuracion import (
 )
 from building_call.domain.entidades import (
     Administrador,
+    EntradaHistorialIncidencia,
     Equipo,
     Especialista,
     Finca,
@@ -187,6 +188,7 @@ class RepositorioMemoria:
         }
         self.llamadas: dict[str, Llamada] = {}
         self.incidencias: dict[str, Incidencia] = {}
+        self.incidencia_historial: list[EntradaHistorialIncidencia] = []
 
     async def listar_fincas(self) -> list[Finca]:
         return list(self.fincas.values())
@@ -222,6 +224,27 @@ class RepositorioMemoria:
 
     async def listar_incidencias(self) -> list[Incidencia]:
         return list(self.incidencias.values())
+
+    async def obtener_incidencia(self, incidencia_id: str) -> Incidencia | None:
+        return self.incidencias.get(incidencia_id)
+
+    async def aplicar_accion_incidencia(
+        self, antes: Incidencia, despues: Incidencia, entrada: EntradaHistorialIncidencia
+    ) -> bool:
+        actual = self.incidencias.get(antes.id)
+        if actual is None or (actual.estado, actual.especialista_id) != (
+            antes.estado,
+            antes.especialista_id,
+        ):
+            return False
+        self.incidencias[despues.id] = despues
+        self.incidencia_historial.append(entrada)
+        return True
+
+    async def listar_historial_incidencia(
+        self, incidencia_id: str
+    ) -> list[EntradaHistorialIncidencia]:
+        return [h for h in self.incidencia_historial if h.incidencia_id == incidencia_id]
 
     # ------------------------------------------------------------- operativo (acceso y trazabilidad)
 
