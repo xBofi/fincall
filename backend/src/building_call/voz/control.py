@@ -47,23 +47,25 @@ ESPERA_MULETILLA_S = 0.8
 ESPERA_FINAL_S = 1.2
 
 #: Palabras que solas no dicen nada al grafo: tras ellas el vecino suele seguir. Sin "sí" ni "no"
-#: (son respuestas) y "vale" o "bueno" sueltos tampoco (valen por un "sí")
+#: (son respuestas) y "vale" o "bueno" sin nada más tampoco (valen por un "sí"). "a ver" y
+#: "o sea" van juntas: "A." u "O." sueltas son la letra de una puerta
 _MULETILLAS = frozenset(
     "ah eh oh ay uy pues mire mira oiga oye perdon perdone perdona disculpe hola buenas "
-    "bueno vale a ver entonces este esto y o sea".split()
+    "bueno vale a_ver entonces este esto y o_sea".split()
 )
 _RESPUESTAS_SUELTAS = frozenset({"vale", "bueno"})
 
 
 def _palabras(texto: str) -> list[str]:
     sin_acentos = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
-    return re.findall(r"[a-z0-9]+", sin_acentos)
+    palabras = " ".join(re.findall(r"[a-z0-9]+", sin_acentos))
+    return re.sub(r"\b(a) (ver)\b|\b(o) (sea)\b", r"\1\3_\2\4", palabras).split()
 
 
 def solo_muletillas(texto: str) -> bool:
     """El turno no trae nada que el grafo pueda usar: el vecino aún no ha dicho lo que quiere."""
     palabras = _palabras(texto)
-    if not palabras or (len(palabras) == 1 and palabras[0] in _RESPUESTAS_SUELTAS):
+    if not palabras or all(p in _RESPUESTAS_SUELTAS for p in palabras):
         return False
     return all(p in _MULETILLAS for p in palabras)
 
@@ -187,8 +189,21 @@ class ControlLlamada:
             self.nuevo_turno(vista)
             return vista
 
-        self._en_curso = asyncio.ensure_future(hacer())
-        return await asyncio.shield(self._en_curso)
+        en_curso = self._en_curso = asyncio.ensure_future(hacer())
+        try:
+            return await asyncio.shield(en_curso)
+        except asyncio.CancelledError:
+            # Nadie esperará ya esta petición: si falla, que quede en el log
+            en_curso.add_done_callback(self._registrar_fallo)
+            raise
+
+    def _registrar_fallo(self, tarea: asyncio.Future[dict[str, Any]]) -> None:
+        if not tarea.cancelled() and (error := tarea.exception()) is not None:
+            logger.error(
+                "Falló el turno de %s cuya respuesta ya no se esperaba",
+                self.llamada_id,
+                exc_info=error,
+            )
 
     def al_terminar_de_hablar(self, entrega: dict[str, Any]) -> tuple[Accion, list[str]]:
         """`entrega`: la `entrega_ultima` que devuelve la API tras registrar lo que sonó."""

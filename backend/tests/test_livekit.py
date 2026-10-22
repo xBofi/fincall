@@ -332,6 +332,12 @@ async def test_cuando_el_vecino_calla_se_da_tiempo_a_que_llegue_su_turno() -> No
         ("Pues sí.", False),
         ("Vale.", False),  # suelto es un "sí"
         ("Bueno.", False),
+        ("Vale, vale.", False),  # repetido sigue siendo un "sí"
+        ("Bueno, vale.", False),
+        ("A.", False),  # la letra de una puerta, no el "a" de "a ver"
+        ("O.", False),
+        ("A ver...", True),
+        ("O sea...", True),
         ("No.", False),
         ("Piso 1, puerta.", False),
         ("", False),
@@ -354,3 +360,28 @@ async def test_los_turnos_van_en_orden_aunque_livekit_cancele_el_primero() -> No
     assert turnos == [("turno", "Sí."), ("turno", "Eso es.")]
     assert ("entrega", (1, True, "")) in api.llamadas  # la respuesta 1 nunca sonó
     assert vista["turno"] == 2 and control.turno == 2 and control.texto == "respuesta 2"
+
+
+async def test_un_turno_cancelado_que_falla_queda_en_el_log_y_no_bloquea_el_siguiente(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Si LiveKit cancela la generación y luego la API falla, nadie espera ya esa petición: el
+    error se registra (no se pierde en silencio) y el turno siguiente sale igual."""
+
+    class _ApiQueFalla(_ApiFalsa):
+        async def turno(self, llamada_id: str, texto: str) -> dict[str, Any]:
+            if texto == "Sí.":
+                await asyncio.sleep(0.02)
+                raise RuntimeError("la API no responde")
+            return await super().turno(llamada_id, texto)
+
+    api = _ApiQueFalla()
+    control = ControlLlamada("llam-1")
+    primero = asyncio.ensure_future(control.enviar_turno(api, "Sí."))
+    await asyncio.sleep(0.005)
+    primero.cancel()
+    with caplog.at_level("ERROR", logger="building_call.voz.control"):
+        vista = await control.enviar_turno(api, "Eso es.")
+    assert vista["mensajes_bot"] == ["respuesta 1"]
+    propios = [r for r in caplog.records if r.name == "building_call.voz.control"]
+    assert any(r.exc_info for r in propios)
