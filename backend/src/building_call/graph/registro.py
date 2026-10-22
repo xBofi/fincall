@@ -27,6 +27,7 @@ _ORDEN_ESTANDAR = [
     "clasificar_problema",
     "pedir_detalle",
     "determinar_urgencia",
+    "atender_emergencia",
     "confirmar_resumen",
     "validar_datos",
     "no_clasificable",

@@ -7,6 +7,7 @@ const NODOS_PRINCIPALES = [
   'recoger_solicitud',
   'clasificar_problema',
   'determinar_urgencia',
+  'atender_emergencia',
   'confirmar_resumen',
   'validar_datos',
   'asignar_especialista',

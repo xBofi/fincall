@@ -146,6 +146,7 @@ def _vista(estado: EstadoLlamada) -> dict[str, Any]:
         "especialista_id", "especialista_nombre", "canal_aviso", "destino_aviso", "incidencia_id",
         "resultado", "motivo_revision", "configuracion_id", "grafo", "intentos_finca", "intentos_vivienda",
         "actuacion", "equipo_id", "sugerencia", "objecion",
+        "emergencia_atendida",
     ]  # fmt: skip
     return {
         "llamada_id": estado["llamada_id"],

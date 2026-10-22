@@ -35,6 +35,8 @@ class EstadoLlamada(TypedDict, total=False):
     avisos_turno: list[str]
     # Turno de detalle del problema ya hecho (o no procede)
     detalle_pedido: bool
+    # Emergencia ya atendida (indicación de seguridad dada y respuesta del vecino recogida)
+    emergencia_atendida: bool
     mensajes_bot: list[str]
     historial: list[dict[str, str]]
     traza: list[Traza]
@@ -106,6 +108,7 @@ def estado_inicial(llamada_id: str, iniciada_en: str, grafo: str) -> EstadoLlama
         piezas_bot=[],
         avisos_turno=[],
         detalle_pedido=False,
+        emergencia_atendida=False,
         mensajes_bot=[],
         historial=[],
         traza=[],

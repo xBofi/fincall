@@ -219,14 +219,18 @@ function TarjetaFinca({
                   </li>
                 )
               })}
-              {!cfg.emergencias_activas && (
-                <li>
-                  <span className="bd-fila-clave">
-                    <Tag color="red">Emergencia</Tag>
+              <li>
+                <span className="bd-fila-clave">
+                  <Tag color="red">Emergencia</Tag>
+                </span>
+                {cfg.emergencias_activas ? (
+                  <span className="bd-fila-valor">
+                    Indicación de seguridad y llamada al teléfono oficial de la finca (simulada por ahora)
                   </span>
+                ) : (
                   <span className="bd-fila-valor is-muted">Se trata como urgencia alta</span>
-                </li>
-              )}
+                )}
+              </li>
             </ul>
           </section>
 

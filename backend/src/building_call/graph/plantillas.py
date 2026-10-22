@@ -290,6 +290,36 @@ CATALOGO: dict[str, Plantilla] = dict(
             "El resumen no era correcto: se vuelve a recoger la solicitud.",
             "De acuerdo. Cuénteme de nuevo qué ocurre, con más detalle si puede.",
         ),
+        # ---------------------------------------------------------------- emergencias
+        _p(
+            "atender_emergencia.aviso",
+            "atender_emergencia",
+            "Emergencia con el tratamiento especial activado: primero la indicación de "
+            "seguridad ({seguridad}, una de las tres siguientes) y solo se confirma lo mínimo, "
+            "la finca y que hay una emergencia. Sin detalle técnico ni resumen largo.",
+            "{seguridad} Le confirmo: hay una emergencia en {direccion}. ¿Es así?",
+            pregunta=True,
+            aviso=True,
+        ),
+        _p(
+            "atender_emergencia.seguridad_gas",
+            "atender_emergencia",
+            "Indicación de seguridad cuando el vecino habla de gas (olor, fuga, butano).",
+            "Si huele a gas, no encienda luces ni aparatos ni haga llama; salga y, si es "
+            "seguro, abra las ventanas. Si alguien corre peligro, llame al 112.",
+        ),
+        _p(
+            "atender_emergencia.seguridad_fuego",
+            "atender_emergencia",
+            "Indicación de seguridad cuando el vecino habla de fuego, humo o incendio.",
+            "Si hay fuego o humo, salga por la escalera, sin usar el ascensor, y llame al 112.",
+        ),
+        _p(
+            "atender_emergencia.seguridad_general",
+            "atender_emergencia",
+            "Indicación de seguridad para el resto de emergencias (alguien atrapado, derrumbe).",
+            "Si alguien corre peligro, llame al 112 ahora mismo y no se ponga en riesgo.",
+        ),
         # ---------------------------------------------------------------- cierres
         _p(
             "no_clasificable.despedida",
@@ -322,6 +352,15 @@ CATALOGO: dict[str, Plantilla] = dict(
             "He registrado su incidencia. {aviso} Si en veinticuatro "
             "horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, "
             "hasta luego.",
+            aviso=True,
+        ),
+        _p(
+            "avisar_canal.cierre_emergencia",
+            "avisar_canal",
+            "Cierre de una emergencia (tratamiento especial activado). No promete una llamada "
+            "ya hecha: el aviso al teléfono oficial queda pendiente. Repite el 112.",
+            "He registrado la emergencia y se la paso con prioridad al administrador de su "
+            "comunidad. Si alguien corre peligro, llame al 112. Gracias por su llamada.",
             aviso=True,
         ),
         _p(
