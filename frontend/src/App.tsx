@@ -704,7 +704,7 @@ export default function App() {
                 <h2>Fincas y profesionales</h2>
               </div>
             </div>
-            <BaseDatos modo="pagina" catalogo={catalogo} />
+            <BaseDatos modo="pagina" catalogo={catalogo} editable={yo.rol !== 'calidad'} />
           </section>
         )}
 

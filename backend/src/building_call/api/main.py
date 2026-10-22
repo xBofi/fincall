@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
 from building_call.bandeja_api import crear_router_bandeja
+from building_call.catalogo_api import crear_router_catalogo
 from building_call.flujo_api import crear_router_flujo
 from building_call.grabacion import GrabadorConversacion
 from building_call.graph import plantillas
@@ -396,6 +397,11 @@ def crear_app(
     app.include_router(crear_router_flujo(deps.repo, deps.repo, acceso))  # type: ignore[arg-type]
     # Bandeja del administrador: incidencias pendientes de su decisión y sus acciones
     app.include_router(crear_router_bandeja(deps.repo, deps.repo, acceso))  # type: ignore[arg-type]
+
+    # Catálogo: lo que el asistente consulta en cada llamada, editable por owner y administrador
+    app.include_router(
+        crear_router_catalogo(deps.repo, deps.repo, deps.repo, acceso)  # type: ignore[arg-type]
+    )
 
     async def purga_periodica() -> None:
         while True:

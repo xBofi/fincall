@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { catalogos, type EspecialistaCatalogo, type FincaDetalle } from './api'
+import { catalogos, type AdministradorCatalogo, type EspecialistaCatalogo, type FincaDetalle } from './api'
 import { etiquetaVivienda } from './textos'
 
 export interface Catalogo {
   fincas: FincaDetalle[]
   profesionales: EspecialistaCatalogo[]
+  /** Con su capa de configuración: quién atiende cada categoría en todas sus fincas. */
+  administradores: AdministradorCatalogo[]
   cargando: boolean
   error: string | null
   recargar: () => void
@@ -25,6 +27,7 @@ export interface Catalogo {
 export function useCatalogo(activo: boolean): Catalogo {
   const [fincas, setFincas] = useState<FincaDetalle[]>([])
   const [profesionales, setProfesionales] = useState<EspecialistaCatalogo[]>([])
+  const [administradores, setAdministradores] = useState<AdministradorCatalogo[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
@@ -33,12 +36,13 @@ export function useCatalogo(activo: boolean): Catalogo {
     if (!activo) return
     let vigente = true
     setCargando(true)
-    Promise.all([catalogos.fincas(), catalogos.especialistas()])
-      .then(async ([resumen, esp]) => {
+    Promise.all([catalogos.fincas(), catalogos.especialistas(), catalogos.administradores()])
+      .then(async ([resumen, esp, admins]) => {
         const detalles = await Promise.all(resumen.map((f) => catalogos.finca(f.id)))
         if (!vigente) return
         setFincas(detalles)
         setProfesionales(esp)
+        setAdministradores(admins)
         setError(null)
       })
       .catch((e: unknown) => {
@@ -66,6 +70,7 @@ export function useCatalogo(activo: boolean): Catalogo {
     return {
       fincas,
       profesionales,
+      administradores,
       cargando,
       error,
       recargar,
@@ -77,7 +82,7 @@ export function useCatalogo(activo: boolean): Catalogo {
         return x ? etiquetaVivienda(x.v) : null
       },
     }
-  }, [fincas, profesionales, cargando, error, recargar])
+  }, [fincas, profesionales, administradores, cargando, error, recargar])
 }
 
 // ------------------------------------------------------------- lectura de la configuración efectiva
