@@ -25,10 +25,14 @@ from building_call.settings import settings
 NOMBRE_AGENTE = "fincall"
 
 
+#: Un secreto corto ("agente", "secret") da acceso sin sesión a todas las llamadas
+SECRETO_MINIMO = 32
+
+
 def es_agente(request: Request | WebSocket) -> bool:
     secreto = settings.agente_secreto
     cabecera = request.headers.get("authorization", "")
-    if not secreto or not cabecera.startswith("Bearer "):
+    if len(secreto) < SECRETO_MINIMO or not cabecera.startswith("Bearer "):
         return False
     return hmac.compare_digest(cabecera.removeprefix("Bearer ").encode(), secreto.encode())
 
@@ -62,6 +66,10 @@ def crear_router_livekit(acceso: Acceso) -> APIRouter:
         """Sala nueva para probar una llamada ya iniciada; el agente se une a ella por despacho."""
         if not livekit_configurado():
             raise HTTPException(503, "LiveKit no está configurado")
+        if settings.livekit_url_consola and len(settings.livekit_api_secret) < SECRETO_MINIMO:
+            # Las claves de `livekit-server --dev` (devkey/secret) son públicas: con la consola
+            # expuesta fuera de localhost cualquiera podría firmar tokens (seguridad 2026-10-22)
+            raise HTTPException(503, "LiveKit con claves de desarrollo: solo en localhost")
         from livekit import api
 
         sala = f"consola-{uuid4().hex[:12]}"

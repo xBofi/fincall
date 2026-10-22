@@ -42,6 +42,15 @@ def firma_valida(auth_token: str, url: str, parametros: dict[str, str], firma: s
     return hmac.compare_digest(esperada, firma)
 
 
+def token_stream(auth_token: str, call_sid: str) -> str:
+    """Token del Media Stream de una llamada. Lo pone nuestro webhook (firmado por Twilio) en
+    el TwiML y vuelve en el evento `start`: sin él, cualquiera podía abrir el WebSocket y hablar
+    con el bot (revisión de seguridad 2026-10-22)."""
+    return hmac.new(
+        auth_token.encode(), f"media-stream:{call_sid}".encode(), hashlib.sha256
+    ).hexdigest()
+
+
 def twiml_conectar_stream(url_ws: str, parametros: dict[str, str]) -> str:
     params = "".join(
         f"<Parameter name={quoteattr(k)} value={quoteattr(v)}/>" for k, v in parametros.items()
@@ -135,9 +144,11 @@ def crear_router_twilio(
                 ),
                 media_type="application/xml",
             )
+        call_sid = formulario.get("CallSid", "")
         parametros = {
             "telefono": formulario.get("From", ""),
-            "call_sid": formulario.get("CallSid", ""),
+            "call_sid": call_sid,
+            "token": token_stream(settings.twilio_auth_token, call_sid),
         }
         return Response(
             twiml_conectar_stream(url_ws_desde_publica(settings.url_publica), parametros),
@@ -172,6 +183,18 @@ def crear_router_twilio(
                     inicio = m.get("start") or {}
                     stream_sid = str(m.get("streamSid") or inicio.get("streamSid") or "")
                     parametros = inicio.get("customParameters") or {}
+                    esperado = token_stream(
+                        settings.twilio_auth_token, str(parametros.get("call_sid", ""))
+                    )
+                    if (
+                        listo() is not None
+                        or not settings.twilio_auth_token
+                        or not parametros.get("call_sid")
+                        or not hmac.compare_digest(str(parametros.get("token", "")), esperado)
+                    ):
+                        logger.warning("Media Stream rechazado: sin token válido de su llamada")
+                        await ws.close(code=1008)
+                        return
                     canal = CanalTwilio(ws, stream_sid)
                     puente = await fabrica_puente(canal, parametros.get("telefono") or None)
                     await puente.iniciar()

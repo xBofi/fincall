@@ -115,7 +115,12 @@ class NuevaLlamada(BaseModel):
 
 
 class Mensaje(BaseModel):
-    texto: str
+    # Un turno hablado cabe de sobra; sin tope, /parcial lanzaba el LLM con cientos de KB
+    texto: str = Field(max_length=2000)
+
+
+#: Audio de un turno por lotes: sin tope, un fichero de varios GB se cargaba entero en memoria
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 class VozBot(BaseModel):
@@ -500,15 +505,19 @@ def crear_app(
             raise HTTPException(
                 503, "STT en servidor no disponible; use el reconocimiento del navegador"
             )
-        datos = await fichero.read()
+        datos = await fichero.read(MAX_AUDIO_BYTES + 1)
         if not datos:
             raise HTTPException(400, "Audio vacío")
+        if len(datos) > MAX_AUDIO_BYTES:
+            raise HTTPException(413, "Audio demasiado grande para un turno")
         try:
             transcripcion = await reconocedor.transcribir(
                 datos, mime or fichero.content_type or "audio/webm"
             )
         except Exception as e:  # noqa: BLE001
-            raise HTTPException(502, f"Error de transcripción: {e}") from e
+            # El detalle va al log, no al cliente (puede llevar rutas o respuestas del proveedor)
+            logger.exception("Error de transcripción en %s", llamada_id)
+            raise HTTPException(502, "Error de transcripción") from e
         if not transcripcion.texto:
             try:
                 estado = await gestor.obtener(llamada_id)
@@ -571,7 +580,10 @@ def crear_app(
         try:
             await sesion.abrir()
         except Exception as e:  # noqa: BLE001
-            await ws.send_json({"type": "error", "mensaje": f"No se pudo abrir el STT: {e}"})
+            logger.warning("No se pudo abrir el STT: %s", e)
+            await ws.send_json(
+                {"type": "error", "mensaje": "No se pudo abrir el reconocimiento de voz"}
+            )
             await ws.close(code=1011)
             return
         await ws.send_json({"type": "listo", "conexion_ms": getattr(sesion, "conexion_ms", None)})

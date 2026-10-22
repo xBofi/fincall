@@ -48,6 +48,9 @@ from building_call.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+#: Vida máxima de una sesión aunque se siga usando: luego hay que volver a entrar
+SESION_MAX_DIAS = 90
+
 #: Cookie firmada que acompaña la ida y vuelta al proveedor (state, nonce, PKCE)
 COOKIE_INTENTO = "bc_oidc"
 INTENTO_MAX_S = 600
@@ -84,6 +87,12 @@ class Acceso:
     # ------------------------------------------------------------------ sesiones
 
     def _segura(self, request: Request) -> bool:
+        # Detrás de un túnel o un proxy (Vite con changeOrigin) el Host llega como 127.0.0.1
+        # aunque el navegador use https: manda la URL pública de la consola
+        if self.s.url_consola.startswith("https://"):
+            return True
+        if request.headers.get("x-forwarded-proto") == "https":
+            return True
         return request.url.hostname not in ("localhost", "127.0.0.1")
 
     def _poner_cookie(self, response: Response, request: Request, token: str) -> None:
@@ -126,6 +135,9 @@ class Acceso:
         sesion = await self.repo.obtener_sesion_por_hash(token_hash)
         ahora = datetime.now(UTC)
         if sesion is None or not sesion.vigente(ahora):
+            return None
+        if ahora - sesion.creada_en > timedelta(days=SESION_MAX_DIAS):
+            # La renovación deslizante tiene techo: una cookie robada no vale para siempre
             return None
         usuario = await self.repo.obtener_usuario(sesion.usuario_id)
         if usuario is None or not usuario.activo:
@@ -194,7 +206,10 @@ class Acceso:
             identidad.proveedor, identidad.sujeto
         )
         if existente is None:
-            nombre_usuario = identidad.correo or f"{identidad.proveedor}-{identidad.sujeto[:12]}"
+            # Solo el correo que el proveedor verifica identifica a alguien: en un inquilino propio
+            # de Microsoft cualquiera se pone el de otra persona (revisión de seguridad 2026-10-22)
+            correo = identidad.correo_verificado
+            nombre_usuario = correo or f"{identidad.proveedor}-{identidad.sujeto[:12]}"
             if await self.repo.obtener_usuario_por_nombre(nombre_usuario) is not None:
                 # El mismo correo por el otro proveedor es otra identidad hasta que se conceda
                 nombre_usuario = f"{nombre_usuario}#{identidad.proveedor}"
@@ -204,7 +219,7 @@ class Acceso:
                 nombre=identidad.nombre,
                 rol=Rol.owner if es_owner else Rol.calidad,
                 activo=True,
-                email=identidad.correo,
+                email=correo,
                 proveedor=identidad.proveedor,
                 sujeto=identidad.sujeto,
                 estado_acceso=EstadoAcceso.concedido if es_owner else EstadoAcceso.sin_solicitar,
@@ -216,11 +231,15 @@ class Acceso:
                 usuario.id,
                 "alta_por_proveedor",
                 "usuario",
-                {"proveedor": identidad.proveedor, "email": identidad.correo, "owner": es_owner},
+                {
+                    "proveedor": identidad.proveedor,
+                    "email": identidad.correo_verificado,
+                    "owner": es_owner,
+                },
             )
             return usuario
         else:
-            cambios: dict[str, Any] = {"email": identidad.correo or existente.email}
+            cambios: dict[str, Any] = {"email": identidad.correo_verificado or existente.email}
             if identidad.nombre:
                 cambios["nombre"] = identidad.nombre
             if es_owner:
@@ -330,6 +349,12 @@ class Acceso:
         async def solicitar(usuario: Usuario = Depends(persona)) -> dict[str, Any]:  # noqa: B008
             if usuario.estado_acceso in (EstadoAcceso.concedido, EstadoAcceso.solicitado):
                 return usuario.publico()
+            if (
+                usuario.estado_acceso is EstadoAcceso.denegado
+                and usuario.solicitado_en
+                and datetime.now(UTC) - usuario.solicitado_en < timedelta(days=1)
+            ):
+                raise HTTPException(429, "Ya lo solicitaste hoy; podrás volver a pedirlo mañana")
             actualizado = usuario.model_copy(
                 update={
                     "estado_acceso": EstadoAcceso.solicitado,

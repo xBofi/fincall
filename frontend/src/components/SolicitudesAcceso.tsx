@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Empty, Popconfirm, Select, Space, Table, Typography, message } from 'antd'
+import { Button, Empty, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { usuarios as apiUsuarios, type Rol, type UsuarioConsola } from '../api'
 import { PROVEEDOR, ROLES, detalle } from './rolesUsuario'
@@ -64,7 +64,13 @@ export function SolicitudesAcceso({ onCambio }: { onCambio: () => void }) {
             title: 'Persona',
             render: (_, u) => (
               <span>
-                <b>{u.nombre ?? u.email ?? u.nombre_usuario}</b>
+                {/* Sin correo verificado el nombre lo pone la propia cuenta: no prueba quién es */}
+                <b>{u.email ? (u.nombre ?? u.email) : `Dice llamarse «${u.nombre ?? '—'}»`}</b>
+                {!u.email && (
+                  <Tag color="red" style={{ marginLeft: 8 }}>
+                    identidad sin verificar
+                  </Tag>
+                )}
                 <div>
                   <Typography.Text type="secondary">
                     {u.email ?? 'sin correo verificado'} · {PROVEEDOR[u.proveedor ?? ''] ?? u.proveedor}

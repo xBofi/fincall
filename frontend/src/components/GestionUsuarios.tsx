@@ -68,7 +68,12 @@ export function GestionUsuarios({ yo }: { yo: UsuarioConsola }) {
             dataIndex: 'nombre_usuario',
             render: (v: string, u) => (
               <span>
-                <b>{u.nombre ?? v}</b>
+                <b>{u.email || !u.proveedor ? (u.nombre ?? v) : `Dice llamarse «${u.nombre ?? '—'}»`}</b>
+                {u.proveedor && !u.email && (
+                  <Tag color="red" style={{ marginLeft: 8 }}>
+                    identidad sin verificar
+                  </Tag>
+                )}
                 {u.id === yo.id && <Tag style={{ marginLeft: 8 }}>tú</Tag>}
                 <div>
                   <Typography.Text type="secondary">

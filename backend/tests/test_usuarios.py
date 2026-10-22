@@ -275,3 +275,24 @@ def test_id_token_con_emisor_audiencia_o_nonce_incorrectos() -> None:
     otra = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     with pytest.raises(ErrorOidc):
         verificar_id_token(g, _token(iss="https://accounts.google.com"), otra.public_key(), "n")
+
+
+async def test_correo_sin_verificar_no_se_guarda_ni_se_muestra(app: Any, oidc: OidcFalso) -> None:
+    """Revisión de seguridad 2026-10-22: en un inquilino propio de Microsoft cualquiera se pone
+    el correo y el nombre de otra persona; en Solicitudes aparecía como si fuera ella."""
+    empresa = "11111111-2222-3333-4444-555555555555"
+    async with _cliente(app) as owner, _cliente(app) as falso:
+        await _entrar(owner, oidc, sub="g-1", email=OWNER, email_verified=True)
+        await _entrar(
+            falso,
+            oidc,
+            proveedor="microsoft",
+            sub="ms-9",
+            tid=empresa,
+            iss=f"https://login.microsoftonline.com/{empresa}/v2.0",
+            email="marc@empresa.es",
+            name="Marc",
+        )
+        yo = (await _yo(falso))["usuario"]
+        assert yo["email"] is None
+        assert "marc@empresa.es" not in yo["nombre_usuario"]

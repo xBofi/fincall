@@ -369,3 +369,50 @@ async def test_puente_se_disculpa_si_el_stt_se_corta(gestor: GestorLlamadas) -> 
     assert len(tts.textos) == 2
     assert (await gestor.obtener(llamada_id))["finalizada"]
     await puente.cerrar()
+
+
+def test_el_stream_de_twilio_exige_el_token_de_su_llamada(
+    deps: Dependencias, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revisión de seguridad 2026-10-22: cualquiera podía abrir el WebSocket de medios y hablar
+    con el bot (gastando STT, LLM y TTS). Ahora el stream lleva un token HMAC de su CallSid que
+    solo pone nuestro webhook firmado."""
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    from building_call.telefonia.twilio import RUTA_MEDIA, token_stream
+
+    monkeypatch.setattr(settings_globales, "twilio_auth_token", "tok")
+    monkeypatch.setattr("building_call.api.main.motivo_no_listo", lambda *_a, **_k: None)
+    abiertos: list[str] = []
+    app = crear_app(deps, fabrica_streaming=None)
+    with TestClient(app) as c:
+        for parametros in ({}, {"call_sid": "CA1", "token": "falso"}):
+            with c.websocket_connect(RUTA_MEDIA) as ws:
+                ws.send_json(
+                    {
+                        "event": "start",
+                        "start": {"streamSid": "MZ1", "customParameters": parametros},
+                    }
+                )
+                with pytest.raises(WebSocketDisconnect) as cierre:
+                    ws.receive_json()
+                assert cierre.value.code == 1008
+                abiertos.append("cerrado")
+    assert abiertos == ["cerrado", "cerrado"]
+    assert token_stream("tok", "CA1") != token_stream("tok", "CA2")
+    assert token_stream("tok", "CA1") != token_stream("otro", "CA1")
+
+
+async def test_el_webhook_firma_el_stream_con_el_callsid(
+    cliente: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from building_call.telefonia.twilio import token_stream
+
+    monkeypatch.setattr("building_call.api.main.motivo_no_listo", lambda *_a, **_k: None)
+    params = {"From": "+34600", "CallSid": "CA1"}
+    url = "https://bot.example" + RUTA_VOZ
+    r = await cliente.post(
+        RUTA_VOZ, data=params, headers={"X-Twilio-Signature": _firmar("tok", url, params)}
+    )
+    assert f'<Parameter name="token" value="{token_stream("tok", "CA1")}"/>' in r.text
