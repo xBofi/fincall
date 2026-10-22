@@ -1,5 +1,5 @@
 """APIs protegidas de la consola operativa: resumen, expedientes, transcripción, decisiones,
-auditoría y audio por URL firmada. Todo acceso queda auditado."""
+auditoría, audio por URL firmada y casos del banco de pruebas. Todo acceso queda auditado."""
 
 from __future__ import annotations
 
@@ -9,7 +9,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from building_call.acceso import Acceso
 from building_call.audio_store import AlmacenAudio
+from building_call.casos_banco import (
+    CLAVES_ESPERADO,
+    CasoBancoEntrada,
+    CasoInvalido,
+    construir_caso,
+)
+from building_call.domain.configuracion import CATEGORIA_NO_CLASIFICABLE, DEFAULTS, URGENCIAS
+from building_call.domain.entidades import ACTUACIONES
 from building_call.domain.operaciones import Rol, Usuario
+from building_call.llm.interpretacion import INTENCIONES
 from building_call.metricas import RegistroMetricas
 from building_call.repos.operaciones import resumir_operaciones
 from building_call.repos.operativo import RepositorioOperativo
@@ -79,6 +88,7 @@ def crear_router_operaciones(
             "llamada": ll.model_dump(mode="json"),
             "turnos": await repo.listar_turnos(llamada_id),
             "decisiones": await repo.listar_decisiones(llamada_id),
+            "casos": await repo.listar_casos_banco(llamada_id),
             "metricas": [t.como_dict() for t in metricas.turnos(llamada_id)],
             "pistas": [
                 {
@@ -138,5 +148,80 @@ def crear_router_operaciones(
         return Response(
             content=datos, media_type=pista["mime"], headers={"Cache-Control": "no-store"}
         )
+
+    # ------------------------------------------------------------- casos del banco de pruebas
+
+    @r.get("/casos/opciones")
+    async def opciones_casos(usuario: Usuario = Depends(revisor)) -> dict[str, Any]:  # noqa: B008
+        """Valores válidos para rellenar lo que el asistente debería haber entendido."""
+        return {
+            "claves": list(CLAVES_ESPERADO),
+            "intenciones": list(INTENCIONES),
+            "urgencias": list(URGENCIAS),
+            "actuaciones": list(ACTUACIONES),
+            "categorias": [*DEFAULTS.catalogo_categorias, CATEGORIA_NO_CLASIFICABLE],
+        }
+
+    @r.get("/casos")
+    async def casos(usuario: Usuario = Depends(revisor)) -> list[dict[str, Any]]:  # noqa: B008
+        """Todos los casos marcados: es lo que `evals/exportar_casos.py --entrada` lee."""
+        return await repo.listar_casos_banco()
+
+    @r.get("/llamadas/{llamada_id}/casos")
+    async def casos_de_llamada(
+        llamada_id: str,
+        usuario: Usuario = Depends(revisor),  # noqa: B008
+    ) -> list[dict[str, Any]]:
+        return await repo.listar_casos_banco(llamada_id)
+
+    @r.post("/llamadas/{llamada_id}/casos", status_code=201)
+    async def marcar_caso(
+        llamada_id: str,
+        cuerpo: CasoBancoEntrada,
+        usuario: Usuario = Depends(revisor),  # noqa: B008
+    ) -> dict[str, Any]:
+        ll = await repo.obtener_llamada(llamada_id)
+        if ll is None:
+            raise HTTPException(404, "Expediente no encontrado")
+        equipos = None
+        if ll.finca_id and hasattr(repo, "equipos_de"):
+            equipos = [(e.id, e.descripcion()) for e in await repo.equipos_de(ll.finca_id)]
+        try:
+            campos = construir_caso(
+                cuerpo,
+                await repo.listar_turnos(llamada_id),
+                nombre_real=ll.nombre_declarado,
+                equipos=equipos,
+            )
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except CasoInvalido as e:
+            raise HTTPException(422, str(e)) from e
+        caso = await repo.guardar_caso_banco(
+            {**campos, "llamada_id": llamada_id, "autor_id": usuario.id}
+        )
+        await auditar(
+            usuario,
+            "marcar_caso_banco",
+            f"llamada:{llamada_id}",
+            turno=cuerpo.turno,
+            caso_id=caso["id"],
+            banco=cuerpo.banco,
+        )
+        return caso
+
+    @r.delete("/casos/{caso_id}", status_code=204)
+    async def desmarcar_caso(caso_id: str, usuario: Usuario = Depends(revisor)) -> Response:  # noqa: B008
+        caso = await repo.eliminar_caso_banco(caso_id)
+        if caso is None:
+            raise HTTPException(404, "Caso no encontrado")
+        await auditar(
+            usuario,
+            "desmarcar_caso_banco",
+            f"llamada:{caso['llamada_id']}",
+            turno=caso["turno"],
+            caso_id=caso_id,
+        )
+        return Response(status_code=204)
 
     return r

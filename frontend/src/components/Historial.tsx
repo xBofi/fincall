@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Collapse, Empty, Segmented, Tag } from 'antd'
-import type { DetalleExpediente, Expediente, ResumenOperaciones } from '../api'
+import { Button, Collapse, Empty, Popconfirm, Segmented, Tag, message } from 'antd'
+import { ApiError, operaciones } from '../api'
+import type { CasoBanco, DetalleExpediente, Expediente, ResumenOperaciones } from '../api'
 import type { Catalogo } from '../catalogo'
 import { calificar, capitalizar, resultado } from '../textos'
+import { MarcarCaso } from './MarcarCaso'
 
 /** En la consola web el bot habla por el navegador: su pista la reconstruye el TTS del servidor. */
 const NOMBRE_PISTA: Record<string, string> = {
@@ -106,7 +108,7 @@ export function Historial({ resumen, expedientes, seleccionado, onAbrir, catalog
 
         <section className="hist-detalle" aria-label="Detalle de la llamada">
           {seleccionado ? (
-            <Detalle d={seleccionado} catalogo={catalogo} />
+            <Detalle d={seleccionado} catalogo={catalogo} onRecargar={() => onAbrir(seleccionado.llamada.id)} />
           ) : (
             <Empty description="Elige una llamada para ver la conversación y lo que hizo el asistente" />
           )}
@@ -116,9 +118,24 @@ export function Historial({ resumen, expedientes, seleccionado, onAbrir, catalog
   )
 }
 
-function Detalle({ d, catalogo }: { d: DetalleExpediente; catalogo: Catalogo }) {
+function Detalle({ d, catalogo, onRecargar }: { d: DetalleExpediente; catalogo: Catalogo; onRecargar: () => void }) {
   const ll = d.llamada
   const r = resultado(ll.resultado)
+  // Turno que se está marcando como caso del banco de pruebas (y el caso previo, si se corrige)
+  const [marcando, setMarcando] = useState<{ turno: number; previo?: CasoBanco } | null>(null)
+  const casosDe = (turno: number) => (d.casos ?? []).filter((c) => c.turno === turno)
+  const preguntaAntes = (turno: number) => d.turnos.find((t) => t.turno === turno - 1)?.asistente.at(-1) ?? null
+  const turnoMarcado = marcando ? d.turnos.find((t) => t.turno === marcando.turno) : undefined
+
+  async function quitar(caso: CasoBanco) {
+    try {
+      await operaciones.desmarcarCaso(caso.id)
+      message.success('Caso quitado del banco de pruebas')
+      onRecargar()
+    } catch (e) {
+      message.error(e instanceof ApiError ? e.detalle : 'No se ha podido quitar el caso.')
+    }
+  }
   return (
     <div className="hist-dossier">
       <header className="hist-cab">
@@ -170,15 +187,53 @@ function Detalle({ d, catalogo }: { d: DetalleExpediente; catalogo: Catalogo }) 
 
       <div className="hist-bloque hist-conv">
         <h3>Conversación</h3>
+        <small className="hist-nota">
+          ¿El asistente no entendió bien al vecino? Marca ese turno como caso para el banco de pruebas: así no vuelve a fallar.
+        </small>
         <div className="hist-chat">
           {d.turnos.map((t) => (
             <div key={t.turno} className="hist-turno">
               {t.vecino && <div className="burbuja vecino">{t.vecino}</div>}
+              {t.vecino && (
+                <div className="hist-caso">
+                  {casosDe(t.turno).map((c) => (
+                    <span key={c.id} className="hist-caso-marca">
+                      <Tag color="purple">{c.banco === 'clasificacion' ? 'Caso de clasificación' : 'Caso del banco'}</Tag>
+                      <Button size="small" type="link" onClick={() => setMarcando({ turno: t.turno, previo: c })}>
+                        Corregir
+                      </Button>
+                      <Popconfirm title="¿Quitar este caso del banco de pruebas?" okText="Quitar" cancelText="No" onConfirm={() => void quitar(c)}>
+                        <Button size="small" type="link" danger>
+                          Quitar
+                        </Button>
+                      </Popconfirm>
+                    </span>
+                  ))}
+                  <Button size="small" type="link" onClick={() => setMarcando({ turno: t.turno })}>
+                    Marcar como caso para el banco
+                  </Button>
+                </div>
+              )}
               {t.asistente.length > 0 && <div className="burbuja bot">{t.asistente.join(' ')}</div>}
             </div>
           ))}
         </div>
       </div>
+
+      {marcando && turnoMarcado && (
+        <MarcarCaso
+          key={`${marcando.turno}-${marcando.previo?.id ?? 'nuevo'}`}
+          llamadaId={ll.id}
+          turno={turnoMarcado}
+          pregunta={preguntaAntes(marcando.turno)}
+          previo={marcando.previo}
+          onCerrar={() => setMarcando(null)}
+          onGuardado={() => {
+            setMarcando(null)
+            onRecargar()
+          }}
+        />
+      )}
 
       <Collapse
         size="small"

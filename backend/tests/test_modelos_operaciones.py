@@ -1,5 +1,6 @@
 from building_call.repos.modelos_sql import (
     AuditoriaEventoSQL,
+    CasoBancoSQL,
     LlamadaDecisionSQL,
     LlamadaTurnoSQL,
     PistaAudioSQL,
@@ -15,3 +16,4 @@ def test_operational_models_have_stable_table_names() -> None:
     assert LlamadaDecisionSQL.__tablename__ == "llamada_decisiones"
     assert PistaAudioSQL.__tablename__ == "pistas_audio"
     assert AuditoriaEventoSQL.__tablename__ == "auditoria_eventos"
+    assert CasoBancoSQL.__tablename__ == "casos_banco"
