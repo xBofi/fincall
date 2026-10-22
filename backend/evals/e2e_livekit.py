@@ -5,9 +5,13 @@ y escucha al agente (`building_call.voz.agente`). Mide `respuesta_ms` como la co
 la voz del vecino al primer audio del bot. El escenario `interrupcion` corta el resumen y
 comprueba el ledger de entrega.
 
-Uso (API en :8000 con BC_AGENTE_SECRETO y LiveKit, agente arrancado, LiveKit en :7880):
+Uso (API con BC_AGENTE_SECRETO y LiveKit, agente arrancado, LiveKit en :7880):
     uv run --extra voz python evals/e2e_livekit.py
     uv run --extra voz python evals/e2e_livekit.py --solo interrupcion --verboso
+Contra una API y un agente de pruebas, sin tocar los de la consola (agente arrancado con
+BC_LIVEKIT_AGENTE=fincall-pruebas y BC_AGENTE_API_URL apuntando a esa API):
+    uv run --extra voz python evals/e2e_livekit.py --api http://127.0.0.1:8100
+        --agente fincall-pruebas --etiqueta u3-base
 """
 
 from __future__ import annotations
@@ -27,7 +31,8 @@ from e2e_voz import ESCENARIOS, _pcm_sin_silencio_final, sintetizar
 from livekit import api, rtc
 
 AQUI = Path(__file__).resolve().parent
-BASE = "http://localhost:8000"
+BASE = os.environ.get("BC_BANCO_API", "http://localhost:8000")
+AGENTE = os.environ.get("BC_LIVEKIT_AGENTE", "fincall")
 URL_LIVEKIT = os.environ.get("BC_LIVEKIT_URL", "ws://localhost:7880")
 CLAVE = os.environ.get("BC_LIVEKIT_API_KEY", "devkey")
 SECRETO_LK = os.environ.get("BC_LIVEKIT_API_SECRET", "secret")
@@ -111,7 +116,7 @@ def _a_48k(ruta: Path) -> bytes:
 
 
 async def ejecutar(
-    escenario: dict[str, Any], http: httpx.AsyncClient, verboso: bool
+    escenario: dict[str, Any], http: httpx.AsyncClient, verboso: bool, agente: str = AGENTE
 ) -> dict[str, Any]:
     vista = (await http.post("/api/llamadas", json={"telefono_llamante": "+34600000000"})).json()
     lid = vista["llamada_id"]
@@ -126,7 +131,7 @@ async def ejecutar(
             api.RoomConfiguration(
                 agents=[
                     api.RoomAgentDispatch(
-                        agent_name="fincall", metadata=json.dumps({"llamada_id": lid})
+                        agent_name=agente, metadata=json.dumps({"llamada_id": lid})
                     )
                 ]
             )
@@ -229,6 +234,9 @@ async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--solo")
     ap.add_argument("--verboso", action="store_true")
+    ap.add_argument("--api", default=BASE, help="URL de la API (BC_BANCO_API)")
+    ap.add_argument("--agente", default=AGENTE, help="agente al que despachar (BC_LIVEKIT_AGENTE)")
+    ap.add_argument("--etiqueta", help="guarda también ultimo_e2e_livekit-<etiqueta>.json")
     args = ap.parse_args()
     if not SECRETO_AGENTE:
         sys.exit("Falta BC_AGENTE_SECRETO (el banco entra en la API como el agente)")
@@ -237,11 +245,11 @@ async def main() -> None:
     ]
     resultados = []
     async with httpx.AsyncClient(
-        base_url=BASE, headers={"Authorization": f"Bearer {SECRETO_AGENTE}"}, timeout=30
+        base_url=args.api, headers={"Authorization": f"Bearer {SECRETO_AGENTE}"}, timeout=30
     ) as http:
         for e in escenarios:
             print(f"== {e['nombre']}")
-            r = await ejecutar(e, http, args.verboso)
+            r = await ejecutar(e, http, args.verboso, args.agente)
             resultados.append(r)
             lat = sorted(r.get("latencias_ms", []))
             print(
@@ -256,9 +264,10 @@ async def main() -> None:
         )
     ok = sum(1 for r in resultados if r["ok"])
     print(f"{ok}/{len(resultados)} escenarios correctos")
-    (AQUI / "ultimo_e2e_livekit.json").write_text(
-        json.dumps(resultados, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    salida = json.dumps(resultados, ensure_ascii=False, indent=2)
+    (AQUI / "ultimo_e2e_livekit.json").write_text(salida, encoding="utf-8")
+    if args.etiqueta:
+        (AQUI / f"ultimo_e2e_livekit-{args.etiqueta}.json").write_text(salida, encoding="utf-8")
     sys.exit(0 if ok == len(resultados) else 1)
 
 

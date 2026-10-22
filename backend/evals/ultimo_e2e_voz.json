@@ -1,42 +1,40 @@
 [
   {
     "nombre": "guiado",
-    "ok": true,
-    "motivo": "",
+    "ok": false,
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None; categoria: esperado 'fontaneria', obtenido 'no_clasificable'",
     "latencias_ms": [
-      1533,
-      1486,
-      822,
-      754,
-      1641,
-      2181,
-      1371
+      1561,
+      722,
+      694,
+      1514,
+      1483,
+      1303
     ],
     "transcripciones": [
       "Calle Mayor 12.",
-      "S.",
+      "Sí.",
       "Tercero B.",
-      "Marta L. Pérez.",
-      "Hay una fuga de agua en el BAO.",
-      "Se ir con fuerza del techo.",
-      "S."
+      "Hay una fuga de agua en el baño.",
+      "Sale con fuerza del techo.",
+      "Sí."
     ]
   },
   {
     "nombre": "natural_todo_junto",
-    "ok": true,
-    "motivo": "",
+    "ok": false,
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None",
     "latencias_ms": [
-      1020,
-      937,
-      818,
-      817
+      1221,
+      1561,
+      1869,
+      111
     ],
     "transcripciones": [
-      "Hola, buenas, mire, llamo desde la Avenida de la Alameda 5, portal 2, tercero A. Soy Carmen y tengo una fuga de agua en el B o que está inundando el suelo.",
+      "Hola, buenas, mire, llamo desde la Avenida de la Alameda 5, portal 2, tercero A. Soy Carmen y tengo una fuga de agua en el baño que está inundando el suelo.",
       "Sí, eso es.",
       "Sale con fuerza, creo que del techo.",
-      "Sí, correcto."
+      "Sí."
     ]
   },
   {
@@ -44,24 +42,24 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      834,
-      1612,
-      1749,
-      105,
-      1499,
-      1211,
-      930,
-      710
+      835,
+      107,
+      884,
+      108,
+      1592,
+      1056,
+      2076,
+      719
     ],
     "transcripciones": [
       "Hola, buenas.",
-      "Sí, vivo en la Calle Mayor en el número 12.",
       "Sí.",
-      "Ah, vale, espéreme.",
-      "Pues ese, piso 1, puerta A, con Andreu Bofipla.",
+      "Vivo en la Calle Mayor número 12, sí.",
+      "Perdón.",
+      "Pues sí, piso 1, puerta A, con Andreu Bofipla.",
       "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
       "El corredor del primero tiene humedad y desconchones.",
-      "Ese es correcto."
+      "Sí, es correcto."
     ]
   },
   {
@@ -69,24 +67,22 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1408,
-      1479,
-      2238,
-      1514,
-      785,
-      2200,
-      2266,
-      1352
+      1553,
+      725,
+      1477,
+      1543,
+      1134,
+      109,
+      1625
     ],
     "transcripciones": [
       "Avenida de la Alameda 5.",
-      "S.",
+      "Sí.",
       "El tercero A es mi vivienda.",
       "Portal 1.",
-      "Juan.",
       "El ascensor hace un ruido raro.",
-      "Funciona, pero hace ruido al arrancar.",
-      "S."
+      "Funciona.",
+      "Pero hace ruido al arrancar, sí."
     ]
   },
   {
@@ -94,24 +90,22 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1506,
-      1507,
-      700,
-      665,
-      1153,
-      895,
-      1491,
-      1480
+      1575,
+      623,
+      2249,
+      727,
+      884,
+      809,
+      620
     ],
     "transcripciones": [
       "Calle Mayor 12.",
-      "S.",
-      "segundo B.",
-      "Pepe.",
+      "Sí.",
+      "Segundo B, soy Pepe.",
       "No funciona la luz de la escalera.",
       "Son todas, no encienden.",
-      "No, me llamo Pedro Garca.",
-      "S."
+      "No, me llamo Pedro García.",
+      "Sí."
     ]
   },
   {
@@ -119,15 +113,15 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      978,
-      1409,
-      1346,
-      777
+      1487,
+      1416,
+      726,
+      1175
     ],
     "transcripciones": [
       "Esta llamada se está grabando.",
       "Calle Mayor 12.",
-      "S.",
+      "Sí.",
       "Prefiero hablar con una persona, por favor."
     ]
   },
@@ -136,24 +130,22 @@
     "ok": true,
     "motivo": "",
     "latencias_ms": [
-      1513,
-      1519,
-      1270,
-      777,
-      708,
-      2327,
-      973,
-      1500
+      1561,
+      619,
+      1674,
+      617,
+      1410,
+      620,
+      730
     ],
     "transcripciones": [
       "Calle Mayor 12.",
-      "S.",
+      "Sí.",
       "Piso 1, puerta 2.",
       "Piso 1, puerta B.",
-      "Ana.",
       "Gotea el grifo del patio.",
-      "Una gota cada poco desde ayer.",
-      "S."
+      "Una gota cada poco, desde ayer.",
+      "Sí."
     ]
   }
 ]

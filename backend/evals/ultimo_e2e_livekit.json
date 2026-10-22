@@ -1,7 +1,106 @@
 [
   {
+    "nombre": "guiado",
+    "ok": false,
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None; categoria: esperado 'fontaneria', obtenido 'no_clasificable'",
+    "latencias_ms": [
+      1469,
+      1000,
+      1032,
+      3671,
+      3610,
+      1875
+    ]
+  },
+  {
+    "nombre": "natural_todo_junto",
+    "ok": false,
+    "motivo": "resultado: esperado 'incidencia_creada', obtenido None",
+    "latencias_ms": [
+      2030,
+      3469,
+      2625,
+      1405
+    ]
+  },
+  {
     "nombre": "muletillas_y_saludo",
     "ok": false,
-    "motivo": "sin voz tras 'Sí, es correcto.'"
+    "motivo": "vivienda_id: esperado 'finca-mayor-12-u-1A', obtenido 'finca-mayor-12-u-1B'",
+    "latencias_ms": [
+      1844,
+      1608,
+      1000,
+      1077,
+      1735,
+      1983,
+      2375,
+      1046
+    ]
+  },
+  {
+    "nombre": "portal_ambiguo",
+    "ok": true,
+    "motivo": "",
+    "latencias_ms": [
+      1453,
+      1030,
+      1828,
+      1764,
+      1780,
+      2250,
+      1000
+    ]
+  },
+  {
+    "nombre": "correccion_nombre",
+    "ok": true,
+    "motivo": "",
+    "latencias_ms": [
+      1592,
+      969,
+      1437,
+      1405,
+      1687,
+      1687,
+      1000
+    ]
+  },
+  {
+    "nombre": "pregunta_y_humano",
+    "ok": true,
+    "motivo": "",
+    "latencias_ms": [
+      1687,
+      1593,
+      937,
+      1233
+    ]
+  },
+  {
+    "nombre": "vivienda_inexistente_y_ayuda",
+    "ok": true,
+    "motivo": "",
+    "latencias_ms": [
+      1546,
+      1046,
+      1577,
+      1203,
+      1937,
+      1797,
+      1092
+    ]
+  },
+  {
+    "nombre": "interrupcion",
+    "ok": true,
+    "motivo": "",
+    "latencias_ms": [
+      1422,
+      937,
+      1077,
+      1672,
+      1827
+    ]
   }
 ]

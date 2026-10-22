@@ -5,7 +5,9 @@ WebSocket de voz del backend (AssemblyAI EU -> grafo -> LLM -> redacción) y com
 resultado de la llamada. Sirve para probar cómo habla "una persona normal", no alguien que
 sabe qué decir.
 
-Uso (backend en :8000 con BC_ASSEMBLYAI_API_KEY):
+Uso (backend con BC_ASSEMBLYAI_API_KEY y BC_AGENTE_SECRETO; el banco entra con ese secreto, como
+el agente de voz, porque la consola solo admite Google o Microsoft). BC_BANCO_API cambia la API
+(por defecto http://localhost:8000):
     uv run python evals/e2e_voz.py            # todos los escenarios
     uv run python evals/e2e_voz.py --solo natural_todo_junto --verboso
 """
@@ -30,7 +32,7 @@ import websockets
 
 AQUI = Path(__file__).resolve().parent
 AUDIO = AQUI / "audio_sintetico"
-BASE = "http://localhost:8000"
+BASE = os.environ.get("BC_BANCO_API", "http://localhost:8000")
 
 ESCENARIOS: list[dict[str, Any]] = [
     {
@@ -171,20 +173,12 @@ def _pcm_sin_silencio_final(ruta: Path) -> tuple[bytes, int]:
     return pcm[:i], rate
 
 
-def sesion_consola() -> httpx.Client:
-    """La API exige sesión de consola. Con BC_BANCO_CONTRASENA entra como `admin` y, si es el
-    primer acceso (instancia de pruebas en memoria), fija esa contraseña."""
-    contrasena = os.environ.get("BC_BANCO_CONTRASENA", "")
-    cliente = httpx.Client(base_url=BASE, timeout=30)
-    if not contrasena:
-        return cliente
-    for intento in (contrasena, "admin"):
-        r = cliente.post("/api/auth/login", json={"usuario": "admin", "contrasena": intento})
-        if r.status_code == 200:
-            if intento != contrasena:
-                cliente.post("/api/auth/contrasena", json={"actual": intento, "nueva": contrasena})
-            return cliente
-    raise SystemExit("No se pudo entrar en la consola con BC_BANCO_CONTRASENA")
+def sesion_api() -> httpx.Client:
+    """Cliente de la API con el secreto del agente (las rutas de llamada y el WebSocket de voz lo
+    aceptan). Sin secreto, sin cabecera: la API responderá 401."""
+    secreto = os.environ.get("BC_AGENTE_SECRETO", "")
+    cabeceras = {"Authorization": f"Bearer {secreto}"} if secreto else {}
+    return httpx.Client(base_url=BASE, timeout=30, headers=cabeceras)
 
 
 def _primer_audio_ms(http: httpx.Client, texto: str) -> int | None:
@@ -205,7 +199,7 @@ def _primer_audio_ms(http: httpx.Client, texto: str) -> int | None:
     return primero
 
 
-HTTP = sesion_consola()
+HTTP = sesion_api()
 
 
 async def ejecutar(escenario: dict[str, Any], verboso: bool) -> dict[str, Any]:
@@ -218,11 +212,12 @@ async def ejecutar(escenario: dict[str, Any], verboso: bool) -> dict[str, Any]:
     ultimo: dict[str, Any] = llamada
     if verboso:
         print(f"    BOT: {' '.join(llamada['mensajes_bot'])}")
-    cookie = "; ".join(f"{k}={v}" for k, v in HTTP.cookies.items())
     async with websockets.connect(
-        f"ws://localhost:8000/api/llamadas/{lid}/voz?sample_rate={rate}",
+        f"{BASE.replace('http', 'ws', 1)}/api/llamadas/{lid}/voz?sample_rate={rate}",
         open_timeout=30,
-        additional_headers={"Cookie": cookie} if cookie else None,
+        additional_headers={"Authorization": HTTP.headers["authorization"]}
+        if "authorization" in HTTP.headers
+        else None,
     ) as ws:
         await ws.recv()  # listo
         chunk = int(rate * 0.1) * 2
