@@ -31,6 +31,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from building_call.audit.access_log import AccessLog, MemoryAccessStore
+from building_call.audit.context import set_actor
 from building_call.auth import hash_session_token
 from building_call.domain.operations import AccessState, Role, User
 from building_call.oidc import (
@@ -44,6 +46,7 @@ from building_call.oidc import (
     verify_id_token,
 )
 from building_call.repos.operational import AccessSession, OperationalRepository
+from building_call.repos.sql_models import UserSQL
 from building_call.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -70,11 +73,17 @@ class Access:
     mode = "oidc"
 
     def __init__(
-        self, repo: OperationalRepository, settings: Settings, oidc: OidcClient | None = None
+        self,
+        repo: OperationalRepository,
+        settings: Settings,
+        oidc: OidcClient | None = None,
+        access_log: AccessLog | None = None,
     ) -> None:
         self.repo = repo
         self.s = settings
         self.oidc = oidc or OidcClient()
+        # Who read or viewed what: it goes with access control, which every route receives
+        self.access_log = access_log or AccessLog(MemoryAccessStore())
         # Sin secreto configurado (desarrollo) la ida y vuelta se firma con uno del proceso
         self._signature = (settings.session_secret or secrets.token_urlsafe(32)).encode()
 
@@ -142,6 +151,7 @@ class Access:
         user = await self.repo.get_user(session.user_id)
         if user is None or not user.active:
             return None
+        set_actor(f"user:{user.id}", "console")
         duration = timedelta(days=self.s.session_days)
         if response is not None and session.expires_at - now < duration / 2:
             await self.repo.renew_session(token_hash, now + duration)
@@ -225,6 +235,8 @@ class Access:
                 access_state=AccessState.granted if is_owner else AccessState.not_requested,
                 created_at=datetime.now(UTC),
             )
+            # Signs themself up when coming in with their provider
+            set_actor(f"user:{user.id}", "console")
             # Primero el usuario: la auditoría lo referencia (clave foránea en Postgres)
             await self.repo.save_user(user)
             await self.repo.record_audit(
@@ -245,6 +257,7 @@ class Access:
             if is_owner:
                 changes.update(role=Role.owner, active=True, access_state=AccessState.granted)
             user = existing.model_copy(update=changes)
+            set_actor(f"user:{user.id}", "console")
         await self.repo.save_user(user)
         return user
 
@@ -423,6 +436,7 @@ class Access:
         @r.get("")
         async def list_all(actor: User = Depends(owner)) -> list[dict[str, Any]]:  # noqa: B008
             users = await self.repo.list_users()
+            await self.access_log.list(UserSQL, {}, rows=len(users))
             return [u.public() for u in sorted(users, key=lambda u: u.username)]
 
         @r.post("/{user_id}/grant")

@@ -94,8 +94,8 @@ async def test_reviewer_sees_call_records_transcript_and_decisions(
     transcript = (await client.get(f"/api/operations/calls/{cid}/transcript")).json()
     assert transcript[0]["role"] == "bot"
 
-    # La auditoría exige owner/administrador: calidad no puede
-    assert (await client.get("/api/operations/audit")).status_code == 403
+    # Nobody queries the audit log from the console (Andreu, 2026-10-22)
+    assert (await client.get("/api/operations/audit")).status_code == 404
 
 
 async def test_owner_sees_audit_and_logout_revokes(
@@ -104,9 +104,11 @@ async def test_owner_sees_audit_and_logout_revokes(
     cid = await _converse(client, ["Calle Mayor 12"])
     await _session(client, repo, Role.owner)
     await client.get(f"/api/operations/calls/{cid}")
-    audit = (await client.get("/api/operations/audit")).json()
-    assert any(a["action"] == "view_call_record" for a in audit)
-    assert any(a["action"] == "login" for a in audit)
+    log = client._transport.app.state.access_log  # type: ignore[attr-defined]
+    rows = await log.store.list({"resource_id": cid})
+    assert any(a["action"] == "read" and a["detail"] == {"part": "record"} for a in rows)
+    assert all(a["actor"].startswith("user:") and a["origin"] == "console" for a in rows)
+    assert any(a["action"] == "login" for a in await repo.list_audit())
     assert (await client.post("/api/auth/logout")).status_code == 200
     client.cookies.clear()
     assert (await client.get("/api/operations/summary")).status_code == 401

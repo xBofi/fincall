@@ -36,7 +36,7 @@ async def test_full_flow_creates_incident(
     assert state["result"] == "incident_created"
     assert state["estate_id"] == "finca-mayor-12"
     assert state["home_id"] == "finca-mayor-12-u-3B"
-    assert state["declared_name"] is None  # el nombre no se pregunta
+    assert "declared_name" not in state  # the name is neither asked nor kept
     assert state["category"] == "plumbing"
     assert state["urgency"] == "high"
     assert state["specialist_id"] == "esp-fontanero"

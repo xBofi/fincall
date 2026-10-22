@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     # Audio de llamadas: directorio privado, URL firmada de corta duración, retención
     audio_dir: str = ".audio"
     audio_retention_days: int = 14
+    # Audit log (changes and accesses): two years, Confirmed by Andreu as DPO (2026-10-22)
+    audit_retention_days: int = 730
     audio_url_seconds: int = 300
 
     # LiveKit autoalojado (spec 2026-10-21): servidor de medios y agente de voz en otro proceso.

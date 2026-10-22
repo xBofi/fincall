@@ -1,5 +1,6 @@
 """APIs protegidas de la consola operativa: resumen, expedientes, transcripción, decisiones,
-auditoría, audio por URL firmada y casos del banco de pruebas. Todo acceso queda auditado."""
+audio por URL firmada, casos del banco de pruebas y el borrado de una llamada. Toda lectura de
+datos personales queda en el registro de accesos."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from building_call.access import Access
 from building_call.audio_store import AudioStore
+from building_call.audit.erasure import CallNotErasable, delete_files
 from building_call.bank_cases import (
     EXPECTED_KEYS,
     BankCaseInput,
@@ -22,6 +24,7 @@ from building_call.llm.interpretation import INTENTS
 from building_call.metrics import MetricsRegistry
 from building_call.repos.operational import OperationalRepository
 from building_call.repos.operations import summarize_operations
+from building_call.repos.sql_models import AudioTrackSQL, BankCaseSQL, CallSQL
 
 REVIEWERS = (Role.owner, Role.administrator, Role.quality)
 
@@ -64,6 +67,7 @@ def create_operations_router(
         user: User = Depends(reviewer),  # noqa: B008
     ) -> list[dict[str, Any]]:
         rows = await repo.list_calls(state=state, limit=limit)
+        await access.access_log.list(CallSQL, {"state": state}, rows=len(rows))
         p50 = _p50_latencies()
         return [
             {
@@ -78,7 +82,7 @@ def create_operations_router(
         call = await repo.get_call(call_id)
         if call is None:
             raise HTTPException(404, "Expediente no encontrado")
-        await record_audit(user, "view_call_record", f"call:{call_id}")
+        await access.access_log.read(CallSQL, call_id, part="record")
         # La mezcla primero: es la que se escucha para seguir la conversación
         order = {"mix": 0, "client": 1, "assistant": 2}
         tracks = sorted(
@@ -115,15 +119,26 @@ def create_operations_router(
         call = await repo.get_call(call_id)
         if call is None:
             raise HTTPException(404, "Expediente no encontrado")
-        await record_audit(user, "view_transcript", f"call:{call_id}")
+        await access.access_log.read(CallSQL, call_id, part="transcript")
         return call.transcript
 
-    @r.get("/audit")
-    async def audit(
-        limit: int = Query(default=200, le=1000),
-        user: User = Depends(access.requires(Role.owner, Role.administrator)),  # noqa: B008
-    ) -> list[dict[str, Any]]:
-        return await repo.list_audit(limit)
+    @r.post("/calls/{call_id}/erase", status_code=204)
+    async def erase(
+        call_id: str,
+        user: User = Depends(access.requires(Role.owner)),  # noqa: B008
+    ) -> Response:
+        """Erases the call and everything associated with it; its incidents stay, anonymised
+        (spec §5). Only the owner. The audit log keeps that it happened, not what."""
+        try:
+            files = await repo.erase_call(call_id)
+        except CallNotErasable as e:
+            call = await repo.get_call(call_id)
+            if call is None:
+                raise HTTPException(404, "Expediente no encontrado") from e
+            raise HTTPException(409, "La llamada sigue en curso: no se puede eliminar") from e
+        await delete_files(files)
+        await access.access_log.erase(call_id)
+        return Response(status_code=204)
 
     @r.get("/audio/{track_id}")
     async def signed_audio(
@@ -142,8 +157,8 @@ def create_operations_router(
         data = audio.read(track)
         if data is None:
             raise HTTPException(410, "Pista eliminada por retención")
-        await record_audit(
-            user, "play_audio", f"track:{track_id}", call_id=track["call_id"]
+        await access.access_log.play(
+            AudioTrackSQL, track_id, call_id=track["call_id"], bytes=len(data)
         )
         return Response(
             content=data, media_type=track["mime"], headers={"Cache-Control": "no-store"}
@@ -165,14 +180,18 @@ def create_operations_router(
     @r.get("/cases")
     async def cases(user: User = Depends(reviewer)) -> list[dict[str, Any]]:  # noqa: B008
         """Todos los casos marcados: es lo que `evals/export_cases.py --entrada` lee."""
-        return await repo.list_test_bank_cases()
+        rows = await repo.list_test_bank_cases()
+        await access.access_log.list(BankCaseSQL, {}, rows=len(rows))
+        return rows
 
     @r.get("/calls/{call_id}/cases")
     async def call_cases(
         call_id: str,
         user: User = Depends(reviewer),  # noqa: B008
     ) -> list[dict[str, Any]]:
-        return await repo.list_test_bank_cases(call_id)
+        rows = await repo.list_test_bank_cases(call_id)
+        await access.access_log.list(BankCaseSQL, {"call_id": call_id}, rows=len(rows))
+        return rows
 
     @r.post("/calls/{call_id}/cases", status_code=201)
     async def mark_case(
@@ -190,7 +209,6 @@ def create_operations_router(
             fields = build_case(
                 body,
                 await repo.list_turns(call_id),
-                real_name=call.declared_name,
                 equipment_list=equipment_list,
             )
         except LookupError as e:

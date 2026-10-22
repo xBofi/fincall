@@ -6,9 +6,12 @@ Uso: `uv run python -m building_call.repos.seed` (requiere BC_DATABASE_URL y mig
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from building_call.audit import session as audit_session
+from building_call.audit.context import AuditContext, audit_context
 from building_call.repos.memory import MemoryRepository
 from building_call.repos.sql_models import (
     AdministratorSQL,
@@ -25,6 +28,13 @@ async def seed(database_url: str) -> None:
     demo = MemoryRepository()
     engine = create_async_engine(database_url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
+    audit_session.install()
+    with audit_context(AuditContext(actor="system:seed")):
+        await _seed(sessions, demo)
+    await engine.dispose()
+
+
+async def _seed(sessions: Any, demo: MemoryRepository) -> None:
     async with sessions() as s, s.begin():
         for a in demo.administrators.values():
             await s.merge(AdministratorSQL(**a.model_dump()))
@@ -57,7 +67,6 @@ async def seed(database_url: str) -> None:
                     document=cfg.model_dump(exclude_none=True),
                 )
             )
-    await engine.dispose()
 
 
 if __name__ == "__main__":

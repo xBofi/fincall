@@ -199,7 +199,7 @@ async def test_speculative_interpretation_is_reused(deps: Dependencies, llm: Any
     state = await manager.message(state["call_id"], "Vivo en el tercero B y me llamo Marta.")
     assert len(llm.calls) == n  # no se volvió a llamar al modelo
     assert state["home_id"] == "finca-mayor-12-u-3B"
-    assert state["declared_name"] == "Marta"
+    assert "Marta" not in str({k: v for k, v in state.items() if k != "history"})
     assert state["turn_timings"]["interpretation_origin"] == "llm_speculative"
     assert deps.speculations == {}
 

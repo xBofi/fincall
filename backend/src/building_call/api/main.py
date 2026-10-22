@@ -8,6 +8,7 @@ import logging
 import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
@@ -27,6 +28,11 @@ from pydantic import BaseModel, Field
 
 from building_call.access import Access
 from building_call.audio_store import AudioStore
+from building_call.audit.access_log import AccessLog, MemoryAccessStore, PostgresAccessStore
+from building_call.audit.api import create_audit_router
+from building_call.audit.context import AuditContext, audit_context, set_actor
+from building_call.audit.http import AuditMiddleware
+from building_call.audit.retention import purge_audit
 from building_call.catalog_api import create_catalog_router
 from building_call.flow_api import create_flow_router
 from building_call.graph import templates
@@ -56,6 +62,7 @@ from building_call.oidc import OidcClient
 from building_call.operations_api import create_operations_router
 from building_call.recording import ConversationRecorder
 from building_call.repos.memory import MemoryRepository
+from building_call.repos.sql_models import IncidentSQL
 from building_call.services import CallManager, CallNotFound
 from building_call.settings import settings
 from building_call.stt import UnavailableRecognizer, VoiceRecognizer, WhisperRecognizer
@@ -148,7 +155,7 @@ class ClientMetrics(BaseModel):
 
 def _view(state: CallState) -> dict[str, Any]:
     fields = [
-        "estate_id", "estate_address", "home_id", "home_label", "declared_name",
+        "estate_id", "estate_address", "home_id", "home_label",
         "request", "category", "urgency", "declared_urgency", "summary", "confirmed",
         "specialist_id", "specialist_name", "notice_channel", "notice_target", "incident_id",
         "result", "review_reason", "config_id", "graph", "estate_attempts", "home_attempts",
@@ -290,10 +297,10 @@ def create_app(
     streaming_factory: StreamingFactory | None | Any = AUTO,
     oidc: OidcClient | None = None,
 ) -> FastAPI:
+    from building_call.repos.postgres import PostgresRepository
+
     if deps is None:
         if settings.repository == "postgres":
-            from building_call.repos.postgres import PostgresRepository
-
             repo: Any = PostgresRepository(settings.database_url)
         else:
             repo = MemoryRepository()
@@ -337,6 +344,8 @@ def create_app(
 
     app = FastAPI(title="Building Call Assistant", version="0.4.0", lifespan=lifespan)
     app.state.repo = deps.repo
+    # Who and in which request: read by the triggers and the access log
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -346,7 +355,13 @@ def create_app(
     )
     # Consola operativa: acceso (usuarios internos + cookie de sesión), APIs protegidas y audio
     secret = signing_secret()
-    access = Access(deps.repo, settings, oidc)  # type: ignore[arg-type]
+    if isinstance(deps.repo, PostgresRepository):
+        access_log = AccessLog(PostgresAccessStore(deps.repo.sessions))
+    else:
+        # Without PostgreSQL there are no triggers: accesses are kept in memory, changes nowhere
+        access_log = AccessLog(MemoryAccessStore())
+    access = Access(deps.repo, settings, oidc, access_log)  # type: ignore[arg-type]
+    app.state.access_log = access_log
     audio_store = AudioStore(
         settings.audio_dir, secret, settings.audio_retention_days, settings.audio_url_seconds
     )
@@ -380,6 +395,7 @@ def create_app(
     # Las rutas de una llamada también las usa el agente de voz de LiveKit, con su secreto
     protected_call = [Depends(requires_user_or_agent(access))]
     app.include_router(create_livekit_router(access))
+    app.include_router(create_audit_router(access))
 
     @app.get("/api/telephony/state")
     async def telephony_state(_: Any = Depends(access.requires())) -> dict[str, Any]:  # noqa: B008
@@ -411,7 +427,13 @@ def create_app(
     async def periodic_purge() -> None:
         while True:
             try:
-                await audio_store.purge_expired(deps.repo)  # type: ignore[arg-type]
+                with audit_context(AuditContext(actor="system:retention")):
+                    await audio_store.purge_expired(deps.repo)  # type: ignore[arg-type]
+                    await access_log.close_abandoned()
+                    if isinstance(deps.repo, PostgresRepository):
+                        await purge_audit(
+                            deps.repo.sessions, settings.audit_retention_days, datetime.now(UTC)
+                        )
             except Exception:  # noqa: BLE001
                 logger.exception("Fallo purgando audio vencido")
             await asyncio.sleep(3600)
@@ -552,7 +574,9 @@ def create_app(
         """
         await ws.accept()
         # Consola o, como en el resto de rutas de llamada, el secreto del agente (banco de voz)
-        if not is_agent(ws) and await access.user_from_request(ws) is None:  # type: ignore[arg-type]
+        if is_agent(ws):
+            set_actor("agent:livekit", "agent")
+        elif await access.user_from_request(ws) is None:  # type: ignore[arg-type]
             await ws.send_json({"type": "error", "message": "Sesión no válida o expirada"})
             await ws.close(code=1008)
             return
@@ -791,7 +815,9 @@ def create_app(
 
     @app.get("/api/incidents", dependencies=protected)
     async def incidents() -> list[dict[str, Any]]:
-        return [i.model_dump(mode="json") for i in await deps.repo.list_incidents()]
+        rows = await deps.repo.list_incidents()
+        await access_log.list(IncidentSQL, {}, rows=len(rows))
+        return [i.model_dump(mode="json") for i in rows]
 
     return app
 

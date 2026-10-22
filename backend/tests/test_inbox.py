@@ -36,7 +36,6 @@ async def _seed(repo: MemoryRepository) -> None:
             started_at=NOW,
             estate_id="finca-mayor-12",
             home_id="finca-mayor-12-u-3B",
-            declared_name="Lucía",
             transcript=[
                 {"role": "bot", "text": "Hola, ¿en qué puedo ayudarle?"},
                 {"role": "caller", "text": "Han reventado el portero automático"},
@@ -195,9 +194,10 @@ async def test_detail_brings_call_equipment_and_specialists(
     # Para el selector de asignación: solo los especialistas de su administrador
     assert {e["id"] for e in d["specialists"]} >= {"esp-porteros", "esp-fontanero"}
     assert d["history"] == []
+    log = client._transport.app.state.access_log  # type: ignore[attr-defined]
     assert any(
-        a["action"] == "view_incident" and a["resource"] == "incident:inc-portero"
-        for a in await repo.list_audit()
+        (a["action"], a["resource"], a["resource_id"]) == ("read", "incidents", "inc-portero")
+        for a in await log.store.list({})
     )
     assert (await client.get("/api/inbox/incidents/inc-nada")).status_code == 404
 

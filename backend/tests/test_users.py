@@ -147,7 +147,7 @@ async def test_another_person_requests_and_the_owner_grants(app: Any, oidc: Fake
         # Denegar le quita el acceso al momento (sus sesiones se revocan)
         await owner.post(f"/api/users/{requested_user['id']}/deny")
         assert (await marta.get("/api/estates")).status_code == 401
-        actions = {a["action"] for a in (await owner.get("/api/operations/audit")).json()}
+        actions = {a["action"] for a in await app.state.repo.list_audit()}
         assert {
             "provider_signup",
             "request_access",

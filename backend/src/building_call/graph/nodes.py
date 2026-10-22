@@ -590,7 +590,6 @@ def _call_from(state: CallState, result: str, reason: str | None = None) -> Call
         caller_phone=state.get("caller_phone"),
         estate_id=state.get("estate_id"),
         home_id=state.get("home_id"),
-        declared_name=state.get("declared_name"),
         transcript=state.get("history", []),
         summary=state.get("summary") or state.get("request"),
         result=result,  # type: ignore[arg-type]
@@ -628,7 +627,8 @@ def _merge_pending(state: CallState, interp: Interpretation) -> dict[str, str]:
         and state.get("current_node") in _IDENTIFICATION_NODES
         and len((interp.problem or "").split()) <= _CUT_PHRASE_WORDS
     )
-    for attr in ("address", "entrance", "floor", "door", "name", "problem"):
+    # The name is never kept (Andreu, 2026-10-22): the address and the home are enough
+    for attr in ("address", "entrance", "floor", "door", "problem"):
         value = getattr(interp, attr)
         if value and not (attr == "problem" and doubtful_problem):
             queued[attr] = value
@@ -821,7 +821,8 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
 
     def _interp_view(interp: Interpretation) -> dict[str, Any]:
         return {
-            **interp.model_dump(exclude_none=True),
+            # Without the name: the interpretation is kept in the state and the turn record
+            **interp.model_dump(exclude_none=True, exclude={"name"}),
             "origin": interp.origin,
             "llm_ms": interp.llm_ms,
         }
@@ -1073,13 +1074,6 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 return _advance(
                     state, "identify_home", pending=queued, trace=trace, **changes
                 )
-
-        # El nombre no se pregunta: con la finca y la vivienda basta. Si el vecino lo dice por
-        # su cuenta, se guarda para el resumen y la ficha.
-        if not state.get("declared_name") and (name := queued.pop("name", None)):
-            changes["declared_name"] = name
-            trace.append(Trace(node=node, action="name_registered", detail=name))
-            state = {**state, **changes}  # type: ignore[typeddict-item]
 
         if not state.get("request"):
             problem = queued.pop("problem", None)
@@ -1540,11 +1534,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         node = "collect_request"
         utterance = state.get("user_utterance")
         if utterance is None:
-            greeting = (
-                render("collect_request.greeting_with_name", name=state.get("declared_name"))
-                if state.get("declared_name")
-                else render("collect_request.greeting")
-            )
+            greeting = render("collect_request.greeting")
             return _ask(state, node, render("collect_request.ask", greeting=greeting))
         interp, history, extra, output = await _turn(state, node)
         if output:
@@ -1692,8 +1682,9 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             # La categoría y la urgencia son internas: no se leen al vecino (Andreu, 2026-10-21).
             # Se siguen pasando para que una plantilla publicada que las use no se rompa.
             category = state.get("category") or ""
-            # El nombre se repite para que el vecino pueda corregir lo que el STT oyó mal
-            who = f"{name}, " if (name := state.get("declared_name")) else ""
+            # `who` stays empty: the caller's name is not kept. It is still passed so that a
+            # published template that uses it does not break
+            who = ""
             return _ask(
                 state,
                 node,
@@ -1712,24 +1703,6 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         changes: dict[str, Any] = {}
         queued = dict(state.get("pending", {}))
         # Prioridad: problema > vivienda > finca. Una corrección del problema no toca la finca.
-        if interp.name and interp.confirms is not True and not interp.problem:
-            changes.update(declared_name=interp.name, confirmed=None)
-            name_trace = _with_trace(state, node, "correction", f"nombre -> {interp.name}")
-            if interp.floor or interp.door or interp.entrance:
-                changes.update(home_id=None, home_label=None)
-                for k in ("entrance", "floor", "door"):
-                    if getattr(interp, k):
-                        queued[k] = getattr(interp, k)
-            return _advance(
-                state,
-                "next_step",
-                render("confirm_summary.correcting"),
-                history=history,
-                pending=queued,
-                trace=name_trace,
-                **changes,
-                **extra,
-            )
         if (
             interp.problem
             and interp.confirms is not True

@@ -247,7 +247,7 @@ CATALOG: dict[str, Template] = dict(
         _p(
             "collect_request.ask",
             "collect_request",
-            "Se pregunta qué ocurre. {greeting} lleva el nombre, si el vecino lo ha dicho.",
+            "Se pregunta qué ocurre. {greeting} es el prefijo de cortesía.",
             "{greeting}Cuénteme, ¿qué ocurre?",
             question=True,
         ),
@@ -257,20 +257,14 @@ CATALOG: dict[str, Template] = dict(
             "Prefijo antes de preguntar qué ocurre. La vivienda ya está registrada: no se repite.",
             "Perfecto. ",
         ),
-        _p(
-            "collect_request.greeting_with_name",
-            "collect_request",
-            "Prefijo cuando el vecino ha dicho su nombre sin que se le pidiera.",
-            "Gracias, {name}. ",
-        ),
         # ---------------------------------------------------------------- confirmar resumen
         _p(
             "confirm_summary.summary",
             "confirm_summary",
-            "Se le lee al vecino lo entendido y se espera un sí o un no. {who} es el nombre "
-            "seguido de coma si lo ha dicho; la vivienda ya está registrada y no se lee. La "
+            "Se le lee al vecino lo entendido y se espera un sí o un no. {who} queda vacío: el "
+            "nombre del vecino no se guarda; la vivienda ya está registrada y no se lee. La "
             "categoría y la urgencia son internas y no se leen (Andreu, 2026-10-21).",
-            "Le resumo: {who}{summary}. ¿Es correcto?",
+            "Le resumo: {summary}. ¿Es correcto?",
             question=True,
         ),
         _p(

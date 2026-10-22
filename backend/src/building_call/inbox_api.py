@@ -29,6 +29,7 @@ from building_call.domain.entities import (
 from building_call.domain.operations import Role, User
 from building_call.repos.base import Repository
 from building_call.repos.operational import OperationalRepository
+from building_call.repos.sql_models import IncidentSQL
 
 READERS = (Role.owner, Role.administrator, Role.quality)
 MANAGERS = (Role.owner, Role.administrator)
@@ -161,6 +162,13 @@ def create_inbox_router(
         rows.sort(key=lambda i: i.created_at, reverse=True)
         rows.sort(key=lambda i: (not pending_administrator(i), _URGENCY_WEIGHT[i.urgency]))
         rows = rows[:limit]
+        filters = {
+            "state": state,
+            "pending_administrator_only": pending_administrator_only or None,
+            "estate_id": estate_id,
+            "urgency": urgency,
+        }
+        await access.access_log.list(IncidentSQL, filters, rows=len(rows))
 
         estates = {f.id: f for f in await repo.list_estates()}
         homes: dict[str, str] = {}
@@ -196,9 +204,7 @@ def create_inbox_router(
         user: User = Depends(reader),  # noqa: B008
     ) -> dict[str, Any]:
         inc = await _incident(incident_id)
-        await operational.record_audit(
-            user.id, "view_incident", f"incident:{incident_id}", {}
-        )
+        await access.access_log.read(IncidentSQL, incident_id)
         estate = await repo.get_estate(inc.estate_id)
         specialists = await _specialists(inc.estate_id)
         home = next(
@@ -220,7 +226,6 @@ def create_inbox_router(
                     "id",
                     "started_at",
                     "caller_phone",
-                    "declared_name",
                     "summary",
                     "transcript",
                     "result",

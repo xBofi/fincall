@@ -303,6 +303,7 @@ body,
 .history-dossier { max-width: 1180px; }
 .history-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-sm); }
 .history-head h2 { margin: 0; font: 600 1.25rem var(--font-display); letter-spacing: -.03em; }
+.history-head-actions { display: flex; align-items: center; gap: var(--space-xs, 6px); flex-wrap: wrap; justify-content: flex-end; }
 .history-explanation { margin: var(--space-sm) 0 0; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-control); font-size: .86rem; line-height: 1.5; }
 .history-explanation.is-good { background: var(--color-good-soft); }
 .history-explanation.is-review { background: var(--color-review-soft); }

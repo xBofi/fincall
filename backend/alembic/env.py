@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy.pool import NullPool
 
@@ -34,6 +35,8 @@ def run_migrations_offline() -> None:
 def _do_run_migrations(connection) -> None:  # type: ignore[no-untyped-def]
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Who the audit triggers record for what a migration changes
+        connection.execute(text("SELECT set_config('fincall.actor', 'system:migration', true)"))
         context.run_migrations()
 
 

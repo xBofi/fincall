@@ -68,6 +68,12 @@ class OperationalRepository(Protocol):
 
     async def get_call(self, call_id: str) -> Call | None: ...
 
+    async def erase_call(self, call_id: str) -> list[str]:
+        """Erases the call and everything associated with it (spec §5); its incidents stay,
+        anonymised. Returns the audio files to delete after the commit. Raises
+        `CallNotErasable` if it does not exist or is in progress."""
+        ...
+
     # Trazabilidad por turno
     async def save_turn(self, call_id: str, turn: int, data: dict[str, Any]) -> None: ...
 

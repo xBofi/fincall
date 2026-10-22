@@ -1,19 +1,26 @@
 """Modelos SQLAlchemy (PostgreSQL).
 
 Las configuraciones son JSONB versionadas: nunca se actualizan en sitio.
+
+Every business table inherits from `AuditedTable`: its static attributes tell the audit
+triggers what is personal, what is secret and what to ignore (spec
+`docs/superpowers/specs/2026-10-22-audit-trail-design.md`). Changing one needs a migration that
+reinstalls the triggers (`audit/install.py`); the tests check it.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     String,
@@ -31,14 +38,46 @@ class Base(DeclarativeBase):
     pass
 
 
-class AdministratorSQL(Base):
+class AuditedTable(Base):
+    """Base of every business table. A PostgreSQL trigger writes the four `audit_*` stamps with
+    the actor of the transaction, so the application cannot forge them. The `audit_` prefix
+    keeps them apart from the `created_at`/`updated_at` some tables manage themselves."""
+
+    __abstract__ = True
+
+    #: Write one `audit_changes` row per insert, update and delete
+    AUDIT_CHANGES: ClassVar[bool] = True
+    #: Fields that can identify a person (phone, e-mail, ID, address, voice, dictated text).
+    #: Logged as a fingerprint, never the value; reading the record is logged in `audit_access`
+    PERSONAL_FIELDS: ClassVar[tuple[str, ...]] = ()
+    #: Hashes and tokens: also logged as a fingerprint
+    SECRET_FIELDS: ClassVar[tuple[str, ...]] = ()
+    #: A change that only touches these fields is not logged (a session renewing itself)
+    IGNORED_FIELDS: ClassVar[tuple[str, ...]] = ()
+
+    audit_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    audit_created_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    audit_updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    audit_updated_by: Mapped[str | None] = mapped_column(String(160), nullable=True)
+
+    @classmethod
+    def has_personal_data(cls) -> bool:
+        return bool(cls.PERSONAL_FIELDS)
+
+
+class AdministratorSQL(AuditedTable):
     __tablename__ = "administrators"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
 
 
-class SpecialistSQL(Base):
+class SpecialistSQL(AuditedTable):
     __tablename__ = "specialists"
+    PERSONAL_FIELDS = ("target",)  # a professional's contact may be a person's phone
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     administrator_id: Mapped[str] = mapped_column(ForeignKey("administrators.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
@@ -47,7 +86,7 @@ class SpecialistSQL(Base):
     target: Mapped[str] = mapped_column(String(200))
 
 
-class EstateSQL(Base):
+class EstateSQL(AuditedTable):
     __tablename__ = "estates"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     administrator_id: Mapped[str] = mapped_column(ForeignKey("administrators.id"), index=True)
@@ -56,7 +95,7 @@ class EstateSQL(Base):
     official_phone: Mapped[str] = mapped_column(String(32))
 
 
-class HomeSQL(Base):
+class HomeSQL(AuditedTable):
     __tablename__ = "homes"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     estate_id: Mapped[str] = mapped_column(ForeignKey("estates.id"), index=True)
@@ -65,7 +104,7 @@ class HomeSQL(Base):
     door: Mapped[str] = mapped_column(String(16))
 
 
-class ConfigSQL(Base):
+class ConfigSQL(AuditedTable):
     __tablename__ = "configs"
     __table_args__ = (
         Index("ix_configs_scope_current", "scope", "scope_id", "valid_from"),
@@ -79,14 +118,14 @@ class ConfigSQL(Base):
     )
 
 
-class CallSQL(Base):
+class CallSQL(AuditedTable):
     __tablename__ = "calls"
+    PERSONAL_FIELDS = ("caller_phone", "transcript", "summary")
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     caller_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     estate_id: Mapped[str | None] = mapped_column(ForeignKey("estates.id"), nullable=True, index=True)
     home_id: Mapped[str | None] = mapped_column(ForeignKey("homes.id"), nullable=True)
-    declared_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     transcript: Mapped[list[dict[str, str]]] = mapped_column(JsonDoc, default=list)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     result: Mapped[str | None] = mapped_column(String(40), nullable=True)
@@ -98,8 +137,10 @@ class CallSQL(Base):
     needs_review: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-class UserSQL(Base):
+class UserSQL(AuditedTable):
     __tablename__ = "users"
+    PERSONAL_FIELDS = ("email", "subject")
+    SECRET_FIELDS = ("password_hash",)
     __table_args__ = (UniqueConstraint("provider", "subject", name="uq_users_identity"),)
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -118,8 +159,10 @@ class UserSQL(Base):
     )
 
 
-class SessionSQL(Base):
+class SessionSQL(AuditedTable):
     __tablename__ = "sessions"
+    SECRET_FIELDS = ("token_hash",)
+    IGNORED_FIELDS = ("expires_at",)  # renews itself while used
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
@@ -130,8 +173,9 @@ class SessionSQL(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class CallTurnSQL(Base):
+class CallTurnSQL(AuditedTable):
     __tablename__ = "call_turns"
+    PERSONAL_FIELDS = ("data",)  # what the caller said
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), index=True)
     turn: Mapped[int] = mapped_column(Integer)
@@ -139,8 +183,9 @@ class CallTurnSQL(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class CallDecisionSQL(Base):
+class CallDecisionSQL(AuditedTable):
     __tablename__ = "call_decisions"
+    PERSONAL_FIELDS = ("data",)  # extracted address, home, problem
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), index=True)
     turn: Mapped[int] = mapped_column(Integer)
@@ -149,8 +194,9 @@ class CallDecisionSQL(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class AudioTrackSQL(Base):
+class AudioTrackSQL(AuditedTable):
     __tablename__ = "audio_tracks"
+    PERSONAL_FIELDS = ("object_key",)  # points to the recording of a voice
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), index=True)
     channel: Mapped[str] = mapped_column(String(16))
@@ -177,7 +223,58 @@ class AuditEventSQL(Base):
     )
 
 
-class EquipmentSQL(Base):
+#: The audit tables themselves: they do not inherit from `AuditedTable` (the log does not
+#: audit itself). The two new ones are append-only: a trigger rejects changing or deleting them.
+AUDIT_TABLES = frozenset({"audit_events", "audit_changes", "audit_access"})
+
+
+class AuditChangeSQL(Base):
+    """One row per insert, update, delete or erasure in an audited table. Written by a trigger."""
+
+    __tablename__ = "audit_changes"
+    __table_args__ = (
+        Index("ix_audit_changes_record", "table_name", "record_id", "occurred_at"),
+        Index("ix_audit_changes_actor", "actor", "occurred_at"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    table_name: Mapped[str] = mapped_column(String(64))
+    record_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    operation: Mapped[str] = mapped_column(String(16))  # insert | update | delete | erase
+    actor: Mapped[str] = mapped_column(String(160))
+    origin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    transaction_id: Mapped[int] = mapped_column(BigInteger)
+    #: Only the columns that changed; personal and secret fields as a fingerprint
+    before: Mapped[dict[str, Any] | None] = mapped_column(JsonDoc, nullable=True)
+    after: Mapped[dict[str, Any] | None] = mapped_column(JsonDoc, nullable=True)
+
+
+class AuditAccessSQL(Base):
+    """Who read, listed, viewed, played or downloaded what. An open view can only be extended
+    or closed; nothing else changes."""
+
+    __tablename__ = "audit_access"
+    __table_args__ = (
+        Index("ix_audit_access_resource", "resource", "resource_id", "started_at"),
+        Index("ix_audit_access_actor", "actor", "started_at"),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    action: Mapped[str] = mapped_column(String(16))  # read | list | view | play | download
+    resource: Mapped[str] = mapped_column(String(64))
+    resource_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    actor: Mapped[str] = mapped_column(String(160))
+    origin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[dict[str, Any]] = mapped_column(JsonDoc, default=dict)
+
+
+class EquipmentSQL(AuditedTable):
     __tablename__ = "equipment"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     estate_id: Mapped[str] = mapped_column(ForeignKey("estates.id"), index=True)
@@ -191,8 +288,9 @@ class EquipmentSQL(Base):
     warranty_until: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
-class IncidentSQL(Base):
+class IncidentSQL(AuditedTable):
     __tablename__ = "incidents"
+    PERSONAL_FIELDS = ("description", "suggestion")  # dictated by the caller
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), index=True)
     estate_id: Mapped[str] = mapped_column(ForeignKey("estates.id"), index=True)
@@ -210,7 +308,7 @@ class IncidentSQL(Base):
     suggestion: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class CallStateSQL(Base):
+class CallStateSQL(AuditedTable):
     """Estado vivo de una llamada en curso (el `CallState` del grafo, tal cual, en JSONB).
 
     Una fila por llamada, sobrescrita en cada turno: permite que la llamada sobreviva a un
@@ -218,6 +316,10 @@ class CallStateSQL(Base):
     queda; esto se purga al poco de terminar la llamada."""
 
     __tablename__ = "call_states"
+    # Overwritten on every turn and purged when the call ends: what is kept and audited is the
+    # call record (`calls`, `call_turns`). It still gets the stamps.
+    AUDIT_CHANGES = False
+    PERSONAL_FIELDS = ("state",)
     call_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     state: Mapped[dict[str, Any]] = mapped_column(JsonDoc)
     turn: Mapped[int] = mapped_column(Integer, default=0)
@@ -226,8 +328,9 @@ class CallStateSQL(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
-class IncidentHistorySQL(Base):
+class IncidentHistorySQL(AuditedTable):
     __tablename__ = "incident_history"
+    PERSONAL_FIELDS = ("note", "detail")  # free text, and the notice sent with the address
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     incident_id: Mapped[str] = mapped_column(ForeignKey("incidents.id"), index=True)
     previous_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -244,7 +347,7 @@ class IncidentHistorySQL(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JsonDoc, default=dict)
 
 
-class TemplateSQL(Base):
+class TemplateSQL(AuditedTable):
     """Sobrescritura publicada de una plantilla. Solo existe fila si se ha editado."""
 
     __tablename__ = "templates"
@@ -257,7 +360,7 @@ class TemplateSQL(Base):
     )
 
 
-class TemplateVersionSQL(Base):
+class TemplateVersionSQL(AuditedTable):
     """Histórico: qué texto estuvo publicado, desde cuándo y por obra de quién."""
 
     __tablename__ = "template_versions"
@@ -269,11 +372,12 @@ class TemplateVersionSQL(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class BankCaseSQL(Base):
+class BankCaseSQL(AuditedTable):
     """Turno real del vecino que calidad marca como caso del banco de pruebas, con lo que el
     asistente debería haber entendido. Sin teléfono ni nombre del vecino."""
 
     __tablename__ = "bank_cases"
+    PERSONAL_FIELDS = ("utterance", "heard_text")
     __table_args__ = (
         UniqueConstraint("call_id", "turn", "bank", name="uq_bank_cases_turn"),
     )

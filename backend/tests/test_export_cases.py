@@ -40,7 +40,6 @@ def _case(**changes: object) -> dict:
         "author_id": "usr-quality",
         "created_at": "2026-10-22T10:00:00+00:00",
         "caller_phone": "+34600111222",
-        "declared_name": "Remedios",
     }
     return {**base, **changes}
 

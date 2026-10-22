@@ -68,7 +68,6 @@ export function StatePanel({ view }: { view: CallView | null }) {
         <Descriptions.Item label="Vivienda">
           {value(d.home_label)} {d.home_attempts ? <Tag>intentos: {d.home_attempts}</Tag> : null}
         </Descriptions.Item>
-        <Descriptions.Item label="Nombre">{value(d.declared_name)}</Descriptions.Item>
         <Descriptions.Item label="Solicitud">{value(d.request)}</Descriptions.Item>
         <Descriptions.Item label="Resumen">{value(d.summary)}</Descriptions.Item>
         <Descriptions.Item label="Categoría">{value(d.category)}</Descriptions.Item>

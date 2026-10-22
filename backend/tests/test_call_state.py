@@ -16,6 +16,7 @@ import pytest
 from conftest import FakeLLM
 from sqlalchemy.dialects import postgresql
 
+from building_call.audit.install import STAMPS
 from building_call.graph.nodes import Dependencies
 from building_call.repos.call_state import (
     MemoryStateStore,
@@ -215,7 +216,7 @@ async def test_a_late_delivery_does_not_undo_the_next_turn() -> None:
 def test_state_sql_model() -> None:
     table = CallStateSQL.__table__
     assert CallStateSQL.__tablename__ == "call_states"
-    assert {c.name for c in table.columns} == {
+    assert {c.name for c in table.columns} - set(STAMPS) == {
         "call_id",
         "state",
         "turn",

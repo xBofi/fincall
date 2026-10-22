@@ -14,7 +14,6 @@ export interface CallData {
   estate_address: string | null
   home_id: string | null
   home_label: string | null
-  declared_name: string | null
   request: string | null
   category: string | null
   urgency: string | null
@@ -239,7 +238,6 @@ export interface CallRecord {
   caller_phone: string | null
   estate_id: string | null
   home_id: string | null
-  declared_name: string | null
   summary: string | null
   result: string | null
   review_reason: string | null
@@ -309,12 +307,22 @@ export interface CallRecordDetail {
 
 export const operations = {
   summary: () => ask<OperationsSummary>('/api/operations/summary'),
-  calls: (state?: string) => ask<CallRecord[]>(`/api/operations/calls${state ? `?estado=${state}` : ''}`),
+  calls: (state?: string) => ask<CallRecord[]>(`/api/operations/calls${state ? `?state=${state}` : ''}`),
   detail: (id: string) => ask<CallRecordDetail>(`/api/operations/calls/${id}`),
   caseOptions: () => ask<CaseOptions>('/api/operations/cases/options'),
   markCase: (callId: string, testCase: NewTestBankCase) =>
     ask<BankCase>(`/api/operations/calls/${callId}/cases`, json(testCase)),
   unmarkCase: (caseId: string) => ask<void>(`/api/operations/cases/${caseId}`, { method: 'DELETE' }),
+  /** Only the owner: the call and everything associated with it; its incidents stay, anonymised. */
+  erase: (callId: string) => ask<void>(`/api/operations/calls/${encodeURIComponent(callId)}/erase`, { method: 'POST' }),
+}
+
+/** What is on screen, for the audit log. Nobody queries the log from the console. */
+export const audit = {
+  openView: (resource: string, resource_id: string) =>
+    ask<{ id: string; heartbeat_s: number }>('/api/audit/views', json({ resource, resource_id })),
+  heartbeat: (id: string) => ask<void>(`/api/audit/views/${encodeURIComponent(id)}/heartbeat`, { method: 'POST' }),
+  endPath: (id: string) => `/api/audit/views/${encodeURIComponent(id)}/end`,
 }
 
 export const api = {
@@ -531,6 +539,9 @@ export const catalogs = {
 
 // ---------------------------------------------------------------- bandeja del administrador
 
+/** What an erased call turns into wherever it was referenced (its incidents stay). */
+export const DELETED_CALL = 'deleted-call'
+
 export type IncidentStatus = 'pending' | 'assigned' | 'in_progress' | 'awaiting_information' | 'resolved' | 'closed'
 export type ManualStatus = 'in_progress' | 'awaiting_information' | 'resolved' | 'closed'
 
@@ -588,8 +599,7 @@ export interface IncidentDetail {
     id: string
     started_at: string
     caller_phone: string | null
-    declared_name: string | null
-    summary: string | null
+      summary: string | null
     transcript: Turn[]
     result: string | null
     review_reason: string | null

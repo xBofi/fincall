@@ -73,7 +73,6 @@ class CallState(TypedDict, total=False):
     home_id: str | None
     home_label: str | None
     home_attempts: int
-    declared_name: str | None
 
     # Solicitud
     request: str | None
@@ -134,7 +133,6 @@ def initial_state(call_id: str, started_at: str, graph: str) -> CallState:
         home_id=None,
         home_label=None,
         home_attempts=0,
-        declared_name=None,
         request=None,
         category=None,
         urgency=None,

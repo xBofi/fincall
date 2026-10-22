@@ -90,7 +90,6 @@ class Call(BaseModel):
     caller_phone: str | None = None
     estate_id: str | None = None
     home_id: str | None = None
-    declared_name: str | None = None
     transcript: list[dict[str, str]] = Field(default_factory=list)
     summary: str | None = None
     result: CallResult | None = None

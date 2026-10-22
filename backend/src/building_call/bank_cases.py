@@ -115,12 +115,15 @@ def build_case(
     utterance: BankCaseInput,
     turns: list[dict[str, Any]],
     *,
-    real_name: str | None,
     equipment_list: list[tuple[str, str]] | None,
 ) -> dict[str, Any]:
     """Campos del caso a partir de los turnos guardados de la llamada. Lanza `LookupError` si el
     turno no existe y `InvalidCase` si no es un turno del vecino o lo esperado no vale."""
     validate_expected(utterance.expected, utterance.bank)
+    # The caller's name is not kept (Andreu, 2026-10-22): the one to replace is the one quality
+    # writes as expected for that turn
+    expected_name = utterance.expected.get("name")
+    real_name = expected_name if isinstance(expected_name, str) and expected_name != "*" else None
     turn = next((t for t in turns if t["turn"] == utterance.turn), None)
     if turn is None:
         raise LookupError(f"La llamada no tiene turno {utterance.turn}")

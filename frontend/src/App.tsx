@@ -693,7 +693,18 @@ export default function App() {
         )}
 
         {screen === 'history' && (
-          <History summary={opsSummary} callRecords={callRecords} selected={selected} onOpen={(id) => void openCallRecord(id)} catalog={catalog} />
+          <History
+            summary={opsSummary}
+            callRecords={callRecords}
+            selected={selected}
+            onOpen={(id) => void openCallRecord(id)}
+            catalog={catalog}
+            canErase={isOwner}
+            onErased={() => {
+              setSelected(null)
+              void refreshOperations()
+            }}
+          />
         )}
 
         {screen === 'data' && (

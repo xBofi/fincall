@@ -93,7 +93,7 @@ async def test_mark_is_audited_and_unmark_too(
     _as_role(client, repo, Role.quality)
     case = (await client.post(f"/api/operations/calls/{cid}/cases", json=CASE)).json()
     _as_role(client, repo, Role.owner)
-    events = (await client.get("/api/operations/audit")).json()
+    events = await repo.list_audit()
     marked = next(e for e in events if e["action"] == "mark_test_bank_case")
     assert marked["user_id"] == "usr-quality"
     assert marked["resource"] == f"call:{cid}"
@@ -101,7 +101,7 @@ async def test_mark_is_audited_and_unmark_too(
 
     assert (await client.delete(f"/api/operations/cases/{case['id']}")).status_code == 204
     assert (await client.get("/api/operations/cases")).json() == []
-    events = (await client.get("/api/operations/audit")).json()
+    events = await repo.list_audit()
     assert any(e["action"] == "unmark_test_bank_case" for e in events)
     assert (await client.delete(f"/api/operations/cases/{case['id']}")).status_code == 404
 
@@ -183,19 +183,16 @@ async def test_the_caller_name_is_pseudonymised(
     client: AsyncClient, repo: MemoryRepository
 ) -> None:
     cid = await _converse(client, repo, ["Calle Mayor 12", "sí", "3 B", "Soy Remedios Quintana"])
-    repo.calls[cid] = repo.calls[cid].model_copy(
-        update={"declared_name": "Remedios Quintana"}
-    )
     _as_role(client, repo, Role.quality)
     case = (
         await client.post(
             f"/api/operations/calls/{cid}/cases",
-            json={"turn": 4, "expected": {"name": "Remedios"}},
+            json={"turn": 4, "expected": {"name": "Remedios Quintana"}},
         )
     ).json()
     assert "Remedios" not in str(case) and "Quintana" not in str(case)
     assert case["utterance"] == "Soy Carmen Ruiz"
-    assert case["expected"] == {"name": "Carmen"}
+    assert case["expected"] == {"name": "Carmen Ruiz"}
 
 
 def test_pseudonymise_and_strip_phones() -> None:

@@ -24,8 +24,6 @@ function steps(v: CallView): Step[] {
   return [
     { title: 'Finca', value: d.estate_address, nodes: ['identify_estate', 'estate_not_identified'], note: d.estate_attempts ? `${d.estate_attempts} intento(s)` : null },
     { title: 'Vivienda', value: d.home_label, nodes: ['identify_home', 'home_not_identified'], note: d.home_attempts ? `${d.home_attempts} intento(s)` : null },
-    // El nombre no se pregunta (basta la vivienda): solo aparece si el vecino lo dijo
-    ...(d.declared_name ? [{ title: 'Nombre del vecino', value: d.declared_name, nodes: [] }] : []),
     { title: 'Qué le ocurre', value: d.request, nodes: ['collect_request', 'ask_detail'] },
     { title: 'Tipo de avería', value: d.category ? category(d.category) : null, nodes: ['classify_problem'] },
     {

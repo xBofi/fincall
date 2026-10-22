@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSoc
 from pydantic import BaseModel
 
 from building_call.access import Access
+from building_call.audit.context import set_actor
 from building_call.settings import settings
 
 #: Identidad del agente en la API (quién hizo la petición). El nombre con el que se registra en
@@ -42,6 +43,7 @@ def requires_user_or_agent(access: Access) -> Callable[..., Coroutine[Any, Any, 
 
     async def dependency(request: Request, response: Response) -> Any:
         if is_agent(request):
+            set_actor("agent:livekit", "agent")
             return AGENT_NAME
         return await user(request, response)
 

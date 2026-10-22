@@ -29,7 +29,7 @@ async def test_everything_in_one_sentence_skips_already_answered_questions(
     # Tras confirmar la finca ya sabe vivienda, nombre y problema: va directo al resumen
     assert state["current_node"] == "confirm_summary"
     assert state["home_id"] == "finca-alameda-5-2-3A"
-    assert state["declared_name"] == "Carmen"
+    assert "declared_name" not in state and "name" not in state["interpretation"]
     assert state["category"] == "plumbing"
     questions = [h["text"] for h in state["history"] if h["role"] == "bot"]
     assert not any("¿Cuál es su vivienda?" in p for p in questions)
@@ -44,7 +44,7 @@ async def test_loose_data_accumulates_and_is_used_later(manager: CallManager) ->
         manager, ["Calle Mayor 12", "sí", "Cuarto A. Me llamo Pedro y no hay luz en la escalera"]
     )
     assert state["home_id"] == "finca-mayor-12-u-4A"
-    assert state["declared_name"] == "Pedro"
+    assert "declared_name" not in state and "name" not in state["interpretation"]
     assert state["request"]
     assert state["current_node"] == "confirm_summary"
 
@@ -186,16 +186,15 @@ async def test_floor_and_door_in_several_entrances_asks_the_entrance(manager: Ca
     assert state["home_id"] == "finca-alameda-5-1-3A"
 
 
-async def test_summary_includes_name_and_allows_correcting_it(manager: CallManager) -> None:
+async def test_the_name_is_neither_kept_nor_read_back(manager: CallManager) -> None:
+    """Andreu, 2026-10-22: the caller's name is not stored. Only what they said keeps it."""
     state = await _converse(
         manager, ["Calle Mayor 12", "sí", "3 B", "Soy Reubofibra y no hay luz en la escalera"]
     )
-    assert "Le resumo: Reubofibra, " in state["bot_messages"][-1]
+    # The test model leaves the name inside the problem; the real one separates it
+    assert state["bot_messages"][-1].startswith("Le resumo: Soy Reubofibra y no hay luz")
     assert "3º B" not in state["bot_messages"][-1]
-    state = await manager.message(state["call_id"], "No, me llamo Andreu Bofi")
-    assert state["declared_name"] == "Andreu Bofi"
-    assert state["current_node"] == "confirm_summary"
-    assert "Andreu Bofi" in state["bot_messages"][-1]
+    assert "declared_name" not in state and "name" not in state["interpretation"]
 
 
 async def test_closing_explains_the_next_step(manager: CallManager) -> None:
@@ -348,14 +347,13 @@ async def test_the_name_is_not_asked(manager: CallManager) -> None:
     assert not any("nombre" in m for m in state["bot_messages"])
     state = await manager.message(state["call_id"], "¿Para qué necesita mi nombre?")
     assert "No necesito su nombre" in state["bot_messages"][-1]
-    assert state["declared_name"] is None
     assert state["current_node"] == "collect_request"
 
 
-async def test_name_said_unprompted_is_saved(manager: CallManager) -> None:
+async def test_name_said_unprompted_is_not_kept(manager: CallManager) -> None:
     state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A, soy Ana"])
-    assert state["declared_name"] == "Ana"
-    assert state["bot_messages"][-1].startswith("Gracias, Ana. Cuénteme")
+    assert "Ana" not in str({k: v for k, v in state.items() if k != "history"})
+    assert state["bot_messages"][-1].startswith("Perfecto. Cuénteme")
 
 
 async def test_cut_phrase_when_giving_home_is_not_taken_as_fault(
@@ -499,3 +497,4 @@ async def test_cut_phrase_without_category_is_not_taken_as_fault_either(
     state = await manager.message(state["call_id"], "Piso 1, puerta A.")
     assert state["current_node"] == "collect_request"
     assert not state.get("request")
+

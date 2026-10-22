@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from building_call.audit.erasure import CallNotErasable
+from building_call.audit.install import DELETED_CALL
 from building_call.domain.config import (
     Contact,
     EffectiveConfig,
@@ -402,6 +404,35 @@ class MemoryRepository:
 
     async def get_call(self, call_id: str) -> Call | None:
         return self.calls.get(call_id)
+
+    async def erase_call(self, call_id: str) -> list[str]:
+        self._operational()
+        call = self.calls.get(call_id)
+        if call is None:
+            raise CallNotErasable(call_id)
+        if call.state == "active":
+            raise CallNotErasable(f"{call_id} is in progress")
+        del self.calls[call_id]
+        self.turns.pop(call_id, None)
+        self.decisions.pop(call_id, None)
+        tracks = [t for t in self.tracks.values() if t["call_id"] == call_id]
+        for t in tracks:
+            del self.tracks[t["id"]]
+        self.bank_cases = {k: c for k, c in self.bank_cases.items() if c["call_id"] != call_id}
+        await self.call_state_store.discard(call_id)
+        incidents = {i.id for i in self.incidents.values() if i.call_id == call_id}
+        for incident_id in incidents:
+            self.incidents[incident_id] = self.incidents[incident_id].model_copy(
+                update={"call_id": DELETED_CALL, "description": "", "suggestion": None}
+            )
+        self.incident_history = [
+            h.model_copy(update={"note": None, "detail": {}}) if h.incident_id in incidents else h
+            for h in self.incident_history
+        ]
+        for event in self.audit:
+            if event["resource"] == f"call:{call_id}":
+                event.update(resource=f"call:{DELETED_CALL}", detail={})
+        return [t["object_key"] for t in tracks]
 
     async def save_turn(self, call_id: str, turn: int, data: dict[str, Any]) -> None:
         self._operational()

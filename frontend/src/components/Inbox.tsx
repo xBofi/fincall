@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Input, Popconfirm, Segmented, Select, Spin, Tag, Timeline, message } from 'antd'
 import { BulbOutlined } from '@ant-design/icons'
 import {
+  DELETED_CALL,
   inbox,
   type IncidentDetail,
   type HistoryEntry,
@@ -9,6 +10,7 @@ import {
   type InboxRow,
   type InboxFilters,
 } from '../api'
+import { useAuditedView } from '../auditedView'
 import type { Catalog } from '../catalog'
 import { work_type, category, incidentStatus, errorMessage, reviewReason, urgency } from '../texts'
 
@@ -200,6 +202,8 @@ function Detail({
 }) {
   const inc = d.incident
   const call = d.call
+  // How long the incident stays on screen goes to the audit log
+  useAuditedView('incidents', inc.id)
   const reason = reviewReason(call?.review_reason)
   const closed = inc.state === 'closed'
   return (
@@ -261,8 +265,7 @@ function Detail({
         <div>
           <dt>Vecino</dt>
           <dd>
-            {call?.declared_name ?? 'Sin nombre'}
-            {call?.caller_phone ? ` · ${call.caller_phone}` : ''}
+            {inc.call_id === DELETED_CALL ? 'Llamada eliminada' : (call?.caller_phone ?? 'Número oculto')}
           </dd>
         </div>
       </dl>

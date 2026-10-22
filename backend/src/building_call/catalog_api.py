@@ -41,6 +41,7 @@ from building_call.domain.operations import Role, User
 from building_call.repos.base import Repository
 from building_call.repos.catalog import CatalogRepository
 from building_call.repos.operational import OperationalRepository
+from building_call.repos.sql_models import SpecialistSQL
 
 READERS = (Role.owner, Role.administrator, Role.quality)
 EDITORS = (Role.owner, Role.administrator)
@@ -389,6 +390,7 @@ def create_catalog_router(
         for admin in await catalog.list_administrators():
             for e in await business.specialists_of(admin.id):
                 output.append(_specialist_view(e, admin))
+        await access.access_log.list(SpecialistSQL, {}, rows=len(output))
         return output
 
     # --------------------------------------------------------------------------------- fincas

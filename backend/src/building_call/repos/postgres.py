@@ -9,6 +9,9 @@ from uuid import uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from building_call.audit import session as audit_session
+from building_call.audit.erasure import erase_in_postgres
+from building_call.audit.install import DELETED_CALL
 from building_call.domain.config import (
     EffectiveConfig,
     PartialConfig,
@@ -58,6 +61,8 @@ class PostgresRepository:
             database_url, pool_pre_ping=True, pool_size=10, max_overflow=20
         )
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
+        # Every transaction tells PostgreSQL who is acting, for the audit triggers
+        audit_session.install()
         # Estado vivo de las llamadas en curso: sobrevive a un reinicio de la API
         self.call_state_store = PostgresStateStore(self.sessions)
 
@@ -319,7 +324,12 @@ class PostgresRepository:
 
     async def list_calls(self, state: str | None = None, limit: int = 100) -> list[Call]:
         async with self.sessions() as s:
-            q = select(CallSQL).order_by(CallSQL.started_at.desc()).limit(limit)
+            q = (
+                select(CallSQL)
+                .where(CallSQL.id != DELETED_CALL)
+                .order_by(CallSQL.started_at.desc())
+                .limit(limit)
+            )
             if state:
                 q = q.where(CallSQL.state == state)
             return [
@@ -328,9 +338,15 @@ class PostgresRepository:
             ]
 
     async def get_call(self, call_id: str) -> Call | None:
+        if call_id == DELETED_CALL:
+            return None
         async with self.sessions() as s:
             f = await s.get(CallSQL, call_id)
             return Call.model_validate(f, from_attributes=True) if f else None
+
+    async def erase_call(self, call_id: str) -> list[str]:
+        async with self.sessions() as s, s.begin():
+            return await erase_in_postgres(s, call_id)
 
     async def save_turn(self, call_id: str, turn: int, data: dict[str, Any]) -> None:
         async with self.sessions() as s, s.begin():

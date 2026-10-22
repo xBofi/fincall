@@ -4,6 +4,7 @@ import { ApiError, operations } from '../api'
 import type { BankCase, CallRecordDetail, CallRecord, OperationsSummary } from '../api'
 import type { Catalog } from '../catalog'
 import { rate, capitalize, result } from '../texts'
+import { useAuditedView } from '../auditedView'
 import { MarkCase } from './MarkCase'
 
 /** En la consola web el bot habla por el navegador: su pista la reconstruye el TTS del servidor. */
@@ -37,9 +38,12 @@ interface Props {
   selected: CallRecordDetail | null
   onOpen: (id: string) => void
   catalog: Catalog
+  /** Only the owner erases calls */
+  canErase: boolean
+  onErased: () => void
 }
 
-export function History({ summary, callRecords, selected, onOpen, catalog }: Props) {
+export function History({ summary, callRecords, selected, onOpen, catalog, canErase, onErased }: Props) {
   const [filter, setFilter] = useState<Filter>('todas')
   const items = useMemo(
     () =>
@@ -97,7 +101,7 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
               onClick={() => onOpen(e.id)}
             >
               <span className="history-row-head">
-                <b>{e.declared_name ?? 'Vecino sin identificar'}</b>
+                <b>{e.caller_phone ?? 'Número oculto'}</b>
                 <time>{time(e.started_at)}</time>
               </span>
               <small>{catalog.estateAddress(e.estate_id) ?? 'Finca sin identificar'}</small>
@@ -108,7 +112,13 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
 
         <section className="history-detail" aria-label="Detalle de la llamada">
           {selected ? (
-            <Detail d={selected} catalog={catalog} onReload={() => onOpen(selected.call.id)} />
+            <Detail
+              d={selected}
+              catalog={catalog}
+              onReload={() => onOpen(selected.call.id)}
+              canErase={canErase}
+              onErased={onErased}
+            />
           ) : (
             <Empty description="Elige una llamada para ver la conversación y lo que hizo el asistente" />
           )}
@@ -118,8 +128,23 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
   )
 }
 
-function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalog; onReload: () => void }) {
+function Detail({
+  d,
+  catalog,
+  onReload,
+  canErase,
+  onErased,
+}: {
+  d: CallRecordDetail
+  catalog: Catalog
+  onReload: () => void
+  canErase: boolean
+  onErased: () => void
+}) {
   const call = d.call
+  // How long the call record stays on screen goes to the audit log
+  useAuditedView('calls', call.id)
+  const [erasing, setErasing] = useState(false)
   const r = result(call.result)
   // Turno que se está marcando como caso del banco de pruebas (y el caso previo, si se corrige)
   const [marking, setMarking] = useState<{ turn: number; previous?: BankCase } | null>(null)
@@ -136,14 +161,43 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
       message.error(e instanceof ApiError ? e.detail : 'No se ha podido quitar el caso.')
     }
   }
+
+  async function erase() {
+    setErasing(true)
+    try {
+      await operations.erase(call.id)
+      message.success('Llamada eliminada')
+      onErased()
+    } catch (e) {
+      message.error(e instanceof ApiError ? e.detail : 'No se ha podido eliminar la llamada.')
+    } finally {
+      setErasing(false)
+    }
+  }
   return (
     <div className="history-dossier">
       <header className="history-head">
         <div>
           <p className="ops-eyebrow">Llamada del {new Date(call.started_at).toLocaleString('es-ES')}</p>
-          <h2>{call.declared_name ?? 'Vecino sin identificar'}</h2>
+          <h2>{call.caller_phone ?? 'Número oculto'}</h2>
         </div>
-        <ResultTag e={call} />
+        <div className="history-head-actions">
+          <ResultTag e={call} />
+          {canErase && call.state === 'finished' && (
+            <Popconfirm
+              title="¿Eliminar esta llamada?"
+              description="Se borran la conversación, el audio, el teléfono y los casos marcados. Sus incidencias se quedan, sin descripción. No se puede deshacer."
+              okText="Eliminar"
+              okButtonProps={{ danger: true }}
+              cancelText="Cancelar"
+              onConfirm={erase}
+            >
+              <Button danger size="small" loading={erasing}>
+                Eliminar llamada
+              </Button>
+            </Popconfirm>
+          )}
+        </div>
       </header>
 
       {r && <p className={`history-explanation is-${r.tone}`}>{r.long}</p>}

@@ -29,7 +29,6 @@ def _phrasing_data(state: CallState) -> dict[str, Any]:
     return {
         "estate": state.get("estate_address"),
         "home": state.get("home_label"),
-        "name": state.get("declared_name"),
         "problem": state.get("summary") or state.get("request"),
         "category": state.get("category"),
         "urgency": state.get("urgency"),
@@ -175,7 +174,6 @@ class CallManager:
                 caller_phone=state.get("caller_phone"),
                 estate_id=state.get("estate_id"),
                 home_id=state.get("home_id"),
-                declared_name=state.get("declared_name"),
                 transcript=state.get("history", []),
                 summary=state.get("summary") or state.get("request"),
                 result=cast("CallResult | None", result),
