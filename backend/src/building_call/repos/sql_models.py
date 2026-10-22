@@ -275,7 +275,7 @@ class BankCaseSQL(Base):
 
     __tablename__ = "bank_cases"
     __table_args__ = (
-        UniqueConstraint("call_id", "turn", "bank", name="uq_test_bank_cases_turn"),
+        UniqueConstraint("call_id", "turn", "bank", name="uq_bank_cases_turn"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), index=True)

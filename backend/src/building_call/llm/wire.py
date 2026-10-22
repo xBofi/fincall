@@ -70,7 +70,9 @@ CATEGORIES: dict[str, str] = {
     "no_clasificable": "unclassifiable",
 }
 
-_TO_MODEL = {v: k for table in (INTENTS, URGENCIES, WORK_TYPES, CATEGORIES) for k, v in table.items()}
+_TO_MODEL = {
+    v: k for table in (INTENTS, URGENCIES, WORK_TYPES, CATEGORIES) for k, v in table.items()
+}
 
 
 def to_model(code: str) -> str:
