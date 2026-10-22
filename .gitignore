@@ -20,3 +20,5 @@ backend/gcp-*.json
 
 # Espacios de trabajo aislados de los agentes de Claude Code
 .claude/worktrees/
+# Último commit de develop ya reflejado en la bóveda y la web (hook de documentación)
+.claude/estado/
