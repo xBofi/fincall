@@ -13,7 +13,7 @@ const TRACK_NAME: Record<string, string> = {
   assistant: 'Solo el asistente',
 }
 
-const TONE_COLOR = { bien: 'green', review: 'orange', neutral: 'default' } as const
+const TONE_COLOR = { good: 'green', review: 'orange', neutral: 'default' } as const
 
 type Filter = 'todas' | 'review' | 'resolved'
 
@@ -75,8 +75,8 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
         </article>
       </section>
 
-      <section className="hist">
-        <aside className="hist-lista" aria-label="Llamadas">
+      <section className="history">
+        <aside className="history-items" aria-label="Llamadas">
           <Segmented<Filter>
             block
             size="small"
@@ -88,15 +88,15 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
               { label: 'Resueltas', value: 'resolved' },
             ]}
           />
-          {items.length === 0 && <Empty className="hist-vacio" description={callRecords.length ? 'Ninguna llamada con este filtro' : 'Todavía no hay llamadas. Simula una desde «Simular llamada».'} />}
+          {items.length === 0 && <Empty className="history-empty" description={callRecords.length ? 'Ninguna llamada con este filtro' : 'Todavía no hay llamadas. Simula una desde «Simular llamada».'} />}
           {items.map((e) => (
             <button
               key={e.id}
               type="button"
-              className={`hist-fila ${selected?.call.id === e.id ? 'is-selected' : ''}`}
+              className={`history-row ${selected?.call.id === e.id ? 'is-selected' : ''}`}
               onClick={() => onOpen(e.id)}
             >
-              <span className="hist-fila-cab">
+              <span className="history-row-head">
                 <b>{e.declared_name ?? 'Vecino sin identificar'}</b>
                 <time>{time(e.started_at)}</time>
               </span>
@@ -106,7 +106,7 @@ export function History({ summary, callRecords, selected, onOpen, catalog }: Pro
           ))}
         </aside>
 
-        <section className="hist-detalle" aria-label="Detalle de la llamada">
+        <section className="history-detail" aria-label="Detalle de la llamada">
           {selected ? (
             <Detail d={selected} catalog={catalog} onReload={() => onOpen(selected.call.id)} />
           ) : (
@@ -137,8 +137,8 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
     }
   }
   return (
-    <div className="hist-dossier">
-      <header className="hist-cab">
+    <div className="history-dossier">
+      <header className="history-head">
         <div>
           <p className="ops-eyebrow">Llamada del {new Date(call.started_at).toLocaleString('es-ES')}</p>
           <h2>{call.declared_name ?? 'Vecino sin identificar'}</h2>
@@ -146,7 +146,7 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
         <ResultTag e={call} />
       </header>
 
-      {r && <p className={`hist-explicacion is-${r.tone}`}>{r.long}</p>}
+      {r && <p className={`history-explanation is-${r.tone}`}>{r.long}</p>}
 
       <dl className="ops-facts">
         <div>
@@ -173,11 +173,11 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
       </div>
 
       {d.tracks.length > 0 && (
-        <div className="hist-bloque">
+        <div className="history-block">
           <h3>Grabación</h3>
-          <small className="hist-nota">Enlace temporal (5 min). Se borra a los 14 días.</small>
+          <small className="history-note">Enlace temporal (5 min). Se borra a los 14 días.</small>
           {d.tracks.map((p) => (
-            <div key={p.id} className="hist-pista">
+            <div key={p.id} className="history-track">
               <small>{TRACK_NAME[p.channel] ?? p.channel}</small>
               {p.url ? <audio controls preload="none" src={p.url} /> : <small> · eliminada por retención</small>}
             </div>
@@ -185,19 +185,19 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
         </div>
       )}
 
-      <div className="hist-bloque hist-conv">
+      <div className="history-block history-conv">
         <h3>Conversación</h3>
-        <small className="hist-nota">
+        <small className="history-note">
           ¿El asistente no entendió bien al vecino? Marca ese turno como caso para el banco de pruebas: así no vuelve a fallar.
         </small>
-        <div className="hist-chat">
+        <div className="history-chat">
           {d.turns.map((t) => (
-            <div key={t.turn} className="hist-turno">
-              {t.caller && <div className="burbuja vecino">{t.caller}</div>}
+            <div key={t.turn} className="history-turn">
+              {t.caller && <div className="bubble caller">{t.caller}</div>}
               {t.caller && (
-                <div className="hist-caso">
+                <div className="history-case">
                   {casesOf(t.turn).map((c) => (
-                    <span key={c.id} className="hist-caso-marca">
+                    <span key={c.id} className="history-case-brand">
                       <Tag color="purple">{c.bank === 'classification' ? 'Caso de clasificación' : 'Caso del banco'}</Tag>
                       <Button size="small" type="link" onClick={() => setMarking({ turn: t.turn, previous: c })}>
                         Corregir
@@ -214,7 +214,7 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
                   </Button>
                 </div>
               )}
-              {t.assistant.length > 0 && <div className="burbuja bot">{t.assistant.join(' ')}</div>}
+              {t.assistant.length > 0 && <div className="bubble bot">{t.assistant.join(' ')}</div>}
             </div>
           ))}
         </div>
@@ -243,7 +243,7 @@ function Detail({ d, catalog, onReload }: { d: CallRecordDetail; catalog: Catalo
             key: 'decisions',
             label: 'Decisiones internas del asistente (para el equipo)',
             children: (
-              <ol className="hist-decisiones">
+              <ol className="history-decisions">
                 {d.turns.map((t) => (
                   <li key={t.turn}>
                     <b>

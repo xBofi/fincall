@@ -36,13 +36,13 @@ const URGENCY: Record<string, { text: string; color: string }> = {
 export const urgency = (u: string | null | undefined) =>
   u ? URGENCY[u] ?? { text: capitalize(u), color: 'default' } : null
 
-export type Tone = 'bien' | 'review' | 'neutral'
+export type Tone = 'good' | 'review' | 'neutral'
 
 const RESULTS: Record<string, { short: string; long: string; tone: Tone }> = {
   incident_created: {
     short: 'Incidencia creada',
     long: 'Incidencia creada y profesional avisado.',
-    tone: 'bien',
+    tone: 'good',
   },
   estate_not_identified: {
     short: 'Finca no encontrada',
@@ -167,6 +167,6 @@ export function reviewReason(m: string | null | undefined): string | null {
 
 export const ROLES: Record<string, string> = {
   owner: 'Propietario',
-  administrator: 'Administrator',
+  administrator: 'Administrador',
   quality: 'Calidad',
 }

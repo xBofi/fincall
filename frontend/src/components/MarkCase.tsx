@@ -152,7 +152,7 @@ export function MarkCase({ callId, turn, question, previous, onClose, onSaved }:
       onCancel={onClose}
       width={640}
     >
-      <div className="caso-contexto">
+      <div className="case-context">
         {question && (
           <p>
             <small>El asistente preguntó</small>
@@ -170,7 +170,7 @@ export function MarkCase({ callId, turn, question, previous, onClose, onSaved }:
           </p>
         )}
       </div>
-      <p className="hist-nota">
+      <p className="history-note">
         Se guarda solo el texto del turno y la pregunta del bot: nunca el teléfono, y el nombre del vecino se cambia por uno ficticio.
       </p>
 
@@ -186,8 +186,8 @@ export function MarkCase({ callId, turn, question, previous, onClose, onSaved }:
         ]}
       />
 
-      <Form layout="vertical" className="caso-form" component="div">
-        <div className="caso-rejilla">
+      <Form layout="vertical" className="case-form" component="div">
+        <div className="case-grid">
           {bank === 'interpretation' && (
             <>
               <Form.Item label="Intención">
@@ -212,7 +212,7 @@ export function MarkCase({ callId, turn, question, previous, onClose, onSaved }:
           <Form.Item label="Categoría" required={bank === 'classification'}>
             <Select mode="multiple" maxCount={bank === 'classification' ? 1 : undefined} allowClear value={lists.category} onChange={items('category')} options={optionsFrom(options?.categories ?? [], bank === 'interpretation')} placeholder="No se comprueba" />
           </Form.Item>
-          <Form.Item label="Urgency" required={bank === 'classification'}>
+          <Form.Item label="Urgencia" required={bank === 'classification'}>
             <Select mode="multiple" allowClear value={lists.urgency} onChange={items('urgency')} options={optionsFrom(options?.urgencies ?? [], bank === 'interpretation')} placeholder="No se comprueba" />
           </Form.Item>
           {bank === 'interpretation' && (
@@ -229,7 +229,7 @@ export function MarkCase({ callId, turn, question, previous, onClose, onSaved }:
           )}
         </div>
         {bank === 'interpretation' && (
-          <p className="hist-nota">
+          <p className="history-note">
             En los campos de texto: <code>*</code> = cualquier valor, <code>-</code> = sin dato, <code>a | b</code> = vale cualquiera. Varias opciones en un desplegable también son alternativas.
           </p>
         )}

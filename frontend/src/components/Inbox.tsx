@@ -97,7 +97,7 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
 
   return (
     <>
-      <section className="ops-single band-cab">
+      <section className="ops-single inbox-head">
         <div className="ops-panel-heading">
           <div>
             <p className="ops-eyebrow">Incidencias</p>
@@ -110,8 +110,8 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
         </p>
       </section>
 
-      <section className="hist band">
-        <aside className="hist-lista" aria-label="Incidencias">
+      <section className="history inbox">
+        <aside className="history-items" aria-label="Incidencias">
           <Segmented<View>
             block
             size="small"
@@ -123,7 +123,7 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
               { label: 'Todas', value: 'todas' },
             ]}
           />
-          <div className="band-filtros">
+          <div className="inbox-filters">
             <Select
               allowClear
               size="small"
@@ -141,10 +141,10 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
               options={['emergency', 'high', 'medium', 'low'].map((u) => ({ value: u, label: urgency(u)?.text }))}
             />
           </div>
-          {loading && <Spin className="hist-vacio" />}
+          {loading && <Spin className="history-empty" />}
           {!loading && rows.length === 0 && (
             <Empty
-              className="hist-vacio"
+              className="history-empty"
               description={view === 'administrator' ? 'Nada pendiente de decidir' : 'Ninguna incidencia con este filtro'}
             />
           )}
@@ -152,19 +152,19 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
             <button
               key={f.id}
               type="button"
-              className={`hist-fila ${detail?.incident.id === f.id ? 'is-selected' : ''} ${f.pending_administrator ? 'is-pendiente' : ''}`}
+              className={`history-row ${detail?.incident.id === f.id ? 'is-selected' : ''} ${f.pending_administrator ? 'is-pending' : ''}`}
               onClick={() => void open(f.id)}
             >
-              <span className="hist-fila-cab">
+              <span className="history-row-head">
                 <b>{category(f.category)}</b>
                 <time>{time(f.created_at)}</time>
               </span>
-              <small className="band-desc">{f.description || 'Sin descripción'}</small>
+              <small className="inbox-desc">{f.description || 'Sin descripción'}</small>
               <small>
                 {f.estate_address ?? 'Finca desconocida'}
                 {f.home ? ` · ${f.home}` : ''}
               </small>
-              <span className="band-tags">
+              <span className="inbox-tags">
                 <UrgencyTag u={f.urgency} />
                 <StatusTag e={f.state} />
                 {f.pending_administrator ? (
@@ -177,7 +177,7 @@ export function Inbox({ catalog, canAct, onPending }: Props) {
           ))}
         </aside>
 
-        <section className="hist-detalle" aria-label="Detalle de la incidencia">
+        <section className="history-detail" aria-label="Detalle de la incidencia">
           {detail ? (
             <Detail key={detail.incident.id} d={detail} canAct={canAct} onUpdate={tras} />
           ) : (
@@ -203,26 +203,26 @@ function Detail({
   const reason = reviewReason(call?.review_reason)
   const closed = inc.state === 'closed'
   return (
-    <div className="hist-dossier band-dossier">
-      <header className="hist-cab">
+    <div className="history-dossier inbox-dossier">
+      <header className="history-head">
         <div>
           <p className="ops-eyebrow">
             {category(inc.category)} · {work_type(inc.work_type)} · {time(inc.created_at)}
           </p>
           <h2>{inc.description || 'Sin descripción'}</h2>
         </div>
-        <span className="band-tags">
+        <span className="inbox-tags">
           <UrgencyTag u={inc.urgency} />
           <StatusTag e={inc.state} />
         </span>
       </header>
 
       {(inc.suggestion || reason) && (
-        <div className={`band-sugerencia ${d.pending_administrator ? 'is-pendiente' : ''}`}>
+        <div className={`inbox-suggestion ${d.pending_administrator ? 'is-pending' : ''}`}>
           <p className="ops-eyebrow">
             <BulbOutlined /> {d.pending_administrator ? 'Te toca decidir' : 'Sugerencia del asistente'}
           </p>
-          {reason && <p className="band-motivo">{reason}</p>}
+          {reason && <p className="inbox-reason">{reason}</p>}
           {inc.suggestion && <p>{inc.suggestion}</p>}
         </div>
       )}
@@ -276,24 +276,24 @@ function Detail({
         </div>
       )}
 
-      <div className="hist-bloque">
+      <div className="history-block">
         <h3>Historial</h3>
         {d.history.length === 0 ? (
-          <small className="hist-nota">Nadie ha actuado todavía sobre esta incidencia.</small>
+          <small className="history-note">Nadie ha actuado todavía sobre esta incidencia.</small>
         ) : (
           <Timeline
-            className="band-historial"
+            className="inbox-history"
             items={d.history.map((h) => ({ key: h.id, children: <HistoryEntryLine h={h} /> }))}
           />
         )}
       </div>
 
       {call && call.transcript.length > 0 && (
-        <div className="hist-bloque hist-conv">
+        <div className="history-block history-conv">
           <h3>Conversación</h3>
-          <div className="hist-chat">
+          <div className="history-chat">
             {call.transcript.map((t, i) => (
-              <div key={i} className={`burbuja ${t.role === 'bot' ? 'bot' : 'caller'}`}>
+              <div key={i} className={`bubble ${t.role === 'bot' ? 'bot' : 'caller'}`}>
                 {t.text}
               </div>
             ))}
@@ -311,7 +311,7 @@ function HistoryEntryLine({ h }: { h: HistoryEntry }) {
   else if (h.action === 'note') what = 'añadió una nota'
   else what = `cambió el estado a «${incidentStatus(h.new_state).text.toLowerCase()}»`
   return (
-    <div className="band-entrada">
+    <div className="inbox-utterance">
       <span>
         <b>{who}</b> {what}
         <time> · {time(h.changed_at)}</time>
@@ -356,12 +356,12 @@ function Actions({ d, onUpdate }: { d: IncidentDetail; onUpdate: (id: string) =>
   }
 
   return (
-    <div className="hist-bloque band-acciones">
+    <div className="history-block inbox-actions">
       <h3>Decidir</h3>
       {assignable && (
-        <div className="band-accion">
+        <div className="inbox-action">
           <label htmlFor="band-especialista">Asignar a un profesional</label>
-          <div className="band-fila">
+          <div className="inbox-row">
             <Select
               id="band-especialista"
               showSearch
@@ -380,13 +380,13 @@ function Actions({ d, onUpdate }: { d: IncidentDetail; onUpdate: (id: string) =>
               Asignar
             </Button>
           </div>
-          <small className="hist-nota">Todavía no se envía ningún aviso real: queda anotado como pendiente de envío.</small>
+          <small className="history-note">Todavía no se envía ningún aviso real: queda anotado como pendiente de envío.</small>
         </div>
       )}
 
-      <div className="band-accion">
+      <div className="inbox-action">
         <label>Cambiar estado</label>
-        <div className="band-estados">
+        <div className="inbox-states">
           {MANUAL_STATUSES.filter((e) => e.value !== inc.state).map((e) =>
             e.value === 'closed' ? (
               <Popconfirm
@@ -415,7 +415,7 @@ function Actions({ d, onUpdate }: { d: IncidentDetail; onUpdate: (id: string) =>
         </div>
       </div>
 
-      <div className="band-accion">
+      <div className="inbox-action">
         <label htmlFor="band-nota">Nota</label>
         <Input.TextArea
           id="band-nota"

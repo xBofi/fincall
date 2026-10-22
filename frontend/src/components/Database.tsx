@@ -68,7 +68,7 @@ const matches = (text: string, query: string) => normalizeText(query).split(' ')
 /** Marca lo que el asistente consulta en las llamadas, para distinguirlo de los datos de ficha. */
 function UsesAssistant({ what }: { what: string }) {
   return (
-    <span className="bd-usa" title={`El asistente lo usa: ${what}`}>
+    <span className="db-uses" title={`El asistente lo usa: ${what}`}>
       <RobotOutlined /> lo usa el asistente
     </span>
   )
@@ -76,7 +76,7 @@ function UsesAssistant({ what }: { what: string }) {
 
 function Contact({ channel: c, target }: { channel: string; target: string }) {
   return (
-    <span className="bd-contacto">
+    <span className="db-contact">
       {c === 'call' ? <PhoneOutlined /> : <MailOutlined />}
       <span>{target}</span>
     </span>
@@ -102,24 +102,24 @@ function Homes({
   }, [homes])
 
   return (
-    <div className="bd-portales">
+    <div className="db-entrances">
       {entrances.map(([entrance, items]) => (
-        <div key={entrance} className="bd-portal">
-          {entrance && <span className="bd-portal-nombre">Portal {entrance}</span>}
-          <div className="bd-chips">
+        <div key={entrance} className="db-entrance">
+          {entrance && <span className="db-entrance-name">Portal {entrance}</span>}
+          <div className="db-chips">
             {items.map((v) =>
               onEdit ? (
                 <button
                   type="button"
                   key={v.id}
-                  className={`bd-chip is-editable ${v.id === highlighted ? 'is-match' : ''}`}
+                  className={`db-chip is-editable ${v.id === highlighted ? 'is-match' : ''}`}
                   onClick={() => onEdit(v)}
                   title="Editar o borrar la vivienda"
                 >
                   {v.floor}º {v.door}
                 </button>
               ) : (
-                <span key={v.id} className={`bd-chip ${v.id === highlighted ? 'is-match' : ''}`}>
+                <span key={v.id} className={`db-chip ${v.id === highlighted ? 'is-match' : ''}`}>
                   {v.floor}º {v.door}
                 </span>
               ),
@@ -170,26 +170,26 @@ function EstateCard({
   }, [identified])
 
   return (
-    <article ref={ref} className={`bd-tarjeta ${identified ? 'is-match' : ''}`}>
-      <button type="button" className="bd-cabecera" onClick={onToggle} aria-expanded={opened}>
-        <span className="bd-chevron">{opened ? <DownOutlined /> : <RightOutlined />}</span>
-        <span className="bd-titulo">
+    <article ref={ref} className={`db-tile ${identified ? 'is-match' : ''}`}>
+      <button type="button" className="db-header" onClick={onToggle} aria-expanded={opened}>
+        <span className="db-chevron">{opened ? <DownOutlined /> : <RightOutlined />}</span>
+        <span className="db-title">
           <b>{estate.address}</b>
           <small>
             {estate.administrator} · {estate.homes.length} viviendas
           </small>
         </span>
         {identified && (
-          <Tag color="blue" icon={<CheckCircleFilled />} className="bd-badge">
+          <Tag color="blue" icon={<CheckCircleFilled />} className="db-badge">
             En la llamada
           </Tag>
         )}
       </button>
 
       {opened && (
-        <div className="bd-cuerpo">
+        <div className="db-body">
           {(mark || editor) && (
-            <div className="bd-acciones">
+            <div className="db-actions">
               {mark && <UsesAssistant what="reconoce la finca por la dirección que dice el vecino" />}
               {editor && (
                 <Button size="small" icon={<EditOutlined />} onClick={() => editor.edit({ kind: 'estate', estate })}>
@@ -198,7 +198,7 @@ function EstateCard({
               )}
             </div>
           )}
-          <dl className="bd-datos">
+          <dl className="db-data">
             <div>
               <dt>Teléfono</dt>
               <dd>{estate.official_phone}</dd>
@@ -207,7 +207,7 @@ function EstateCard({
               <dt>
                 Correo{' '}
                 {mark && (
-                  <span className="bd-usa-icono" title="El asistente deja aquí lo que tiene que revisar el administrador">
+                  <span className="db-uses-icon" title="El asistente deja aquí lo que tiene que revisar el administrador">
                     <RobotOutlined />
                   </span>
                 )}
@@ -221,7 +221,7 @@ function EstateCard({
           </dl>
 
           <section>
-            <h4 className="bd-seccion">
+            <h4 className="db-section">
               <span>Viviendas</span>
               {mark && <UsesAssistant what="solo acepta viviendas de esta lista" />}
               {editor && (
@@ -243,7 +243,7 @@ function EstateCard({
 
           {(estate.equipment_list.length > 0 || editor) && (
             <section>
-              <h4 className="bd-seccion">
+              <h4 className="db-section">
                 <span>Equipos y quién los mantiene</span>
                 {mark && <UsesAssistant what="avisa al mantenedor del equipo antes que al profesional de la categoría" />}
                 {editor && (
@@ -253,7 +253,7 @@ function EstateCard({
                 )}
               </h4>
               {!estate.equipment_list.length && <span className="is-muted">Sin equipos registrados</span>}
-              <ul className="bd-filas">
+              <ul className="db-rows">
                 {estate.equipment_list.map((e) => {
                   const m = e.maintainer_id ? professionalById[e.maintainer_id] : undefined
                   const conditions = [e.contract && `contrato ${e.contract}`, e.warranty_until && `garantía hasta ${e.warranty_until}`]
@@ -261,11 +261,11 @@ function EstateCard({
                     .join(' · ')
                   return (
                     <li key={e.id}>
-                      <span className="bd-fila-clave">
+                      <span className="db-row-key">
                         {editor ? (
                           <button
                             type="button"
-                            className="bd-enlace"
+                            className="db-link"
                             onClick={() => editor.edit({ kind: 'equipment', estate, equipment: e })}
                             title="Editar o borrar el equipo"
                           >
@@ -276,13 +276,13 @@ function EstateCard({
                         )}
                       </span>
                       {m ? (
-                        <span className="bd-fila-valor">
+                        <span className="db-row-value">
                           <b>{m.name}</b>
                           <Contact channel={m.contact_channel} target={m.target} />
                           {conditions && <small className="is-muted"> · {conditions}</small>}
                         </span>
                       ) : (
-                        <span className="bd-fila-valor is-muted">Sin mantenedor: se avisa al profesional de la categoría</span>
+                        <span className="db-row-value is-muted">Sin mantenedor: se avisa al profesional de la categoría</span>
                       )}
                     </li>
                   )
@@ -292,34 +292,34 @@ function EstateCard({
           )}
 
           <section>
-            <h4 className="bd-seccion">
+            <h4 className="db-section">
               <span>Quién atiende cada avería</span>
               {mark && <UsesAssistant what="avisa a este profesional cuando es una reparación" />}
             </h4>
             {editor &&
               (estate.own_assignment ? (
-                <p className="bd-ayuda">
+                <p className="db-hint">
                   Esta finca fija sus propios profesionales en su configuración: lo que se asigne a{' '}
                   {estate.administrator} no le llega.
                 </p>
               ) : (
-                <p className="bd-ayuda">
+                <p className="db-hint">
                   Se guarda para todas las fincas de {estate.administrator}, como una versión nueva de su configuración.
                 </p>
               ))}
-            <ul className="bd-filas">
+            <ul className="db-rows">
               {categoriesOf(estate).map((c) => {
                 const p = byCategory[c] ? professionalById[byCategory[c]] : undefined
                 const active = identified && highlight?.category === c
                 return (
                   <li key={c} className={active ? 'is-match' : ''}>
-                    <span className="bd-fila-clave">{category(c)}</span>
+                    <span className="db-row-key">{category(c)}</span>
                     {editor && !estate.own_assignment ? (
-                      <span className="bd-fila-valor">
+                      <span className="db-row-value">
                         <Select
                           size="small"
                           allowClear
-                          className="bd-asignar"
+                          className="db-assign"
                           value={byCategory[c] ?? null}
                           placeholder="Sin profesional: para el administrador"
                           options={professionalOptions}
@@ -328,12 +328,12 @@ function EstateCard({
                         />
                       </span>
                     ) : p ? (
-                      <span className="bd-fila-valor">
+                      <span className="db-row-value">
                         <b>{p.name}</b>
                         <Contact channel={p.contact_channel} target={p.target} />
                       </span>
                     ) : (
-                      <span className="bd-fila-valor is-muted">Sin profesional: queda pendiente para el administrador</span>
+                      <span className="db-row-value is-muted">Sin profesional: queda pendiente para el administrador</span>
                     )}
                   </li>
                 )
@@ -343,28 +343,28 @@ function EstateCard({
 
           <section>
             <h4>Cómo se avisa según la urgencia</h4>
-            <ul className="bd-filas">
+            <ul className="db-rows">
               {rulesOf(estate).map((r) => {
                 const u = urgency(r.urgency)
                 return (
                   <li key={r.urgency}>
-                    <span className="bd-fila-clave">{u && <Tag color={u.color}>{u.text}</Tag>}</span>
-                    <span className="bd-fila-valor">
+                    <span className="db-row-key">{u && <Tag color={u.color}>{u.text}</Tag>}</span>
+                    <span className="db-row-value">
                       {capitalize(channel(r.channel))} {ruleTarget(r.target, catalog.professionalName)}
                     </span>
                   </li>
                 )
               })}
               <li>
-                <span className="bd-fila-clave">
+                <span className="db-row-key">
                   <Tag color="red">Emergencia</Tag>
                 </span>
                 {cfg.emergencies_enabled ? (
-                  <span className="bd-fila-valor">
+                  <span className="db-row-value">
                     Indicación de seguridad y llamada al teléfono oficial de la finca (simulada por ahora)
                   </span>
                 ) : (
-                  <span className="bd-fila-valor is-muted">Se trata como urgencia alta</span>
+                  <span className="db-row-value is-muted">Se trata como urgencia alta</span>
                 )}
               </li>
             </ul>
@@ -372,18 +372,18 @@ function EstateCard({
 
           <section>
             <h4>Comportamiento del asistente en esta finca</h4>
-            <ul className="bd-filas">
+            <ul className="db-rows">
               <li>
-                <span className="bd-fila-clave">Intentos para encontrar la finca</span>
-                <span className="bd-fila-valor">{String(cfg.estate_attempts)}</span>
+                <span className="db-row-key">Intentos para encontrar la finca</span>
+                <span className="db-row-value">{String(cfg.estate_attempts)}</span>
               </li>
               <li>
-                <span className="bd-fila-clave">Intentos para la vivienda</span>
-                <span className="bd-fila-valor">{String(cfg.home_attempts)}</span>
+                <span className="db-row-key">Intentos para la vivienda</span>
+                <span className="db-row-value">{String(cfg.home_attempts)}</span>
               </li>
               <li>
-                <span className="bd-fila-clave">Pide un detalle extra del problema</span>
-                <span className="bd-fila-valor">{cfg.ask_detail ? 'Sí' : 'No'}</span>
+                <span className="db-row-key">Pide un detalle extra del problema</span>
+                <span className="db-row-value">{cfg.ask_detail ? 'Sí' : 'No'}</span>
               </li>
             </ul>
           </section>
@@ -413,18 +413,18 @@ function ProfessionalCard({
   }, [assigned])
 
   return (
-    <article ref={ref} className={`bd-tarjeta bd-profesional ${assigned ? 'is-match' : ''}`}>
-      <div className="bd-cabecera is-estatica">
-        <span className="bd-titulo">
+    <article ref={ref} className={`db-tile db-professional ${assigned ? 'is-match' : ''}`}>
+      <div className="db-header is-static">
+        <span className="db-title">
           <b>{p.name}</b>
           <small>{p.administrator}</small>
         </span>
         {assigned ? (
-          <Tag color="blue" icon={<CheckCircleFilled />} className="bd-badge">
+          <Tag color="blue" icon={<CheckCircleFilled />} className="db-badge">
             Asignado
           </Tag>
         ) : (
-          <Tag className="bd-badge">{category(p.main_category)}</Tag>
+          <Tag className="db-badge">{category(p.main_category)}</Tag>
         )}
         {editor && (
           <Button
@@ -437,30 +437,30 @@ function ProfessionalCard({
           />
         )}
       </div>
-      <div className="bd-cuerpo">
-        <ul className="bd-filas">
+      <div className="db-body">
+        <ul className="db-rows">
           {assigned && (
             <li>
-              <span className="bd-fila-clave">Oficio</span>
-              <span className="bd-fila-valor">{category(p.main_category)}</span>
+              <span className="db-row-key">Oficio</span>
+              <span className="db-row-value">{category(p.main_category)}</span>
             </li>
           )}
           <li>
-            <span className="bd-fila-clave">
+            <span className="db-row-key">
               Se le avisa por{' '}
               {mark && (
-                <span className="bd-usa-icono" title="El asistente le avisa por este canal">
+                <span className="db-uses-icon" title="El asistente le avisa por este canal">
                   <RobotOutlined />
                 </span>
               )}
             </span>
-            <span className="bd-fila-valor">
+            <span className="db-row-value">
               <Contact channel={p.contact_channel} target={`${capitalize(channel(p.contact_channel))} · ${p.target}`} />
             </span>
           </li>
           <li>
-            <span className="bd-fila-clave">Atiende en</span>
-            <span className="bd-fila-valor">{estates.length ? estates.map((f) => f.address).join(' · ') : <span className="is-muted">Ninguna finca lo tiene asignado</span>}</span>
+            <span className="db-row-key">Atiende en</span>
+            <span className="db-row-value">{estates.length ? estates.map((f) => f.address).join(' · ') : <span className="is-muted">Ninguna finca lo tiene asignado</span>}</span>
           </li>
         </ul>
       </div>
@@ -575,8 +575,8 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
   const hasSearch = query.trim() !== ''
 
   return (
-    <div className={`bd bd-${mode}`}>
-      <div className="bd-herramientas">
+    <div className={`db bd-${mode}`}>
+      <div className="db-tools">
         <Segmented<Tab>
           value={tab}
           onChange={setTab}
@@ -591,7 +591,7 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
           placeholder={tab === 'estates' ? 'Buscar calle, vivienda (3º B)…' : 'Buscar nombre, oficio, finca…'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="bd-buscador"
+          className="db-search"
         />
         {editor && (
           <Button
@@ -608,7 +608,7 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
       </div>
 
       {mark && (
-        <p className="bd-leyenda">
+        <p className="db-legend">
           <RobotOutlined /> marca lo que el asistente consulta en cada llamada
           {editor ? ': lo que cambies se aplica desde la siguiente llamada.' : '.'}
         </p>
@@ -620,7 +620,7 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
         </Spin>
       ) : tab === 'estates' ? (
         estates.length ? (
-          <div className="bd-lista">
+          <div className="db-items">
             {estates.map((f) => (
               <EstateCard
                 key={f.id}
@@ -638,7 +638,7 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
           <Empty description={hasSearch ? 'Ninguna finca coincide con la búsqueda' : 'No hay fincas dadas de alta'} />
         )
       ) : professionals.length ? (
-        <div className="bd-lista">
+        <div className="db-items">
           {professionals.map((p) => (
             <ProfessionalCard
               key={p.id}

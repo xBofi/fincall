@@ -20,21 +20,21 @@ function steps(v: CallView): Step[] {
   const u = urgency(d.urgency)
   // Con ticket, el destino es el propio profesional: no se repite su nombre
   const target = d.notice_target && d.notice_target !== d.specialist_name ? ` a ${d.notice_target}` : ''
-  const notice = d.notice_channel ? `${d.specialist_name ?? 'Administrator'} · por ${channel(d.notice_channel)}${target}` : null
+  const notice = d.notice_channel ? `${d.specialist_name ?? 'Administrador'} · por ${channel(d.notice_channel)}${target}` : null
   return [
-    { title: 'Estate', value: d.estate_address, nodes: ['identify_estate', 'estate_not_identified'], note: d.estate_attempts ? `${d.estate_attempts} intento(s)` : null },
-    { title: 'Home', value: d.home_label, nodes: ['identify_home', 'home_not_identified'], note: d.home_attempts ? `${d.home_attempts} intento(s)` : null },
+    { title: 'Finca', value: d.estate_address, nodes: ['identify_estate', 'estate_not_identified'], note: d.estate_attempts ? `${d.estate_attempts} intento(s)` : null },
+    { title: 'Vivienda', value: d.home_label, nodes: ['identify_home', 'home_not_identified'], note: d.home_attempts ? `${d.home_attempts} intento(s)` : null },
     // El nombre no se pregunta (basta la vivienda): solo aparece si el vecino lo dijo
     ...(d.declared_name ? [{ title: 'Nombre del vecino', value: d.declared_name, nodes: [] }] : []),
     { title: 'Qué le ocurre', value: d.request, nodes: ['collect_request', 'ask_detail'] },
     { title: 'Tipo de avería', value: d.category ? category(d.category) : null, nodes: ['classify_problem'] },
     {
-      title: 'Urgency',
+      title: 'Urgencia',
       value: u ? (
         <>
           <Tag color={u.color}>{u.text}</Tag>
           {d.declared_urgency && d.declared_urgency !== d.urgency && (
-            <small className="ficha-nota">el vecino dijo «{urgency(d.declared_urgency)?.text}»</small>
+            <small className="card-note">el vecino dijo «{urgency(d.declared_urgency)?.text}»</small>
           )}
         </>
       ) : null,
@@ -45,7 +45,7 @@ function steps(v: CallView): Step[] {
       ? [{ title: 'Indicación de seguridad', value: d.emergency_handled ? 'Dada · emergencia registrada' : null, nodes: ['handle_emergency'] }]
       : []),
     { title: 'Resumen confirmado', value: d.confirmed ? 'Sí, el vecino lo confirmó' : null, nodes: ['confirm_summary'] },
-    { title: 'Incident', value: d.incident_id ? `Creada · ref. ${d.incident_id}` : null, nodes: ['validate_data', 'create_ticket'] },
+    { title: 'Incidencia', value: d.incident_id ? `Creada · ref. ${d.incident_id}` : null, nodes: ['validate_data', 'create_ticket'] },
     { title: 'Aviso (simulado)', value: notice, nodes: ['assign_specialist', 'notify_channel'], note: d.suggestion },
   ]
 }
@@ -59,14 +59,14 @@ function stateOf(p: Step, v: CallView): State {
 const ICON: Record<State, ReactNode> = {
   done: <CheckCircleFilled />,
   now: <LoadingOutlined />,
-  pending: <span className="ficha-punto" />,
-  skipped: <span className="ficha-punto" />,
+  pending: <span className="card-dot" />,
+  skipped: <span className="card-dot" />,
 }
 
 export function CallCard({ view }: { view: CallView | null }) {
   if (!view) {
     return (
-      <div className="ficha-vacia">
+      <div className="card-empty">
         <p>Aquí verás, en tiempo real, lo que el asistente va entendiendo:</p>
         <ol>
           <li>la finca y la vivienda desde la que llaman,</li>
@@ -83,10 +83,10 @@ export function CallCard({ view }: { view: CallView | null }) {
   const r = result(view.data.result)
 
   return (
-    <div className="ficha">
+    <div className="card">
       {r && view.finished && (
-        <div className={`ficha-resultado is-${r.tone}`}>
-          {r.tone === 'bien' ? <CheckCircleFilled /> : r.tone === 'review' ? <ExclamationCircleFilled /> : <InfoCircleFilled />}
+        <div className={`card-result is-${r.tone}`}>
+          {r.tone === 'good' ? <CheckCircleFilled /> : r.tone === 'review' ? <ExclamationCircleFilled /> : <InfoCircleFilled />}
           <div>
             <b>{r.short}</b>
             <p>{r.long}</p>
@@ -94,19 +94,19 @@ export function CallCard({ view }: { view: CallView | null }) {
         </div>
       )}
 
-      <ol className="ficha-pasos">
+      <ol className="card-steps">
         {items.map((p) => {
           const e = stateOf(p, view)
           return (
             <li key={p.title} className={`is-${e}`}>
-              <span className="ficha-icono">{ICON[e]}</span>
+              <span className="card-icon">{ICON[e]}</span>
               <div>
-                <span className="ficha-titulo">
+                <span className="card-title">
                   {p.title}
                   {e === 'now' && <em>preguntando ahora</em>}
                 </span>
-                <span className="ficha-valor">{p.value ?? (e === 'skipped' ? 'No se llegó a este paso' : 'Pendiente')}</span>
-                {p.note && <small className="ficha-nota">{p.note}</small>}
+                <span className="card-value">{p.value ?? (e === 'skipped' ? 'No se llegó a este paso' : 'Pendiente')}</span>
+                {p.note && <small className="card-note">{p.note}</small>}
               </div>
             </li>
           )
@@ -114,7 +114,7 @@ export function CallCard({ view }: { view: CallView | null }) {
       </ol>
 
       {view.data.summary && (
-        <div className="ficha-resumen">
+        <div className="card-summary">
           <span>Resumen que se envía</span>
           <p>{view.data.summary}</p>
         </div>
@@ -123,7 +123,7 @@ export function CallCard({ view }: { view: CallView | null }) {
       <Collapse
         size="small"
         ghost
-        className="ficha-tecnico"
+        className="card-technical"
         items={[
           {
             key: 'technical',

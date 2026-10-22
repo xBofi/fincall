@@ -45,7 +45,7 @@ export function Login() {
       <section className="ops-login-card" aria-labelledby="titulo-acceso">
         <div className="ops-brand">
           <Logo withName />
-          <div className="ops-brand-producto">
+          <div className="ops-brand-product">
             <h1 id="titulo-acceso">Centro operativo</h1>
           </div>
         </div>
@@ -54,11 +54,11 @@ export function Login() {
           <Alert type="error" showIcon message="No se ha podido completar el inicio de sesión. Vuelve a intentarlo." style={{ marginBottom: 16 }} />
         )}
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
-        {providers === null && !error && <Spin className="ops-cargando" />}
+        {providers === null && !error && <Spin className="ops-loading" />}
         {providers?.length === 0 && (
           <Alert type="warning" showIcon message="El inicio de sesión no está configurado en el servidor." />
         )}
-        <div className="ops-login-proveedores">
+        <div className="ops-login-providers">
           {providers?.map((p) => {
             const Icon = ICONS[p.id]
             return (

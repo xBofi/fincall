@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     vertex_credentials: str = ""
     vertex_timeout_s: float = 20.0
 
-    # STT por lotes en servidor: "ninguno" (el navegador transcribe) | "whisper" (faster-whisper local)
-    stt: str = "ninguno"
+    # STT por lotes en servidor: "none" (el navegador transcribe) | "whisper" (faster-whisper local)
+    stt: str = "none"
     whisper_model: str = "small"
     whisper_device: str = "auto"  # auto | cuda | cpu
     whisper_compute: str = "auto"  # auto | int8 | float16 | int8_float16
@@ -84,14 +84,14 @@ class Settings(BaseSettings):
     # Telefonía real (proveedor Pendiente en la bóveda; Twilio es la primera implementación).
     # Cuando haya número: BC_TELEPHONY=twilio, BC_PUBLIC_URL=https://... (túnel o dominio),
     # credenciales de Twilio y `python -m building_call.telephony.configure`.
-    telephony: str = "ninguna"  # ninguna | twilio
+    telephony: str = "none"  # none | twilio
     public_url: str = ""
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_number: str = ""  # E.164, p. ej. +34912345678
     telephony_bargein_words: int = 2
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
-    tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | ninguno
+    tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
     # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).
     elevenlabs_api_key: str = ""
     elevenlabs_voice: str = ""  # voice ID, no el nombre

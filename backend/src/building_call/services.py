@@ -250,7 +250,7 @@ class CallManager:
                 llm_calls=int(timings.get("llm_calls", 0)),
                 graph_ms=graph_ms,
                 server_ms=server_ms,
-                interpretation_origin=timings.get("interpretation_origin", "ninguna"),
+                interpretation_origin=timings.get("interpretation_origin", "none"),
             )
         )
         notices = list(fresh.get("turn_notices", []))

@@ -30,7 +30,7 @@ class VoiceRecognizer(Protocol):
 
 
 class UnavailableRecognizer:
-    name = "ninguno"
+    name = "none"
 
     def available(self) -> bool:
         return False

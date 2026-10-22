@@ -194,7 +194,7 @@ export function CatalogEditing({ editing, catalog, onClose, onDone, onDeleteProf
       onCancel={onClose}
       destroyOnHidden
       footer={
-        <div className="bd-modal-pie">
+        <div className="db-modal-footer">
           {existing ? (
             <Popconfirm
               title={`¿Borrar ${editing.kind === 'professional' ? 'este profesional' : `esta ${editing.kind === 'equipment' ? 'instalación' : editing.kind}`}?`}
@@ -224,7 +224,7 @@ export function CatalogEditing({ editing, catalog, onClose, onDone, onDeleteProf
         {editing.kind === 'estate' && (
           <>
             {!editing.estate && (
-              <Form.Item name="administrator_id" label="Administrator" rules={[{ required: true, message: 'Elige el administrador' }]}>
+              <Form.Item name="administrator_id" label="Administrador" rules={[{ required: true, message: 'Elige el administrador' }]}>
                 <Select options={adminOptions} placeholder="Quién administra la finca" />
               </Form.Item>
             )}
@@ -268,7 +268,7 @@ export function CatalogEditing({ editing, catalog, onClose, onDone, onDeleteProf
                 <Input placeholder="B" />
               </Form.Item>
             </Space.Compact>
-            <p className="bd-ayuda">El asistente solo acepta viviendas de esta lista cuando el vecino dice «3º B».</p>
+            <p className="db-hint">El asistente solo acepta viviendas de esta lista cuando el vecino dice «3º B».</p>
           </>
         )}
 
@@ -321,7 +321,7 @@ export function CatalogEditing({ editing, catalog, onClose, onDone, onDeleteProf
         {editing.kind === 'professional' && (
           <>
             {!editing.professional && (
-              <Form.Item name="administrator_id" label="Administrator" rules={[{ required: true, message: 'Elige el administrador' }]}>
+              <Form.Item name="administrator_id" label="Administrador" rules={[{ required: true, message: 'Elige el administrador' }]}>
                 <Select options={adminOptions} placeholder="Para qué administrador trabaja" />
               </Form.Item>
             )}
@@ -344,7 +344,7 @@ export function CatalogEditing({ editing, catalog, onClose, onDone, onDeleteProf
               <Select
                 options={[
                   { value: 'email', label: 'Correo' },
-                  { value: 'call', label: 'Call' },
+                  { value: 'call', label: 'Llamada' },
                 ]}
               />
             </Form.Item>

@@ -66,7 +66,7 @@ export function PendingAccess({
         </p>
       </section>
 
-      <ol className="landing-pasos">
+      <ol className="landing-steps">
         {STEPS.map((p, i) => (
           <li key={p.title}>
             <span className="landing-num">{String(i + 1).padStart(2, '0')}</span>
@@ -76,7 +76,7 @@ export function PendingAccess({
         ))}
       </ol>
 
-      <section className={`landing-acceso is-${user.access_state}`} aria-live="polite">
+      <section className={`landing-access is-${user.access_state}`} aria-live="polite">
         {user.access_state === 'not_requested' && (
           <>
             <div>
@@ -89,7 +89,7 @@ export function PendingAccess({
           </>
         )}
         {user.access_state === 'requested' && (
-          <div className="landing-estado">
+          <div className="landing-state">
             <ClockCircleOutlined />
             <div>
               <h2>Solicitud enviada</h2>
@@ -98,7 +98,7 @@ export function PendingAccess({
           </div>
         )}
         {user.access_state === 'denied' && (
-          <div className="landing-estado">
+          <div className="landing-state">
             <StopOutlined />
             <div>
               <h2>Acceso no concedido</h2>

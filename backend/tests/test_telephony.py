@@ -221,7 +221,7 @@ async def client(deps: Dependencies, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(global_settings, "public_url", "https://bot.example")
     monkeypatch.setattr(global_settings, "twilio_account_sid", "AC1")
     monkeypatch.setattr(global_settings, "twilio_auth_token", "tok")
-    monkeypatch.setattr(global_settings, "tts", "ninguno")
+    monkeypatch.setattr(global_settings, "tts", "none")
     app = create_app(deps, streaming_factory=lambda _t, _v: FakeStt())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as c:
         yield c

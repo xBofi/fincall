@@ -78,7 +78,7 @@ class _Cache:
 
 
 class UnavailableSynthesizer:
-    name = "ninguno"
+    name = "none"
     rate = 16000
 
     def available(self) -> bool:

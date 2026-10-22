@@ -62,28 +62,28 @@ export function StatePanel({ view }: { view: CallView | null }) {
       />
 
       <Descriptions size="small" column={1} bordered title="Extracción y decisiones">
-        <Descriptions.Item label="Estate">
+        <Descriptions.Item label="Finca">
           {value(d.estate_address)} {d.estate_attempts ? <Tag>intentos: {d.estate_attempts}</Tag> : null}
         </Descriptions.Item>
-        <Descriptions.Item label="Home">
+        <Descriptions.Item label="Vivienda">
           {value(d.home_label)} {d.home_attempts ? <Tag>intentos: {d.home_attempts}</Tag> : null}
         </Descriptions.Item>
         <Descriptions.Item label="Nombre">{value(d.declared_name)}</Descriptions.Item>
         <Descriptions.Item label="Solicitud">{value(d.request)}</Descriptions.Item>
-        <Descriptions.Item label="Summary">{value(d.summary)}</Descriptions.Item>
+        <Descriptions.Item label="Resumen">{value(d.summary)}</Descriptions.Item>
         <Descriptions.Item label="Categoría">{value(d.category)}</Descriptions.Item>
-        <Descriptions.Item label="Urgency">
+        <Descriptions.Item label="Urgencia">
           {d.urgency ? <Tag color={URGENCY_COLOR[d.urgency]}>{d.urgency}</Tag> : '—'}
           {d.declared_urgency && d.declared_urgency !== d.urgency && (
             <Typography.Text type="secondary"> (declarada: {d.declared_urgency})</Typography.Text>
           )}
         </Descriptions.Item>
         <Descriptions.Item label="Confirmado">{value(d.confirmed)}</Descriptions.Item>
-        <Descriptions.Item label="Specialist">{value(d.specialist_name)}</Descriptions.Item>
+        <Descriptions.Item label="Especialista">{value(d.specialist_name)}</Descriptions.Item>
         <Descriptions.Item label="Aviso">
           {d.notice_channel ? `${d.notice_channel} → ${value(d.notice_target)}` : '—'}
         </Descriptions.Item>
-        <Descriptions.Item label="Incident">{value(d.incident_id)}</Descriptions.Item>
+        <Descriptions.Item label="Incidencia">{value(d.incident_id)}</Descriptions.Item>
         <Descriptions.Item label="Config. aplicada">{value(d.config_id)}</Descriptions.Item>
       </Descriptions>
 

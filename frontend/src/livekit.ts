@@ -1,6 +1,6 @@
 /**
  * Voz por LiveKit: la consola entra en una sala con el micrófono y el agente de voz del servidor
- * (`building_call.voice.agent`) escucha, habla e informa del ledger de entrega. La consola solo
+ * (`building_call.voz.agente`) escucha, habla e informa del ledger de entrega. La consola solo
  * muestra el estado de la llamada, que sigue en la API.
  */
 import { Room, RoomEvent, Track } from 'livekit-client'

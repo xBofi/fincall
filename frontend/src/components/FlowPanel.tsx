@@ -53,8 +53,8 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
   }
 
   return (
-    <div className="flujo-plantilla">
-      <div className="flujo-plantilla-cab">
+    <div className="flow-template">
+      <div className="flow-template-head">
         <Text strong>{template.description}</Text>
         {template.overridden && <Tag color="gold">editada · v{template.version}</Tag>}
       </div>
@@ -64,11 +64,11 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
         autoSize={{ minRows: 2, maxRows: 6 }}
         spellCheck
       />
-      <div className="flujo-plantilla-pie">
+      <div className="flow-template-footer">
         <Space size={4} wrap>
           {template.variables.map((v) => (
             <Tooltip key={v} title="Dato que rellena el nodo. Tiene que seguir apareciendo.">
-              <Tag className="flujo-var">{'{' + v + '}'}</Tag>
+              <Tag className="flow-var">{'{' + v + '}'}</Tag>
             </Tooltip>
           ))}
           {template.question && (
@@ -138,8 +138,8 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
   const { boxes, strokes, end, finals, repeated, exitsLabel, width, high } = layout
 
   return (
-    <div className="flujo">
-      <div className="flujo-lienzo">
+    <div className="flow">
+      <div className="flow-canvas">
         <div className="ops-panel-heading">
           <div>
             <p className="ops-eyebrow">Flujo del asistente · {graph.nodes.length} bloques</p>
@@ -157,7 +157,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
           />
         )}
 
-        <div className="flujo-scroll">
+        <div className="flow-scroll">
           <svg viewBox={`0 0 ${width} ${high}`} style={{ width: `min(100%, ${Math.round(width * 1.3)}px)`, minWidth: width }} role="img" aria-label="Grafo del flujo de llamada">
             <defs>
               {(['normal', 'active'] as const).map((t) => (
@@ -168,7 +168,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
             </defs>
 
             {exitsLabel && (
-              <text className="flujo-rotulo" x={exitsLabel.x} y={exitsLabel.y}>
+              <text className="flow-caption" x={exitsLabel.x} y={exitsLabel.y}>
                 Desde cualquier pregunta
               </text>
             )}
@@ -176,12 +176,12 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
             {strokes.map((t) => {
               const active = selection !== null && (t.origin === selection || t.target === selection)
               if (t.activeOnly && !active) return null
-              const punta = `url(#punta-${active ? 'active' : 'normal'})`
+              const punta = `url(#punta-${active ? 'activa' : 'normal'})`
               return (
                 <path
                   key={t.key}
                   d={t.d}
-                  className={`flujo-arista ${active ? 'is-activa' : ''} ${t.times === 0 ? 'is-fria' : ''}`}
+                  className={`flow-edge ${active ? 'is-active' : ''} ${t.times === 0 ? 'is-cold' : ''}`}
                   strokeWidth={1.25 + (t.times / maxTimes) * 2.25}
                   markerEnd={t.final ? punta : undefined}
                   markerStart={t.start ? punta : undefined}
@@ -192,7 +192,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
             })}
 
             {finals.map((f) => (
-              <g key={`fin-${f.origin}`} className={`flujo-fin-marca ${f.origin === selection ? 'is-activa' : ''}`}>
+              <g key={`fin-${f.origin}`} className={`flow-end-brand ${f.origin === selection ? 'is-active' : ''}`}>
                 <path d={`M ${f.x - 16} ${f.y} L ${f.x - 5} ${f.y}`} />
                 <circle cx={f.x} cy={f.y} r={4.5} />
                 <title>Termina la llamada</title>
@@ -200,7 +200,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
             ))}
 
             {end && (
-              <g className="flujo-fin" transform={`translate(${end.x - 66},${end.y - 11})`}>
+              <g className="flow-end" transform={`translate(${end.x - 66},${end.y - 11})`}>
                 <rect width={132} height={24} rx={12} />
                 <text x={66} y={16} textAnchor="middle">Fin de la llamada</text>
               </g>
@@ -212,21 +212,21 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
                 <g
                   key={n.id}
                   transform={`translate(${c.x},${c.y})`}
-                  className={`flujo-nodo ${c.column === 'axis' ? 'is-eje' : ''} ${selection === n.id ? 'is-sel' : ''}`}
+                  className={`flow-node ${c.column === 'axis' ? 'is-axis' : ''} ${selection === n.id ? 'is-sel' : ''}`}
                   onClick={() => setSelection(n.id)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelection(n.id) }}
                 >
                   <rect width={c.width} height={c.high} rx={9} style={{ stroke: TYPE_COLOR[n.kind] }} />
-                  <text className="flujo-nodo-titulo" x={12} y={21}>{n.title}</text>
-                  <text className="flujo-nodo-meta" x={12} y={38}>
+                  <text className="flow-node-title" x={12} y={21}>{n.title}</text>
+                  <text className="flow-node-meta" x={12} y={38}>
                     {TYPE_LABEL[n.kind]}
                     {n.uses_llm ? ' · modelo' : ''}
                     {c.column === 'output' ? ` · desde ${c.origins} pasos` : ''}
                   </text>
                   {c.column === 'axis' && (
-                    <text className="flujo-eje-texto" x={12} y={64}>
+                    <text className="flow-axis-text" x={12} y={64}>
                       {['Reparte las preguntas:', 'salta a lo primero que', 'aún falte. Todos los', 'pasos vuelven aquí.'].map((l, i) => (
                         <tspan key={l} x={12} dy={i === 0 ? 0 : 16}>{l}</tspan>
                       ))}
@@ -234,7 +234,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
                   )}
                   {repeated.has(n.id) && (
                     // En la línea de la meta, que siempre es corta: en la del título lo pisan los nombres largos.
-                    <text className="flujo-repite" x={c.width - 14} y={39} textAnchor="middle">
+                    <text className="flow-repeats" x={c.width - 14} y={39} textAnchor="middle">
                       ↻<title>Puede repetir la pregunta si no entiende la respuesta</title>
                     </text>
                   )}
@@ -245,18 +245,18 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
           </svg>
         </div>
 
-        <div className="flujo-leyenda">
+        <div className="flow-legend">
           {Object.entries(TYPE_LABEL).map(([kind, label]) => (
             <span key={kind}><i style={{ background: TYPE_COLOR[kind] }} />{label}</span>
           ))}
           <span><i style={{ background: 'var(--flujo-llm)', borderRadius: '50%' }} />Puede llamar al modelo</span>
           <span>↻ Puede repetir la pregunta</span>
-          <span><i className="flujo-leyenda-fin" />Termina la llamada</span>
+          <span><i className="flow-legend-end" />Termina la llamada</span>
           <span>Grosor = veces recorrida · punteado = aún no recorrida</span>
         </div>
       </div>
 
-      <aside className="flujo-detalle">
+      <aside className="flow-detail">
         {node === null ? <Empty description="Elige un bloque" /> : (
           <>
             <div className="ops-panel-heading">
@@ -269,7 +269,7 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
 
             {node.deterministic_paths.length > 0 && (
               <Card size="small" title={<><ThunderboltOutlined /> Se resuelve sin modelo</>}>
-                <Paragraph type="secondary" className="flujo-nota">
+                <Paragraph type="secondary" className="flow-note">
                   Estos casos no necesitan el modelo de lenguaje: el asistente responde al instante.
                   Editar un texto no cambia cómo se entienden.
                 </Paragraph>
@@ -281,19 +281,19 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
 
             {node.effects.length > 0 && (
               <Card size="small" title="Efectos">
-                <ul className="flujo-lista">{node.effects.map((e) => <li key={e}>{e}</li>)}</ul>
+                <ul className="flow-items">{node.effects.map((e) => <li key={e}>{e}</li>)}</ul>
               </Card>
             )}
 
             <Card size="small" title="A dónde puede ir">
-              <ul className="flujo-lista">
+              <ul className="flow-items">
                 {exits.map((a) => (
                   <li key={a.target}>
-                    <button className="flujo-salto" onClick={() => boxes.has(a.target) && setSelection(a.target)}>
+                    <button className="flow-jump" onClick={() => boxes.has(a.target) && setSelection(a.target)}>
                       {graph.nodes.find((n) => n.id === a.target)?.title ?? 'Fin de la llamada'}
                     </button>
-                    <span className="flujo-cond"> — {a.condition}</span>
-                    {a.times > 0 && <Tag className="flujo-veces">{a.times}</Tag>}
+                    <span className="flow-cond"> — {a.condition}</span>
+                    {a.times > 0 && <Tag className="flow-times">{a.times}</Tag>}
                   </li>
                 ))}
               </ul>
@@ -305,9 +305,9 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
                 : isOwner
                   ? suyas.map((p) => <TemplateEditor key={`${p.id}:${p.version}`} template={p} onUpdate={() => void load()} />)
                   : suyas.map((p) => (
-                      <div key={p.id} className="flujo-plantilla">
+                      <div key={p.id} className="flow-template">
                         <Text strong>{p.description}</Text>
-                        <Paragraph className="flujo-texto-plano">{p.text}</Paragraph>
+                        <Paragraph className="flow-text-plain">{p.text}</Paragraph>
                       </div>
                     ))}
               {!isOwner && suyas.length > 0 && (
@@ -317,13 +317,13 @@ export function FlowPanel({ isOwner }: { isOwner: boolean }) {
 
             {prompts && (
               <Card size="small" title={<><RobotOutlined /> Instrucciones del modelo de lenguaje</>}>
-                <Alert type="info" showIcon message={prompts.reason} className="flujo-nota" />
+                <Alert type="info" showIcon message={prompts.reason} className="flow-note" />
                 {prompts.prompts.map((p) => (
-                  <details key={p.id} className="flujo-prompt">
+                  <details key={p.id} className="flow-prompt">
                     <summary>{p.title} <Tag>{p.version}</Tag></summary>
-                    <Paragraph type="secondary" className="flujo-nota">{p.when}</Paragraph>
-                    <pre className="flujo-prompt-texto">{p.text}</pre>
-                    <ul className="flujo-lista">{p.contract.map((c) => <li key={c}>{c}</li>)}</ul>
+                    <Paragraph type="secondary" className="flow-note">{p.when}</Paragraph>
+                    <pre className="flow-prompt-text">{p.text}</pre>
+                    <ul className="flow-items">{p.contract.map((c) => <li key={c}>{c}</li>)}</ul>
                   </details>
                 ))}
               </Card>

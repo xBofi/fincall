@@ -10,7 +10,7 @@ const STATE: Record<UserAccessState, { text: string; color: string }> = {
   granted: { text: 'con acceso', color: 'green' },
   requested: { text: 'solicita acceso', color: 'gold' },
   not_requested: { text: 'no ha solicitado', color: 'default' },
-  denied: { text: 'denied', color: 'red' },
+  denied: { text: 'denegado', color: 'red' },
 }
 
 /** Quién puede entrar en la consola: rol, activación y baja. Solo owner. */
@@ -85,13 +85,13 @@ export function UserManagement({ me }: { me: ConsoleUser }) {
             ),
           },
           {
-            title: 'Access',
+            title: 'Acceso',
             dataIndex: 'access_state',
             width: 150,
             render: (state: UserAccessState) => <Tag color={STATE[state].color}>{STATE[state].text}</Tag>,
           },
           {
-            title: 'Role',
+            title: 'Rol',
             dataIndex: 'role',
             width: 190,
             render: (role: Role, u) =>

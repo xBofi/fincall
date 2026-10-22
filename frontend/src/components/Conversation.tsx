@@ -50,7 +50,7 @@ export function Conversation({ history, partial, voiceState, busy, finished, han
       </div>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
         {history.map((t, i) => (
-          <div key={i} className={`burbuja ${t.role}`}>
+          <div key={i} className={`bubble ${t.role}`}>
             <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
               {t.role === 'bot' ? 'Asistente' : 'Vecino'}
             </Typography.Text>
@@ -58,7 +58,7 @@ export function Conversation({ history, partial, voiceState, busy, finished, han
           </div>
         ))}
         {partial && (
-          <div className="burbuja vecino" style={{ opacity: 0.6 }}>
+          <div className="bubble caller" style={{ opacity: 0.6 }}>
             <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
               Vecino (transcribiendo)
             </Typography.Text>

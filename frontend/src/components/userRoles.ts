@@ -2,7 +2,7 @@ import { ApiError, type Role } from '../api'
 
 export const ROLES: { value: Role; label: string; hint: string }[] = [
   { value: 'owner', label: 'Propietario', hint: 'Todo, incluida la gestión de usuarios' },
-  { value: 'administrator', label: 'Administrator', hint: 'Expedientes, grabaciones y auditoría' },
+  { value: 'administrator', label: 'Administrador', hint: 'Expedientes, grabaciones y auditoría' },
   { value: 'quality', label: 'Calidad', hint: 'Expedientes y grabaciones' },
 ]
 

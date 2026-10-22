@@ -179,7 +179,7 @@ export function layOut(g: Graph): Layout {
   const repeated = new Set<string>()
   const axis = boxes.get(utterance)
   const title = (a: GraphEdge) =>
-    `${a.origin} → ${a.target}\n${a.condition}\nRecorrida ${a.times} ${a.times === 1 ? 'vez' : 'times'}`
+    `${a.origin} → ${a.target}\n${a.condition}\nRecorrida ${a.times} ${a.times === 1 ? 'vez' : 'veces'}`
 
   // Eje ↔ principal: una sola línea por paso, con punta en cada sentido que exista
   if (axis) {

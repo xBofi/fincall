@@ -59,7 +59,7 @@ const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
 
 type SttMode = 'browser' | 'server' | 'streaming' | 'livekit'
-type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flujo' | 'latency' | 'users' | 'requests'
+type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | 'users' | 'requests'
 
 /** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
 /** El barge-in (cortar al bot cuando el vecino habla) está siempre activo en la consola. */
@@ -495,7 +495,7 @@ export default function App() {
   const managesIncidents = isOwner || me.role === 'administrator'
   const screenOptions: { label: React.ReactNode; value: Screen }[] = [
     { label: 'Simular llamada', value: 'simulate' },
-    { label: 'History', value: 'history' },
+    { label: 'Historial', value: 'history' },
     ...(managesIncidents
       ? [
           {
@@ -509,7 +509,7 @@ export default function App() {
         ]
       : []),
     { label: 'Fincas y profesionales', value: 'data' },
-    { label: 'Flujo', value: 'flujo' },
+    { label: 'Flujo', value: 'flow' },
     { label: 'Rendimiento', value: 'latency' },
     ...(isOwner
       ? [
@@ -528,7 +528,7 @@ export default function App() {
 
   const inProgress = !!view && !view.finished
   const voiceSettings = (
-    <div className="sim-ajustes">
+    <div className="sim-settings">
       <label>
         <span>
           <b>Voz del asistente</b>
@@ -570,22 +570,22 @@ export default function App() {
   )
 
   return (
-      <main className={`ops-shell ${screen === 'simulate' ? 'is-fija' : ''}`}>
+      <main className={`ops-shell ${screen === 'simulate' ? 'is-fixed' : ''}`}>
         <header className="ops-topbar">
           <div className="ops-brand">
             <Logo withName />
-            <div className="ops-brand-producto">
+            <div className="ops-brand-product">
               <h1>Asistente de incidencias</h1>
               <div className="ops-system">
                 <Tooltip title={health?.model_available ? 'El asistente puede atender llamadas' : 'El modelo de lenguaje no responde'}>
-                  <span className="ops-estado">
+                  <span className="ops-state">
                     <span className={`ops-signal ${health?.model_available ? 'is-online' : ''}`} />
                     {health?.model_available ? 'Asistente disponible' : 'Asistente no disponible'}
                   </span>
                 </Tooltip>
                 {tel && (
                   <Tooltip title={tel.items ? `Teléfono ${tel.number ?? ''}` : 'Pendiente de contratar el número. Mientras tanto, las llamadas se simulan desde esta consola.'}>
-                    <span className="ops-estado">
+                    <span className="ops-state">
                       <span className={`ops-signal ${tel.items ? 'is-online' : ''}`} />
                       {tel.items ? `Línea ${tel.number ?? 'active'}` : 'Línea telefónica pendiente'}
                     </span>
@@ -605,7 +605,7 @@ export default function App() {
             }}
           >
             <Tooltip title={me.name ?? me.username} placement="left">
-              <Button className="ops-usuario" icon={<UserOutlined />}><span>{me.name ?? me.username}</span></Button>
+              <Button className="ops-user" icon={<UserOutlined />}><span>{me.name ?? me.username}</span></Button>
             </Tooltip>
           </Dropdown>
         </header>
@@ -614,13 +614,13 @@ export default function App() {
 
         {screen === 'simulate' && (
           <section className="sim">
-            <section className="sim-col sim-llamada" aria-label="Call">
+            <section className="sim-col sim-call" aria-label="Llamada">
               <div className="ops-panel-heading">
                 <div>
                   <p className="ops-eyebrow">Llamada simulada</p>
                   <h2>{inProgress ? 'En curso' : view?.finished ? 'Llamada terminada' : 'Línea libre'}</h2>
                 </div>
-                <div className="sim-acciones">
+                <div className="sim-actions">
                   <Popover content={voiceSettings} title="Ajustes de voz" trigger="click" placement="bottomRight">
                     <Button icon={<SettingOutlined />} title="Ajustes de voz" />
                   </Popover>
@@ -633,11 +633,11 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <div className="sim-conversacion">
+              <div className="sim-conversation">
                 {view ? (
                   <Conversation history={view.history} partial={partial} voiceState={voiceState} busy={busy} finished={view.finished} handsFree={handsFree} onSend={sendText} onListen={() => void listen()} />
                 ) : (
-                  <div className="sim-bienvenida">
+                  <div className="sim-welcome">
                     <p className="sim-intro">
                       Haz de vecino: pulsa <b>Iniciar llamada</b> y habla con el micrófono, o escribe lo que diría.
                       Las direcciones y viviendas que existen están en <b>Fincas y profesionales</b>.
@@ -645,7 +645,7 @@ export default function App() {
                     <Button type="primary" size="large" icon={<PhoneOutlined />} onClick={() => void begin()} loading={busy}>
                       Iniciar llamada
                     </Button>
-                    <div className="sim-capacidades">
+                    <div className="sim-capabilities">
                       <div>
                         <h3>Qué hace el asistente</h3>
                         <ul>{CAN.map((t) => <li key={t}><CheckOutlined className="is-good" />{t}</li>)}</ul>
@@ -655,13 +655,13 @@ export default function App() {
                         <ul>{CANNOT.map((t) => <li key={t}><CloseOutlined className="is-review" />{t}</li>)}</ul>
                       </div>
                     </div>
-                    <small className="sim-pie">En esta demostración los avisos a profesionales y administradores se simulan: no se envía ningún correo ni llamada.</small>
+                    <small className="sim-footer">En esta demostración los avisos a profesionales y administradores se simulan: no se envía ningún correo ni llamada.</small>
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="sim-col sim-ficha" aria-label="Lo que ha entendido el asistente">
+            <section className="sim-col sim-card" aria-label="Lo que ha entendido el asistente">
               <div className="ops-panel-heading">
                 <div>
                   <p className="ops-eyebrow">En tiempo real</p>
@@ -671,7 +671,7 @@ export default function App() {
               <CallCard view={view} />
             </section>
 
-            <section className="sim-col sim-datos" aria-label="Fincas y profesionales">
+            <section className="sim-col sim-data" aria-label="Fincas y profesionales">
               <div className="ops-panel-heading">
                 <div>
                   <p className="ops-eyebrow">Para comprobar</p>
@@ -708,7 +708,7 @@ export default function App() {
           </section>
         )}
 
-        <Suspense fallback={<Spin className="ops-cargando" />}>
+        <Suspense fallback={<Spin className="ops-loading" />}>
         {screen === 'inbox' && managesIncidents && (
           <Inbox catalog={catalog} canAct={managesIncidents} onPending={setInboxPending} />
         )}
@@ -721,7 +721,7 @@ export default function App() {
           <section className="ops-single"><AccessRequests onUpdate={() => void refreshOperations()} /></section>
         )}
 
-        {screen === 'flujo' && (
+        {screen === 'flow' && (
           <section className="ops-single"><FlowPanel isOwner={isOwner} /></section>
         )}
 
