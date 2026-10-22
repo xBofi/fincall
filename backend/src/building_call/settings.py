@@ -115,6 +115,28 @@ class Settings(BaseSettings):
     livekit_url_consola: str = ""
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
+    # Nombre con el que se registra el agente y que piden las salas en su despacho. Otro nombre
+    # permite tener un segundo agente (pruebas, banco) en el mismo LiveKit sin quitarle salas
+    livekit_agente: str = "fincall"
+    # Turnos del agente de LiveKit (ver `building_call.voz.agente`). Silencio de fin de turno de
+    # Universal-3 Pro: con frase acabada cierra tras el mínimo; si no, espera hasta el máximo.
+    # Medido 2026-10-22 (frases del banco de voz, AssemblyAI EU): con 220 ms partía en dos 6 de
+    # 32 frases en la pausa de una coma ("Sí. / Es correcto."); con 300 ms, 1 de 32, a cambio de
+    # ~90 ms más de mediana. El camino WebSocket sigue con assemblyai_eot_silencio_ms.
+    livekit_stt_silencio_min_ms: int = 300
+    livekit_stt_silencio_max_ms: int = 800
+    # Pasar a AssemblyAI lo último que dijo el bot (agent_context de Universal-3 Pro). Medido
+    # 2026-10-22: con contexto cierra antes el turno tras "Sí." o "No." (3 de 32 frases partidas
+    # frente a 1 de 32), así que va apagado
+    livekit_stt_contexto: bool = False
+    # Silencio con el que el VAD (silero) da por acabada la voz. Bastante menor que el mínimo de
+    # AssemblyAI para saber, al cerrar AssemblyAI un turno, si el vecino ya ha vuelto a hablar. Con
+    # 0,25 s el VAD seguía "oyendo" el final de la frase al cerrarse el turno y se retenían turnos
+    # completos 1,2 s (medido 2026-10-22)
+    livekit_vad_silencio_s: float = 0.15
+    livekit_fin_turno_min_s: float = 0.0  # espera de LiveKit tras el fin de turno de AssemblyAI
+    livekit_interrupcion_min_s: float = 0.5  # voz mínima del vecino para cortar al bot
+    livekit_interrupcion_min_palabras: int = 0  # palabras mínimas para cortar al bot
     # El agente entra en la API con este secreto (cabecera Authorization: Bearer). Vacío = no
     agente_secreto: str = ""
     agente_api_url: str = "http://127.0.0.1:8000"

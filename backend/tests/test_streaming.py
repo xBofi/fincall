@@ -88,6 +88,24 @@ def test_turno_por_streaming(cliente_ws: TestClient) -> None:
         assert respuesta["datos"]["finca_id"] == "finca-mayor-12"
 
 
+def test_el_websocket_de_voz_acepta_el_secreto_del_agente(
+    deps: Dependencias, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Como el resto de rutas de llamada: el banco de voz compara este camino con LiveKit."""
+    from building_call.settings import settings
+
+    secreto = "secreto-del-agente-con-largo-suficiente-0123456789"
+    monkeypatch.setattr(settings, "agente_secreto", secreto)
+    cliente = TestClient(crear_app(deps, fabrica_streaming=SesionFalsa))
+    cabeceras = {"Authorization": f"Bearer {secreto}"}
+    llamada_id = cliente.post("/api/llamadas", json={}, headers=cabeceras).json()["llamada_id"]
+    ruta = f"/api/llamadas/{llamada_id}/voz?sample_rate=16000"
+    with cliente.websocket_connect(ruta, headers=cabeceras) as ws:
+        assert ws.receive_json()["type"] == "listo"
+    with cliente.websocket_connect(ruta, headers={"Authorization": "Bearer otro"}) as ws:
+        assert ws.receive_json()["type"] == "error"
+
+
 def test_streaming_sin_configurar_devuelve_error(deps: Dependencias) -> None:
     cliente = TestClient(crear_app(deps, fabrica_streaming=None))
     cliente.cookies.set("bc_sesion", sesion_de_prueba(deps.repo))  # type: ignore[arg-type]

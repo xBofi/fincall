@@ -7,9 +7,12 @@ No tiene lógica de negocio.
 
 Autoalojado sin llamadas a la nube de LiveKit: el fin de turno lo decide AssemblyAI
 (`turn_detection="stt"`), la interrupción es por VAD local (silero) y no se graba la sesión.
+Cómo se ordenan y juntan los turnos partidos: `building_call.voz.control`. Medidas de los
+ajustes: `docs/superpowers/plans/2026-10-21-delivery-ledger-phase-2.md`.
 Spec: `docs/superpowers/specs/2026-10-21-livekit-delivery-ledger-design.md`.
 
-Uso (desarrollo): `uv run --extra voz building-call-agente dev`
+Uso (desarrollo): `uv run --extra voz building-call-agente dev`. Con `BC_LIVEKIT_AGENTE` se
+registra con otro nombre (un agente de pruebas junto al de la consola).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from collections.abc import AsyncIterable
 from typing import Any
 
 import httpx
+from livekit import rtc
 from livekit.agents import (
     Agent,
     AgentServer,
@@ -31,12 +35,11 @@ from livekit.agents import (
     UserInputTranscribedEvent,
     cli,
     llm,
+    stt,
 )
-from livekit.agents.types import NOT_GIVEN
 from livekit.plugins import assemblyai, elevenlabs, silero
 
 from building_call.graph.ledger import corte_por_palabras
-from building_call.livekit_api import NOMBRE_AGENTE
 from building_call.settings import settings
 from building_call.stt_streaming import validar_endpoint_eu
 from building_call.voz.control import ControlLlamada
@@ -113,47 +116,106 @@ class AgenteFincall(Agent):
         self.api = api
         self.control = control
 
+    async def stt_node(
+        self, audio: AsyncIterable[rtc.AudioFrame], model_settings: ModelSettings
+    ) -> AsyncIterable[stt.SpeechEvent]:
+        """El STT de siempre; solo anota si el vecino seguía hablando al cerrarse cada turno."""
+        async for ev in Agent.default.stt_node(self, audio, model_settings):
+            if ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
+                # Aún no ha pasado por la sesión: el estado es el del VAD, no el del cierre
+                hablando = self.session.user_state == "speaking"
+                logger.debug("AssemblyAI cierra turno; el vecino sigue hablando: %s", hablando)
+                self.control.al_cerrar_turno(hablando)
+            yield ev
+
     async def llm_node(
         self, chat_ctx: llm.ChatContext, tools: list[Any], model_settings: ModelSettings
     ) -> AsyncIterable[str]:
-        entrada = next(
-            (
-                m.text_content
-                for m in reversed(chat_ctx.items)
-                if isinstance(m, llm.ChatMessage) and m.role == "user" and m.text_content
-            ),
-            "",
+        # Lo que el vecino ha dicho desde el último turno enviado (un turno partido va junto)
+        entrada = self.control.por_enviar(
+            m for m in chat_ctx.items if isinstance(m, llm.ChatMessage)
         )
+        if not entrada:
+            return
+        # Pausa a media frase o solo muletillas: si llega el resto, LiveKit cancela esto y el
+        # texto va junto con el turno siguiente
         try:
-            vista = await self.api.turno(self.control.llamada_id, entrada or "")
+            espero = await self.control.esperar_antes_de_enviar(
+                entrada, lambda: self.session.user_state == "speaking"
+            )
+        except asyncio.CancelledError:
+            logger.debug("Turno retenido y cancelado: irá junto con el siguiente")
+            raise
+        logger.debug("Turno enviado (retenido antes: %s)", espero)
+        try:
+            # En orden y sin cortar la petición si LiveKit cancela esta generación
+            await self.control.enviar_turno(self.api, entrada)
         except httpx.HTTPError:
             logger.exception("La API no respondió al turno de %s", self.control.llamada_id)
             return
-        texto = self.control.nuevo_turno(vista)
-        if texto:
-            yield texto
+        if self.control.texto:
+            yield self.control.texto
 
 
 #: Los modelos de AssemblyAI que aceptan fijar el idioma (el plugin rechaza el resto)
 _MODELOS_CON_IDIOMA = ("u3-rt-pro", "u3-rt-pro-beta-1", "universal-3-5-pro", "universal-3-6-pro")
 
 
-def _stt(vocabulario: list[str]) -> assemblyai.STT:
+def opciones_stt(vocabulario: list[str]) -> dict[str, Any]:
+    """Argumentos de `assemblyai.STT`. Separado para probarlo sin abrir conexiones."""
     host = settings.assemblyai_streaming_host
     validar_endpoint_eu(host)  # solo el endpoint europeo, como el resto del sistema
-    return assemblyai.STT(
-        model=settings.assemblyai_modelo,  # type: ignore[arg-type]
-        api_key=settings.assemblyai_api_key,
-        base_url=f"wss://{host}",
-        # Solo los Universal-3 Pro aceptan fijar el idioma; el multilingüe lo detecta
-        language_codes="es" if settings.assemblyai_modelo in _MODELOS_CON_IDIOMA else NOT_GIVEN,
-        format_turns=True,
-        end_of_turn_confidence_threshold=settings.assemblyai_eot_confianza,
-        min_turn_silence=settings.assemblyai_eot_silencio_ms,
-        max_turn_silence=settings.assemblyai_max_silencio_ms,
+    modelo = settings.assemblyai_modelo
+    opciones: dict[str, Any] = {
+        "model": modelo,
+        "api_key": settings.assemblyai_api_key,
+        "base_url": f"wss://{host}",
+        "format_turns": True,
+        "end_of_turn_confidence_threshold": settings.assemblyai_eot_confianza,
+        "min_turn_silence": settings.livekit_stt_silencio_min_ms,
+        "max_turn_silence": settings.livekit_stt_silencio_max_ms,
         # Sin el vocabulario de la finca AssemblyAI se come las letras sueltas (puertas)
-        keyterms_prompt=vocabulario[:100],
-    )
+        "keyterms_prompt": vocabulario[:100],
+    }
+    # Solo los Universal-3 Pro aceptan fijar el idioma; el multilingüe lo detecta
+    if modelo in _MODELOS_CON_IDIOMA:
+        opciones["language_codes"] = "es"
+    return opciones
+
+
+def _stt(vocabulario: list[str]) -> assemblyai.STT:
+    return assemblyai.STT(**opciones_stt(vocabulario))
+
+
+def opciones_vad() -> dict[str, Any]:
+    """`silero.VAD.load`: corta la voz antes que AssemblyAI el turno (ver `ControlLlamada`)."""
+    return {"min_silence_duration": settings.livekit_vad_silencio_s}
+
+
+def opciones_contexto_stt() -> dict[str, Any]:
+    """`AgentSession.stt_context_options`: sin detección de términos (usaría la nube de LiveKit)
+    y, salvo que se active, sin pasar al STT lo que dijo el bot."""
+    return {
+        "forward_chat_context": settings.livekit_stt_contexto,
+        "keyterm_detection": {"enabled": False},
+    }
+
+
+def opciones_turnos() -> dict[str, Any]:
+    """Cuándo acaba el turno del vecino y cuándo corta al bot (`AgentSession.turn_handling`)."""
+    return {
+        "turn_detection": "stt",
+        # AssemblyAI ya espera su silencio de fin de turno: LiveKit solo añade este margen
+        "endpointing": {"min_delay": settings.livekit_fin_turno_min_s},
+        "interruption": {
+            "mode": "vad",
+            "min_duration": settings.livekit_interrupcion_min_s,
+            "min_words": settings.livekit_interrupcion_min_palabras,
+        },
+        # El grafo tiene efectos (crea incidencias): nada de turnos especulativos de LiveKit.
+        # La especulación propia va por `/parcial` y solo interpreta.
+        "preemptive_generation": {"enabled": False},
+    }
 
 
 def _tts() -> elevenlabs.TTS:
@@ -173,7 +235,7 @@ servidor = AgentServer(
 )
 
 
-@servidor.rtc_session(agent_name=NOMBRE_AGENTE)
+@servidor.rtc_session(agent_name=settings.livekit_agente)
 async def sesion(ctx: JobContext) -> None:
     api = ClienteApi(settings.agente_api_url, settings.agente_secreto)
     metadata = json.loads(ctx.job.metadata or "{}")
@@ -187,25 +249,19 @@ async def sesion(ctx: JobContext) -> None:
     session: AgentSession[None] = AgentSession(
         stt=_stt(await api.vocabulario()),
         tts=_tts(),
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(**opciones_vad()),
         use_tts_aligned_transcript=True,
-        turn_handling={
-            "turn_detection": "stt",
-            # AssemblyAI ya espera su silencio de fin de turno: sin espera extra de LiveKit
-            "endpointing": {"min_delay": 0.0},
-            "interruption": {"mode": "vad"},
-            # El grafo tiene efectos (crea incidencias): nada de turnos especulativos de LiveKit.
-            # La especulación propia va por `/parcial` y solo interpreta.
-            "preemptive_generation": {"enabled": False},
-        },
+        turn_handling=opciones_turnos(),  # type: ignore[arg-type]
+        stt_context_options=opciones_contexto_stt(),  # type: ignore[arg-type]
     )
 
     tareas: set[asyncio.Task[Any]] = set()
 
-    def lanzar(corrutina: Any) -> None:
-        tarea = asyncio.ensure_future(corrutina)
+    def lanzar(corrutina: Any) -> asyncio.Task[Any]:
+        tarea: asyncio.Task[Any] = asyncio.ensure_future(corrutina)
         tareas.add(tarea)
         tarea.add_done_callback(tareas.discard)
+        return tarea
 
     @session.on("user_input_transcribed")
     def _parcial(ev: UserInputTranscribedEvent) -> None:
@@ -216,8 +272,7 @@ async def sesion(ctx: JobContext) -> None:
         await api.cerrar()
         ctx.delete_room()
 
-    async def informar(item: Any) -> None:
-        turno, texto = control.turno, control.texto
+    async def informar(item: Any, turno: int, texto: str) -> None:
         oido = item.text_content or ""
         corte = corte_por_palabras(texto, oido) if item.interrupted else len(texto)
         entrega = await api.entrega(
@@ -234,7 +289,9 @@ async def sesion(ctx: JobContext) -> None:
     @session.on("conversation_item_added")
     def _dicho(ev: ConversationItemAddedEvent) -> None:
         if getattr(ev.item, "role", None) == "assistant":
-            lanzar(informar(ev.item))
+            # El turno al que se refiere se toma ya: el siguiente puede estar en camino
+            turno, texto = control.informe()
+            control.seguir_informe(lanzar(informar(ev.item, turno, texto)))
 
     await session.start(agent=AgenteFincall(api, control), room=ctx.room, record=False)
     # El saludo (o lo último pendiente) ya lo ha preparado la API
