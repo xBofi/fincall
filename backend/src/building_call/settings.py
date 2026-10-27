@@ -189,6 +189,16 @@ class Settings(BaseSettings):
     livekit_end_of_turn_min_s: float = 0.0  # espera de LiveKit tras el fin de turno de AssemblyAI
     livekit_interruption_min_s: float = 0.5  # voz mínima del vecino para cortar al bot
     livekit_interruption_min_words: int = 0  # palabras mínimas para cortar al bot
+    # Entrada por SIP (spec 2026-10-22-telnyx-sip-pilot-design, `telephony/sip.py`). El número
+    # al que llaman (en local uno ficticio); quién puede entregar llamadas: usuario y contraseña
+    # (softphone) o IPs/redes separadas por comas (operador). Sin ninguno no se configura.
+    sip_number: str = ""
+    sip_auth_username: str = ""
+    sip_auth_password: str = ""
+    sip_allowed_addresses: str = ""
+    # A quién pasar la llamada cuando el vecino pide una persona (tel:+34… o sip:…). Vacío:
+    # se cuelga y el caso queda para el administrador, como en la consola
+    handoff_target: str = ""
     # El agente entra en la API con este secreto (cabecera Authorization: Bearer). Vacío = no
     agent_secret: str = ""
     agent_api_url: str = "http://127.0.0.1:8000"

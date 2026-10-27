@@ -91,6 +91,8 @@ class CallControl:
         self.language_changed = False
         self.turn = 0
         self.finished = False
+        # Cómo acabó la llamada (`CallResult`): decide si se transfiere a una persona al colgar
+        self.result: str | None = None
         self.text = ""
         # La respuesta del turno actual aún no consta como sonada (ni como cortada)
         self.pending_report = False
@@ -108,6 +110,7 @@ class CallControl:
         if view.get("language") and view["language"] != self.language:
             self.language = str(view["language"])
             self.language_changed = True
+        self.result = (view.get("data") or {}).get("result")
         self.text = " ".join(view.get("bot_messages") or []).strip()
         self.pending_report = bool(self.text)
         return self.text

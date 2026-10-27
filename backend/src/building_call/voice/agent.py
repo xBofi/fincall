@@ -24,6 +24,7 @@ from collections.abc import AsyncIterable
 from typing import Any
 
 import httpx
+from livekit import api as lkapi
 from livekit import rtc
 from livekit.agents import (
     Agent,
@@ -44,6 +45,7 @@ from building_call.graph.ledger import cut_by_words
 from building_call.settings import settings
 from building_call.stt_streaming import validate_eu_endpoint
 from building_call.telephony.tts import voice_for
+from building_call.telephony import sip
 from building_call.voice.control import CallControl
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,8 @@ class ApiClient:
         self._http = httpx.AsyncClient(
             base_url=base_url, headers={"Authorization": f"Bearer {secret}"}, timeout=30
         )
+        # Por dónde llegó el vecino en las métricas: consola por LiveKit o teléfono por SIP
+        self.stt_client = "livekit"
 
     async def _post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         r = await self._http.post(path, json=body)
@@ -98,7 +102,7 @@ class ApiClient:
         return r.get("last_delivery") or {}
 
     async def metrics(self, call_id: str, turn: int, response_ms: int | None) -> None:
-        body = {"turn": turn, "response_ms": response_ms, "stt_client": "livekit"}
+        body = {"turn": turn, "response_ms": response_ms, "stt_client": self.stt_client}
         try:
             await self._post(f"/api/calls/{call_id}/metrics", body)
         except httpx.HTTPStatusError:
@@ -279,12 +283,19 @@ server = AgentServer(
 async def session(ctx: JobContext) -> None:
     api = ApiClient(settings.agent_api_url, settings.agent_secret)
     metadata = json.loads(ctx.job.metadata or "{}")
-    # Desde la consola la llamada ya existe; desde el teléfono (fase 3) se crea aquí
+    # Desde la consola la llamada ya existe; desde el teléfono (SIP) se crea aquí con el número
+    # del vecino, que llega en los atributos de su participante
     if call_id := metadata.get("call_id"):
         view = await api.get(call_id)
     else:
+        await ctx.connect()
+        caller = await ctx.wait_for_participant()
+        if caller.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+            api.stt_client = "sip"
         view = await api.begin(
-            metadata.get("phone"), metadata.get("language"), metadata.get("persona")
+            sip.caller_from(caller.attributes) or metadata.get("phone"),
+            metadata.get("language"),
+            metadata.get("persona"),
         )
     # The call's language: ears, mouth and turn fillers all follow it
     language = view.get("language") or i18n.default_code()
@@ -312,7 +323,32 @@ async def session(ctx: JobContext) -> None:
         if not ev.is_final and ev.transcript:
             launch(api.partial(control.call_id, ev.transcript))
 
+    async def transfer(target: str) -> None:
+        """Pasa al vecino a una persona (SIP REFER). Si falla, se cuelga como siempre."""
+        caller = next(
+            (
+                p
+                for p in ctx.room.remote_participants.values()
+                if p.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
+            ),
+            None,
+        )
+        if caller is None:
+            return
+        try:
+            await ctx.api.sip.transfer_sip_participant(
+                lkapi.TransferSIPParticipantRequest(
+                    room_name=ctx.room.name,
+                    participant_identity=caller.identity,
+                    transfer_to=target,
+                )
+            )
+        except Exception:  # noqa: BLE001 - el operador puede rechazar el REFER
+            logger.warning("La transferencia a humano falló; se cuelga", exc_info=True)
+
     async def hang_up() -> None:
+        if target := sip.transfer_target(control.result, settings):
+            await transfer(target)
         await api.close()
         ctx.delete_room()
 
@@ -340,6 +376,8 @@ async def session(ctx: JobContext) -> None:
     await session.start(
         agent=FincallAgent(api, control, view.get("persona")), room=ctx.room, record=False
     )
+    # Qué llamada es esta sala (para el banco SIP y para operar: sala tel-… → expediente)
+    await ctx.room.local_participant.set_attributes({"fincall.call_id": control.call_id})
     # El saludo (o lo último pendiente) ya lo ha preparado la API
     if text := control.new_turn(view):
         session.say(text)

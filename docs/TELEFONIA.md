@@ -1,10 +1,67 @@
 # Telefonía: conectar un número real al asistente
 
-Estado: código listo y probado con proveedor simulado (`backend/tests/test_telefonia.py`). Falta el
-número. El proveedor está **Pendiente** en la bóveda; la primera implementación es **Twilio**
-(Provisional): permite comprar un número español en minutos y expone el audio de la llamada por
-WebSocket, que es lo que el puente necesita. Otro proveedor solo requiere un adaptador nuevo en
-`backend/src/building_call/telefonia/` que implemente `CanalTelefono`.
+Hay dos caminos:
+
+- **Entrada por SIP con LiveKit (principal, Provisional, 2026-10-22).** El operador (Telnyx) entrega
+  la llamada por un trunk SIP a nuestro `livekit-sip`. Somos nuestra propia centralita y podemos
+  transferir a una persona.
+  Spec: `docs/superpowers/specs/2026-10-22-telnyx-sip-pilot-design.md`.
+- **Puente Twilio Media Streams (respaldo).** Descrito más abajo.
+
+## Entrada por SIP (LiveKit)
+
+Camino de una llamada: operador o softphone → `livekit-sip` (trunk de entrada
+`fincall-entrada`, que solo acepta `BC_SIP_NUMBER` y autentica con usuario o con las IPs del
+operador) → regla `fincall-llamadas`, que crea una sala `tel-…` por llamada con el agente
+`BC_LIVEKIT_AGENT` → agente (`building_call.voice.agent`) → API.
+
+El agente toma el número del vecino del atributo SIP `sip.phoneNumber`, etiqueta las métricas con
+`stt_client=sip` y publica `fincall.call_id` en la sala.
+
+Si el grafo termina en `handoff_to_human` y hay `BC_HANDOFF_TARGET`, transfiere la llamada (SIP
+REFER) en vez de colgar. `BC_HANDOFF_TARGET` nunca puede ser el número de entrada, porque la llamada
+volvería al bot.
+
+### En local (fase 0, sin operador)
+
+```powershell
+docker compose --profile voice up -d livekit redis livekit-sip
+cd backend
+uv run python -m building_call.telephony.configure_sip     # trunk + regla, idempotente
+uv run building-call                                       # API
+uv run --extra voice building-call-agent dev               # agente
+```
+
+- **Banco automático:** `uv run --extra voice python evals/e2e_sip.py --verbose`. LiveKit marca por
+  SIP a su propia entrada (trunk de salida `fincall-banco-salida`) y un vecino sintético habla con
+  el bot.
+- **A mano:** un softphone (MicroSIP, Linphone) con servidor `127.0.0.1`, usuario
+  `BC_SIP_AUTH_USERNAME` y la contraseña del `.env`, llamando a `BC_SIP_NUMBER`.
+
+Detalles del compose:
+- `livekit-sip` comparte la red de `livekit`.
+- El audio RTP va por 30000–30199/udp. El 10010 lo ocupa un servicio de NVIDIA en Windows.
+- G.722 está desactivado para que se negocie G.711, el audio de una línea normal.
+
+### Con Telnyx (fase 1)
+
+En Telnyx:
+- un número español;
+- una conexión SIP por IP hacia la IP pública del servidor;
+- REFER activado (por ticket).
+
+En el `.env` del servidor:
+- `BC_SIP_NUMBER` = ese número;
+- `BC_SIP_ALLOWED_ADDRESSES` = las IPs de señalización de Telnyx;
+- sin usuario.
+
+Después, `configure_sip`. El cortafuegos solo abre 5060 y el rango RTP a las IPs de Telnyx.
+
+## Puente Twilio Media Streams (respaldo)
+
+Estado: código listo y probado con proveedor simulado (`backend/tests/test_telefonia.py`). Permite
+comprar un número español en minutos y expone el audio de la llamada por WebSocket. Otro proveedor
+por WebSocket solo requiere un adaptador nuevo que implemente `CanalTelefono`.
 
 ## Qué hace falta de Andreu
 

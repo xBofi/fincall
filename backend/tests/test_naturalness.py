@@ -283,9 +283,12 @@ async def test_partial_home_data_accumulates(manager: CallManager, llm: Any) -> 
     state = await _converse(manager, ["Alameda 5", "sí", "El tercero es mi vivienda"])
     assert state["home_attempts"] == 0
     assert "¿Y la puerta?" in state["bot_messages"][-1]
+    # Lo que se dice al vecino va en español (el código en inglés dejó «floor 3», 2026-10-22)
+    assert "Tomo nota: piso 3." in state["bot_messages"][-1]
     llm._interpret = lambda user, schema: {"entrance": "1"}  # type: ignore[method-assign]
     state = await manager.message(state["call_id"], "Portal 1")
     assert "¿Y la puerta?" in state["bot_messages"][-1]
+    assert "Tomo nota: portal 1, piso 3." in state["bot_messages"][-1]
     llm._interpret = original  # type: ignore[method-assign]
     state = await manager.message(state["call_id"], "puerta A")
     assert state["home_id"] == "finca-alameda-5-1-3A"
