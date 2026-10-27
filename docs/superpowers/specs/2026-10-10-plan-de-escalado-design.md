@@ -3,6 +3,8 @@
 Fecha: 2026-10-10 · Estado: **Provisional** (propuesta para revisar con Andreu y Marc) ·
 Origen: auditoría con 5 agentes (concurrencia, rendimiento, código backend, frontend, infraestructura).
 
+> Capacidad e infraestructura revisadas en [2026-10-23-call-scaling-architecture-design.md](2026-10-23-call-scaling-architecture-design.md).
+
 Las cifras de coste y capacidad son **estimaciones** razonadas a partir del código, no medidas.
 Hay que validarlas con una prueba de carga antes de comprometerlas con un cliente.
 
