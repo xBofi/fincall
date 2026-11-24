@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import TEST_SECRET, make_session
+from session_helpers import TEST_SECRET, make_session
 from httpx import ASGITransport, AsyncClient
 
 from building_call.api.main import create_app

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from conftest import FakeLLM
+from es_helpers import FakeLLM
 
 from building_call.graph.nodes import Dependencies
 from building_call.nlp.classifier import (
