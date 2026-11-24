@@ -52,12 +52,43 @@ def test_english() -> None:
     assert spacy_entities("Main Street, number twelve", "en")["address"].startswith("Main Street")
 
 
-def test_catalan_once_its_locale_exists() -> None:
-    from building_call import i18n
+#: One turn per language with every field: (text, expected)
+ALL_FIELDS = {
+    "es": ("Soy Carmen, calle Mayor 12, portal 2, tercero B", "calle Mayor 12", "Carmen", "B"),
+    "en": ("My name is Sarah, 12 Elm Street, entrance 2, third floor, apartment B",
+           "12 Elm Street", "Sarah", "B"),
+    "ca": ("Em dic Jordi, carrer Gran 10, escala 2, tercer pis, porta B", "carrer Gran 10",
+           "Jordi", "B"),
+    "ar": ("اسمي أحمد، شارع النيل رقم 12، المدخل 2، الطابق الثالث، شقة 5", "شارع النيل رقم 12",
+           "أحمد", "5"),
+    "hi": ("मेरा नाम राहुल है, एमजी रोड 12, ब्लॉक 2, तीसरी मंजिल, फ्लैट 5", "एमजी रोड 12", "राहुल", "5"),
+    "ur": ("میرا نام احمد ہے، مال روڈ 12، بلاک 2، تیسری منزل، فلیٹ 5", "مال روڈ 12", "احمد", "5"),
+}  # fmt: skip
 
-    if "ca" not in i18n.languages():
-        pytest.skip("no Catalan locale yet")
-    assert spacy_entities("Em dic Jordi", "ca")["name"] == "Jordi"
+
+@pytest.mark.parametrize("language", sorted(ALL_FIELDS))
+def test_every_language(language: str) -> None:
+    text, address, name, door = ALL_FIELDS[language]
+    found = spacy_entities(text, language)
+    assert found == {
+        "name": name, "address": address, "entrance": "2", "floor": "3", "door": door,
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize("language", sorted(ALL_FIELDS))
+def test_combined_in_every_language(language: str) -> None:
+    text = ALL_FIELDS[language][0]
+    combined = extract_entities(text, language)
+    assert combined["name"] == ALL_FIELDS[language][2]
+    assert combined["floor"] == "3"
+
+
+def test_every_registered_language_has_its_row() -> None:
+    from building_call import i18n
+    from building_call.nlp.entities import _EXTRA
+
+    assert set(i18n.languages()) <= set(_EXTRA) | {"xx"}
+    assert set(ALL_FIELDS) == set(i18n.languages())
 
 
 def test_a_problem_description_has_no_entities() -> None:

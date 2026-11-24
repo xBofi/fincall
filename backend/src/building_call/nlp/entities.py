@@ -9,7 +9,9 @@ language gets entrance/floor/door patterns with no code. What the locales do not
 per language; a language without a row still gets the locale patterns plus phone and email.
 
 `regex_entities` is the graph's rule-based parser (`Parser.extract_home` of the language);
-`extract_entities` combines both: the regex for entrance/floor/door, spaCy for the rest. The
+`extract_entities` combines both: the regex runs on the text without the address spaCy found;
+for Spanish and English (parsers tuned on real calls) its entrance/floor/door win, for the
+languages on the generic parser spaCy's win and the regex fills the gaps. The
 comparison that chose this is in `evals/compare_nlp.py --entities-only` and the README.
 
 Values come back normalised by the language's parser, as the graph does ("tercero", "3º" and
@@ -53,6 +55,9 @@ class _Extra:
     #: Words after a name intro that are not a name: "soy del tercero", "soy vecino"
     not_names: tuple[str, ...] = ()
     building_markers: tuple[str, ...] = ()
+    #: The script has upper case: names and street names are Title Case tokens. Without case
+    #: (Arabic, Devanagari, Urdu) any word token counts, up to three
+    cased: bool = True
 
 
 _EXTRA: dict[str, _Extra] = {
@@ -134,7 +139,36 @@ _EXTRA: dict[str, _Extra] = {
         not_names=("del", "de", "el", "la", "veí", "veïna"),
         building_markers=("bloc", "edifici", "torre"),
     ),
+    "ar": _Extra(
+        street_types=("شارع", "طريق", "ميدان", "حي", "جادة"),
+        number_marks=("رقم", "،", ","),
+        name_intros=(("اسمي",), ("أنا",), ("انا",)),
+        not_names=("من", "في", "ساكن", "ساكنة", "الطابق", "شقة"),
+        building_markers=("عمارة", "مبنى", "برج"),
+        cased=False,
+    ),
+    "hi": _Extra(
+        street_types=("मार्ग", "रोड", "गली", "स्ट्रीट", "नगर"),
+        street_type_last=True,
+        number_marks=("नंबर", ","),
+        name_intros=(("मेरा", "नाम"), ("मैं",)),
+        not_names=("है", "हूँ", "हूं", "बोल", "रहा", "रही", "से"),
+        building_markers=("बिल्डिंग", "इमारत", "सोसाइटी"),
+        cased=False,
+    ),
+    "ur": _Extra(
+        street_types=("روڈ", "سڑک", "گلی", "اسٹریٹ", "شاہراہ"),
+        street_type_last=True,
+        number_marks=("نمبر", "،", ","),
+        name_intros=(("میرا", "نام"), ("میں",)),
+        not_names=("ہے", "ہوں", "بول", "رہا", "رہی", "سے"),
+        building_markers=("بلڈنگ", "عمارت", "سوسائٹی"),
+        cased=False,
+    ),
 }
+
+#: A word of any script: no digits, spaces or punctuation (Devanagari vowel signs included)
+_WORD = {"TEXT": {"REGEX": r"^[^\d\s.,;:!?¿¡،؛؟।۔()\"'«»\-]+$"}}
 
 _NUM = {"TEXT": {"REGEX": r"^\d{1,4}$"}}
 _SHORT = {"TEXT": {"REGEX": r"^(\d{1,2}|[A-Ha-h])$"}}
@@ -193,9 +227,16 @@ def _patterns(language: i18n.Language) -> list[dict[str, Any]]:
             )
     # "3A" (US style): floor and door in one token
     pats.append({"label": "FLOOR_DOOR", "pattern": [{"TEXT": {"REGEX": r"^\d{1,2}[A-Ha-h]$"}}]})
+    word = _CAP if extra.cased else _WORD
+    more = [{"IS_TITLE": True, "OP": "*"}] if extra.cased else [{**_WORD, "OP": "?"}] * 2
+    if home.floor_markers and floor_words:
+        # "الطابق الثالث": the marker before the floor word
+        pats.append(
+            {"label": "FLOOR", "pattern": [_lower_in(home.floor_markers), _lower_in(floor_words)]}
+        )
     if extra.street_types:
         street = _lower_in(extra.street_types)
-        name = [_CAP, {"IS_TITLE": True, "OP": "*"}]
+        name = [word, *more]
         number = [_NUM] + ([_lower_in(numbers)] if numbers else [])
         if extra.street_type_last:
             # "12 Elm Street", "twelve Main Street", "Main Street, number twelve"
@@ -211,7 +252,7 @@ def _patterns(language: i18n.Language) -> list[dict[str, Any]]:
     for intro in extra.name_intros:
         pats.append(
             {"label": "NAME", "pattern": [*({"LOWER": w} for w in intro),
-             {"IS_TITLE": True}, {"IS_TITLE": True, "OP": "?"}]}
+             word, {**word, "OP": "?"}]}
         )  # fmt: skip
     if extra.building_markers:
         pats.append({"label": "BUILDING", "pattern": [_lower_in(extra.building_markers), _SHORT]})
@@ -239,9 +280,13 @@ def _value(label: str, text: str, language: i18n.Language) -> dict[str, str]:
     extra = _EXTRA.get(language.code, _Extra())
     if label == "NAME":
         intro = {w for i in extra.name_intros for w in i}
-        name = [w for w in words if w.lower() not in intro]
-        if not name or name[0].lower() in extra.not_names:
-            return {}
+        rest = list(words)
+        while rest and rest[0].lower() in intro:
+            rest.pop(0)  # "me llamo", "my name 's"
+        if not rest or rest[0].lower() in extra.not_names:
+            return {}  # "soy del tercero": not a name
+        # Trailing verbs of uncased languages: "मेरा नाम राहुल है" -> "राहुल"
+        name = [w for w in rest if w.lower() not in extra.not_names]
         return {"name": " ".join(name)}
     if label == "FLOOR_DOOR":
         return {"floor": text[:-1], "door": text[-1].upper()}
@@ -292,8 +337,19 @@ def regex_entities(text: str, language: str | None = None) -> dict[str, str]:
     return {k: v for k, v in (("entrance", entrance), ("floor", floor), ("door", door)) if v}
 
 
+#: Parsers tuned on real calls: their entrance/floor/door win over spaCy's
+TUNED_PARSERS = frozenset({"spanish", "english"})
+
+
 def extract_entities(text: str, language: str | None = None) -> dict[str, str]:
-    """Combined: the regex for entrance/floor/door, spaCy for the rest."""
-    found = spacy_entities(text, language)
-    found.update(regex_entities(text, language))
-    return found
+    """Combined. The regex runs on the text without the address spaCy found (alone it reads
+    "Calle Mayor 12" as floor 12). Its entrance/floor/door win for the parsers tuned on real
+    calls (Spanish, English); for languages on the generic parser spaCy's win and the regex only
+    fills what spaCy missed."""
+    lang = i18n.get(language or i18n.active_code())
+    found = spacy_entities(text, lang.code)
+    rest = text.replace(found["address"], " ") if found.get("address") else text
+    regex = regex_entities(rest, lang.code)
+    if lang.parser in TUNED_PARSERS:
+        return {**found, **regex}
+    return {**regex, **found}

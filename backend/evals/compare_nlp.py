@@ -182,17 +182,9 @@ ENTITY_FIELDS = ("address", "entrance", "floor", "door", "name")
 def compare_entities(cases: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, float]]]:
     from building_call.nlp.entities import extract_entities, regex_entities, spacy_entities
 
-    def regex_then_spacy(text: str) -> dict[str, str]:
-        return {**spacy_entities(text), **regex_entities(text)}
-
-    def spacy_then_regex(text: str) -> dict[str, str]:
-        return {**regex_entities(text), **spacy_entities(text)}
-
     systems = {
         "regex": regex_entities,
         "spacy": spacy_entities,
-        "regex>spacy": regex_then_spacy,
-        "spacy>regex": spacy_then_regex,
         "combined": extract_entities,
     }
     out: dict[str, dict[str, dict[str, float]]] = {}

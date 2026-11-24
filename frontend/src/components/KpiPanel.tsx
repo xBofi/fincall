@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Statistic, Tooltip, Typography } from 'antd'
 import { operations, type ConversationKpis, type LatencySummary } from '../api'
-import { t, type KpiKey } from '../i18n/kpis'
+import { t } from '../i18n'
+import type { MessageKey } from '../i18n/messages/es'
 
 const percent = (v: number | null) => (v === null ? '—' : `${(v * 100).toFixed(1)}`)
 const number = (v: number | null) => (v === null ? '—' : `${v}`)
 const pair = (l: LatencySummary) => (l.p50 === null ? '—' : `${Math.round(l.p50)} / ${Math.round(l.p95 ?? l.p50)}`)
 
-function Kpi({ label, help, value, suffix }: { label: KpiKey; help?: KpiKey; value: string; suffix?: string }) {
+function Kpi({ label, help, value, suffix }: { label: MessageKey; help?: MessageKey; value: string; suffix?: string }) {
   const title = help ? <Tooltip title={t(help)}><span>{t(label)}</span></Tooltip> : t(label)
   return <Statistic title={title} value={value} suffix={value === '—' ? undefined : suffix} />
 }
