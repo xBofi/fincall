@@ -8,7 +8,10 @@
  * vuelven a una etapa anterior tampoco cuentan); las vueltas al reparto y las salidas globales
  * se dibujan igual, por debajo y atenuadas. Ninguna coordenada está escrita a mano.
  */
-import ELK from 'elkjs/lib/elk.bundled.js'
+// ELK corre en un web worker propio (minificado y fuera del hilo principal): ni el paquete de la
+// consola carga su código ni el cálculo bloquea la interfaz
+import ELK from 'elkjs/lib/elk-api.js'
+import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url'
 import type { GraphStructure } from './types.ts'
 
 export const NODE_WIDTH = 188
@@ -48,7 +51,7 @@ export function layoutEdges(s: GraphStructure): [string, string][] {
 let elk: InstanceType<typeof ELK> | null = null
 
 export async function layOut(s: GraphStructure, rtl = false, aspectRatio = 1.6): Promise<Map<string, Placed>> {
-  elk ??= new ELK()
+  elk ??= new ELK({ workerUrl: elkWorkerUrl })
   const result = await elk.layout({
     id: 'root',
     layoutOptions: {
