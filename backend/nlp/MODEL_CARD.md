@@ -21,7 +21,7 @@ off by default.
 ### Why SetFit on a small multilingual sentence-transformer
 
 - **Data size.** The project has 46 gold classification rows and 81 gold interpretation rows per
-  language, and they are the test set. Training uses 658 hand-written rows (about 30 per
+  language, and they are the test set. Training uses 656 hand-written rows (about 30 per
   category, 14 per non-default intent). Fully fine-tuning `xlm-roberta-base` (278M) with a
   softmax head needs thousands of rows to beat a frozen encoder. SetFit is designed for 8 to 64
   examples per class.
@@ -36,7 +36,8 @@ off by default.
 ### MiniLM vs mpnet (measured)
 
 The same recipe on `paraphrase-multilingual-mpnet-base-v2` (278M), scored on the same gold sets
-with the same cached LLM answers:
+with the same cached LLM answers. This was measured before the English intent gold grew from 81
+to 131 rows; re-run it with `--model-dir` to refresh:
 
 | Base | Size | Train (split run) | Classifier only: intent es / en | category es / en | urgency es / en | Hybrid @ 0.8 | CPU per turn |
 |---|---|---|---|---|---|---|---|
@@ -55,7 +56,7 @@ re-run this comparison: mpnet's intent head would then matter.
   four tasks. They are augmented with seeded openers ("Hola, …", "Mire, …") and closers
   ("…, desde ayer"). Gold rows are not used.
 - **Leakage check:** the builder drops any generated row whose normalised text is ≥ 0.85
-  similar (SequenceMatcher) to any `evals/gold_*.jsonl` row. That dropped 8 rows.
+  similar (SequenceMatcher) to any `evals/gold_*.jsonl` row. That dropped 10 rows (656 remain).
 - **Validation split:** 15 %, stratified by pair label and **grouped by source sentence**, so
   the augmented variants of one sentence never sit on both sides.
 - **Test sets:** `evals/gold_classification[_en].jsonl` (category, urgency) and
@@ -79,14 +80,14 @@ validation scores.
 ## Results
 
 See the README section "NLP models and evaluation" for the gold-set table (LLM-only vs
-classifier-only vs hybrid). Validation (grouped split, 102 rows):
+classifier-only vs hybrid). Validation (grouped split, 100 rows):
 
 | Task | Accuracy | Macro-F1 |
 |---|---|---|
-| intent | 92.2 % | 0.828 |
-| category | 79.3 % | 0.772 |
-| urgency | 58.6 % | 0.617 |
-| work type | 50.6 % | 0.400 |
+| intent | 91.0 % | 0.821 |
+| category | 80.0 % | 0.772 |
+| urgency | 55.3 % | 0.583 |
+| work type | 52.9 % | 0.427 |
 
 ## Limitations and intended use
 

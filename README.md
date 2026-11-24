@@ -264,7 +264,7 @@ adds classic NLP in front of it, **off by default** (`BC_NLP_HYBRID=false`):
 - **Turn classifier (Hugging Face, SetFit).** A multilingual sentence-transformer
   (`paraphrase-multilingual-MiniLM-L12-v2`), fine-tuned contrastively, with one
   logistic-regression head each for intent, incident category, urgency and work type. One encode
-  answers all four in about 11 ms on CPU. Training data, the reproducible script and the reasons
+  answers all four in about 10 ms on CPU. Training data, the reproducible script and the reasons
   for this model are in [`backend/nlp/MODEL_CARD.md`](backend/nlp/MODEL_CARD.md). The weights
   are not in git; `nlp/train_classifier.py` rebuilds them in about a minute on an RTX 4070
   SUPER.
@@ -277,18 +277,18 @@ adds classic NLP in front of it, **off by default** (`BC_NLP_HYBRID=false`):
   persona") and a plain problem description. Corrections always go to the LLM. Handing over or
   hanging up still needs the caller's explicit words.
 
-Results on the gold sets, which are never trained on (`evals/gold_*.jsonl`; es: 81 intent rows
-and 46 classification rows; en: the same in English). The LLM here is the local
-`qwen3.5:latest` (9.7B, Ollama).
+Results on the gold sets, which are never trained on (`evals/gold_*.jsonl`): es has 81 intent
+rows and 46 classification rows; en has 131 intent rows and 46 classification rows. The LLM is
+the local `qwen3.5:latest` (9.7B, Ollama).
 
 | Language | System | Intent acc | Intent macro-F1 | Category acc | Category macro-F1 | Urgency acc | Urgency macro-F1 | p50 ms | p95 ms | Turns to the LLM | USD / 1,000 calls* |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | es | LLM only | 77.8 % | 0.690 | 97.8 % | 0.985 | 100 % | 1.000 | 5 289 | 6 615 | 100 % | 0.66 |
-| es | Classifier only | 80.2 % | 0.743 | 91.3 % | 0.948 | 69.6 % | 0.652 | 13 | 26 | 0 % | 0.00 |
-| es | **Hybrid @ 0.8** | **81.5 %** | **0.836** | 97.8 % | 0.985 | 100 % | 1.000 | 5 196 | 6 630 | 90 % | 0.59 |
-| en | LLM only | 84.9 % | 0.789 | 97.8 % | 0.988 | 97.8 % | 0.984 | 5 108 | 6 679 | 100 % | 0.66 |
-| en | Classifier only | 75.3 % | 0.702 | 84.8 % | 0.869 | 73.9 % | 0.740 | 11 | 15 | 0 % | 0.00 |
-| en | **Hybrid @ 0.8** | **86.0 %** | **0.815** | 97.8 % | 0.988 | 97.8 % | 0.984 | 4 932 | 6 693 | 92 % | 0.61 |
+| es | Classifier only | 81.5 % | 0.748 | 84.8 % | 0.895 | 67.4 % | 0.627 | 9 | 11 | 0 % | 0.00 |
+| es | **Hybrid @ 0.8** | **80.2 %** | **0.806** | 97.8 % | 0.985 | 100 % | 1.000 | 5 204 | 6 624 | 91 % | 0.60 |
+| en | LLM only | 90.8 % | 0.872 | 97.8 % | 0.988 | 97.8 % | 0.984 | 2 042 | 3 553 | 100 % | 0.67 |
+| en | Classifier only | 82.4 % | 0.660 | 87.0 % | 0.894 | 69.6 % | 0.701 | 10 | 13 | 0 % | 0.00 |
+| en | **Hybrid @ 0.8** | **91.6 %** | **0.901** | 97.8 % | 0.988 | 97.8 % | 0.984 | 2 029 | 3 564 | 94 % | 0.63 |
 
 \* LLM requests priced as the production model (`gemini-3.5-flash-lite`: $0.30 / $2.50 per
 1M input/output tokens, Gemini API price list, 2026-11-24). Tokens are estimated (characters /
@@ -307,17 +307,18 @@ uv run python evals/compare_nlp.py --entities-only --language es   # spaCy vs re
 What the numbers say:
 
 - **Hybrid beats LLM-only on intent in both languages and never loses on category or urgency.**
-  The classifier catches questions to the assistant that the LLM misses ("question"
-  F1 is 0.00 for the LLM alone in Spanish, 1.00 hybrid). It answers about 1 turn in 10 without
-  the LLM, which cuts the estimated cost by 8 to 10 %.
+  The classifier catches questions to the assistant that the LLM misses ("question" F1 goes
+  from 0.00 to 0.80 in Spanish and from 0.80 to 1.00 in English). It answers 6 to 9 % of turns
+  without the LLM, which cuts the estimated cost by 6 to 9 %.
 - **The classifier alone is not enough.** Urgency is a judgement call and the classifier gets
-  70 to 74 % of it. Since the router needs category, urgency and work type all at or above the
-  threshold, problem descriptions stay on the LLM. At 0.6 the router starts answering them, and
-  English category accuracy drops to 93.5 %. 0.8 is the lowest threshold with no loss in either
-  language.
-- **Latency:** the classifier adds about 11 ms per turn. The LLM latencies above come from a
-  9.7B model that did not fit fully in GPU memory on the test machine (other apps were holding
-  VRAM). They show the relative cost, not production latency. The production LLM (Vertex
+  67 to 70 % of it. Since the router needs category, urgency and work type all at or above the
+  threshold, problem descriptions stay on the LLM. At 0.7 the router starts answering them, and
+  English category accuracy drops to 95.7 %. 0.8 is the lowest threshold with no loss in either
+  language. The threshold sweep (0.6 to 0.95) is in `evals/last_nlp_result*.json`.
+- **Latency:** the classifier adds about 10 ms per turn. The LLM latencies above come from a
+  9.7B model that did not always fit fully in GPU memory on the test machine (other apps were
+  holding VRAM; the es run was the slower one). They show the relative cost, not production
+  latency. The production LLM (Vertex
   `gemini-3.5-flash-lite`) was measured at p50 626 / p95 722 ms (`settings.py`). The saving
   is the classifier-answered turns, which take about 11 ms instead of an LLM round trip.
 - **Entities (gold recall).** In Spanish, the combined extractor lifts door from 38 % (regex) to
