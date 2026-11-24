@@ -34,7 +34,8 @@ export const en: Messages = {
   'voice.mode.server': 'Server',
   'voice.mode.browser': 'Browser',
   'voice.mode.recording': 'Recording',
-  'voice.modes.hint': '"Twilio" and "LiveKit" are the path of real calls: voice, barge-in and delivery ledger on the server.',
+  'voice.mode.line': 'Phone line (no Twilio)',
+  'voice.modes.hint': '"Twilio", "Phone line" and "LiveKit" are the path of real calls: voice, barge-in and delivery ledger on the server.',
   'voice.silence': 'Silence that ends the turn: {ms} ms',
 
   'call.language': 'Call language',

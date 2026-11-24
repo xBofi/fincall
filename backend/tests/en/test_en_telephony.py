@@ -424,7 +424,7 @@ async def test_the_webhook_signs_the_stream_with_the_callsid(
 def test_voice_access_token_is_a_twilio_jwt_signed_with_the_api_key() -> None:
     from building_call.telephony.browser import voice_access_token
 
-    token = voice_access_token("AC1", "SK1", "key-secret", "AP1", "console-ann", now=1000)
+    token = voice_access_token("AC1", "SK1", "key-secret", "AP1", "console_ann", now=1000)
     header_b64, payload_b64, signature_b64 = token.split(".")
 
     def decode(part: str) -> dict[str, Any]:
@@ -433,9 +433,9 @@ def test_voice_access_token_is_a_twilio_jwt_signed_with_the_api_key() -> None:
     assert decode(header_b64) == {"typ": "JWT", "alg": "HS256", "cty": "twilio-fpa;v=1"}
     payload = decode(payload_b64)
     assert payload["iss"] == "SK1" and payload["sub"] == "AC1"
-    assert payload["exp"] == 1000 + 3600
+    assert payload["exp"] == 1000 + 900
     assert payload["grants"] == {
-        "identity": "console-ann",
+        "identity": "console_ann",
         "voice": {"outgoing": {"application_sid": "AP1"}},
     }
     expected = hmac.new(
@@ -448,7 +448,7 @@ async def test_a_console_browser_call_carries_on_the_call_the_console_opened(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("building_call.api.main.not_ready_reason", lambda *_a, **_k: None)
-    params = {"From": "client:console-ann", "CallSid": "CA9", "call_id": "llam-123"}
+    params = {"From": "client:console_ann", "CallSid": "CA9", "call_id": "llam-123"}
     url = "https://bot.example" + VOICE_PATH
     r = await client.post(
         VOICE_PATH, data=params, headers={"X-Twilio-Signature": _sign("tok", url, params)}

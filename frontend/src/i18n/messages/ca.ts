@@ -34,6 +34,7 @@ export const ca: Messages = {
   'voice.mode.server': 'Servidor',
   'voice.mode.browser': 'Navegador',
   'voice.mode.recording': 'Enregistrament',
+  'voice.mode.line': 'Línia (sense Twilio)',
   'voice.modes.hint': '«Twilio» i «LiveKit» són el camí de les trucades reals: veu, interrupcions i registre al servidor.',
   'voice.silence': 'Silenci que tanca el torn: {ms} ms',
 

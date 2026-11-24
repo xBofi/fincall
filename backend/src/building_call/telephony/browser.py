@@ -18,8 +18,10 @@ import time
 from typing import Any
 
 #: Identity prefix of the console's browser clients; Twilio sends it as `From=client:<identity>`
-CLIENT_PREFIX = "console-"
-TOKEN_TTL_S = 3600
+#: Twilio identities allow only letters, digits and underscores (max 121 characters)
+CLIENT_PREFIX = "console_"
+#: Long enough to dial and talk; a leaked token is useless soon after
+TOKEN_TTL_S = 900
 
 
 def _b64url(data: bytes) -> str:
@@ -70,5 +72,5 @@ def browser_ready_reason(settings: Any) -> str | None:
 
 
 def console_identity(username: str) -> str:
-    safe = "".join(c if c.isalnum() else "-" for c in username)[:60]
+    safe = "".join(c if c.isascii() and c.isalnum() else "_" for c in username)[:60]
     return CLIENT_PREFIX + safe

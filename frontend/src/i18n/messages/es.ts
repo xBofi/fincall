@@ -33,7 +33,8 @@ export const es = {
   'voice.mode.server': 'Servidor',
   'voice.mode.browser': 'Navegador',
   'voice.mode.recording': 'Grabación',
-  'voice.modes.hint': '«Twilio» y «LiveKit» son el camino de las llamadas reales: voz, interrupciones y ledger en el servidor.',
+  'voice.mode.line': 'Línea (sin Twilio)',
+  'voice.modes.hint': '«Twilio», «Línea» y «LiveKit» son el camino de las llamadas reales: voz, interrupciones y ledger en el servidor.',
   'voice.silence': 'Silencio que cierra el turno: {ms} ms',
 
   'call.language': 'Idioma de la llamada',

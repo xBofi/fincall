@@ -125,6 +125,8 @@ export interface Health {
   livekit: boolean
   /** La consola puede llamar al agente por Twilio (la red telefónica) desde el navegador. */
   twilio_browser?: boolean
+  /** La línea del navegador: el camino del teléfono sin Twilio (STT y voz de servidor). */
+  browser_line?: boolean
   /** Voz del servidor (la del teléfono); null si no hay y la consola usa la del navegador. */
   server_tts: string | null
   graphs: string[]
