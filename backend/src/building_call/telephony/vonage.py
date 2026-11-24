@@ -129,9 +129,18 @@ def call_language(params: dict[str, str]) -> str:
 
 
 def ncco_unavailable(language: str | None = None) -> list[dict[str, Any]]:
-    """Spoken when telephony is not ready (NCCO `talk`; with no more actions the call ends)."""
+    """Spoken when telephony is not ready (NCCO `talk`; with no more actions the call ends).
+    A language Vonage cannot speak (Urdu) falls back to the default language's message."""
     spec = i18n.get(language)
-    return [{"action": "talk", "text": spec.phrases.service_unavailable, "language": spec.locale}]
+    if not spec.tts.vonage_talk_language:
+        spec = i18n.get(None)
+    return [
+        {
+            "action": "talk",
+            "text": spec.phrases.service_unavailable,
+            "language": spec.tts.vonage_talk_language,
+        }
+    ]
 
 
 class VonageChannel:

@@ -15,6 +15,7 @@ fail on purpose (no external account was used), which shows that everything befo
 | `n8n-ticket-to-maintainer-workflow.png` | `ticket.created` → e-mail and Slack message to the maintainer. |
 | `n8n-ticket-execution.png` | The ticket event of the call: signature verified, deduplicated, message written; the e-mail node fails only on the fake SMTP. |
 | `n8n-urgent-escalation-workflow.png` | Emergencies, high-urgency tickets and handoffs → SMS to the on-call coordinator. |
+| `console-rule-ar-rtl.png`, `console-rule-ur-rtl.png` | The console in Arabic and Urdu (RTL) after the rebase on the multilingual branch: the last "what it doesn't do" item states the slot rule (never a firm time; with the n8n calendar on, a provisional slot pending the maintainer's confirmation), translated in all six languages (`sim.cannot.5`). Throwaway local console, memory repository. |
 | `n8n-replay-dropped-execution.png` | The same event sent twice: the second run stops at **Skip retried events** (same `Idempotency-Key`), so nothing is sent twice. Test copy of the ticket workflow with the actions disabled. |
 
 Measured in that run (the closing has since been reworded so it always says the visit is

@@ -18,6 +18,7 @@ piper_voice = "en_US-lessac-medium"
 melotts_lang = "en"
 twilio_say_language = "en-US"
 twilio_say_voice = "Polly.Joanna-Neural"
+vonage_talk_language = "en-US"
 browser_lang = "en-US"
 
 [formats]

@@ -146,6 +146,18 @@ const L = {
   en: { title: 'New maintenance request', urgency: 'urgency', building: 'Building', home: 'Unit',
         summary: 'Summary', pending: 'Waiting for the property manager', noPro: 'no contractor',
         assigned: 'Assigned to', call: 'Call' },
+  ca: { title: 'Nova incidència', urgency: 'urgència', building: 'Finca', home: 'Habitatge',
+        summary: 'Resum', pending: "Pendent de l'administrador", noPro: 'sense professional',
+        assigned: 'Assignada a', call: 'Trucada' },
+  ar: { title: 'بلاغ صيانة جديد', urgency: 'الأولوية', building: 'المبنى', home: 'الشقة',
+        summary: 'الملخص', pending: 'بانتظار مدير العقار', noPro: 'بدون فني',
+        assigned: 'مسند إلى', call: 'المكالمة' },
+  hi: { title: 'नई रखरखाव शिकायत', urgency: 'प्राथमिकता', building: 'इमारत', home: 'फ्लैट',
+        summary: 'सारांश', pending: 'प्रॉपर्टी मैनेजर के निर्णय की प्रतीक्षा', noPro: 'कोई तकनीशियन नहीं',
+        assigned: 'सौंपा गया', call: 'कॉल' },
+  ur: { title: 'نئی مرمت کی شکایت', urgency: 'ترجیح', building: 'عمارت', home: 'فلیٹ',
+        summary: 'خلاصہ', pending: 'پراپرٹی مینیجر کے فیصلے کا انتظار', noPro: 'کوئی ٹیکنیشن نہیں',
+        assigned: 'سپرد کیا گیا', call: 'کال' },
 };
 return $input.all().map(({ json: e }) => {
   const t = L[e.language] || L.en;
@@ -230,6 +242,10 @@ def urgent_escalation() -> dict[str, Any]:
 const L = {
   es: { emergency: 'EMERGENCIA', person: 'Vecino pide una persona', urgency: 'Urgencia' },
   en: { emergency: 'EMERGENCY', person: 'Caller asked for a person', urgency: 'Urgency' },
+  ca: { emergency: 'EMERGÈNCIA', person: 'El veí demana una persona', urgency: 'Urgència' },
+  ar: { emergency: 'طوارئ', person: 'المتصل يطلب التحدث إلى شخص', urgency: 'الأولوية' },
+  hi: { emergency: 'आपातकाल', person: 'कॉलर किसी व्यक्ति से बात करना चाहता है', urgency: 'प्राथमिकता' },
+  ur: { emergency: 'ہنگامی صورتحال', person: 'کالر کسی شخص سے بات کرنا چاہتا ہے', urgency: 'ترجیح' },
 };
 const urgent = (e) =>
   e.type === 'emergency.detected' ||
@@ -289,6 +305,10 @@ def book_visit() -> dict[str, Any]:
 const LANGS = {
   es: { locale: 'es-ES', say: (day) => `el ${day}, entre las 9:00 y las 11:00` },
   en: { locale: 'en-US', say: (day) => `on ${day}, between 9 and 11 AM` },
+  ca: { locale: 'ca-ES', say: (day) => `el ${day}, entre les 9:00 i les 11:00` },
+  ar: { locale: 'ar-AE', say: (day) => `يوم ${day}، بين الساعة 9 و11 صباحا` },
+  hi: { locale: 'hi-IN', say: (day) => `${day} को सुबह 9 से 11 बजे के बीच` },
+  ur: { locale: 'ur-PK', say: (day) => `${day} کو صبح 9 سے 11 بجے کے درمیان` },
 };
 const req = $input.first().json;
 const lang = LANGS[req.language] || LANGS.en;

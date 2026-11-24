@@ -63,7 +63,7 @@ export const en: Messages = {
   'sim.cannot.2': 'Without an identified unit it creates no incident: it notifies the property manager.',
   'sim.cannot.3': 'If no contractor covers the fault, the incident waits for the property manager.',
   'sim.cannot.4': "If the resident asks for a person, it doesn't transfer the call: it notifies the property manager.",
-  'sim.cannot.5': 'Never promises a visit time: nobody has spoken to the contractor yet.',
+  'sim.cannot.5': 'Never gives a firm visit time: nobody has spoken to the contractor yet. With the n8n calendar on, it offers a provisional slot, pending the contractor\'s confirmation.',
   'sim.footer': 'In this demo, notices to contractors and property managers are simulated: no email or call is sent.',
   'sim.live': 'Live',
   'sim.understood': 'What the assistant understood',

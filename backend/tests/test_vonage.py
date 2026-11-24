@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from test_telephony import FakeStt, FakeTts, _wait
 
+from building_call import i18n
 from building_call.api.main import create_app
 from building_call.graph.nodes import Dependencies
 from building_call.services import CallManager
@@ -338,3 +339,25 @@ async def test_the_bridge_gets_the_language_from_the_websocket(deps: Dependencie
         with pytest.raises(WebSocketDisconnect):
             ws.receive_bytes()
     assert seen == [("+15550000000", None, "en")]
+
+
+#: Vonage TTS `talk` codes (its supported-languages table, read 2026-11-24). Urdu has no
+#: Vonage voice: None means the apology falls back to the default language.
+VONAGE_TALK = {"es": "es-ES", "en": "en-US", "ca": "ca-ES", "ar": "ar", "hi": "hi-IN", "ur": None}
+
+
+@pytest.mark.parametrize("code", i18n.supported())
+def test_the_apology_is_said_in_every_language_vonage_can_speak(code: str) -> None:
+    from building_call.telephony.vonage import call_language, ncco_unavailable
+
+    assert code in VONAGE_TALK, f"say which Vonage talk language {code} uses (or None)"
+    assert call_language({"language": code}) == code
+    talk = ncco_unavailable(code)[0]
+    expected = VONAGE_TALK[code]
+    if expected is None:
+        default = i18n.get(None)
+        assert talk["language"] == default.tts.vonage_talk_language
+        assert talk["text"] == default.phrases.service_unavailable
+    else:
+        assert talk["language"] == expected
+        assert talk["text"] == i18n.get(code).phrases.service_unavailable

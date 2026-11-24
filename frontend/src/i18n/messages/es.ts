@@ -62,7 +62,7 @@ export const es = {
   'sim.cannot.2': 'Sin la vivienda identificada no crea incidencia: avisa al administrador.',
   'sim.cannot.3': 'Si ningún profesional cubre esa avería, la incidencia queda pendiente para el administrador.',
   'sim.cannot.4': 'Si el vecino pide hablar con una persona, no transfiere la llamada: avisa al administrador.',
-  'sim.cannot.5': 'No promete hora de visita: todavía nadie ha hablado con el profesional.',
+  'sim.cannot.5': 'No da una hora firme: nadie ha hablado aún con el profesional. Con la agenda de n8n activada ofrece un hueco provisional, pendiente de que el profesional lo confirme.',
   'sim.footer': 'En esta demostración los avisos a profesionales y administradores se simulan: no se envía ningún correo ni llamada.',
   'sim.live': 'En tiempo real',
   'sim.understood': 'Lo que ha entendido el asistente',

@@ -367,6 +367,10 @@ def test_the_app_fans_out_to_every_configured_url() -> None:
 PROVISIONAL_WORDS: dict[str, tuple[str, str]] = {
     "es": ("provisional", "pendiente de que el profesional la confirme"),
     "en": ("provisional", "pending confirmation"),
+    "ca": ("provisional", "pendent que el professional la confirmi"),
+    "ar": ("مبدئية", "بانتظار تأكيد"),
+    "hi": ("अस्थायी", "पुष्टि पर निर्भर"),
+    "ur": ("عارضی", "تصدیق سے مشروط"),
 }
 
 

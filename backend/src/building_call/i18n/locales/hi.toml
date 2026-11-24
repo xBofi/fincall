@@ -17,6 +17,7 @@ elevenlabs_language = "hi"
 piper_voice = "hi_IN-pratham-medium"
 twilio_say_language = "hi-IN"
 twilio_say_voice = "Polly.Kajal-Neural"
+vonage_talk_language = "hi-IN"
 browser_lang = "hi-IN"
 
 [formats]
@@ -227,5 +228,6 @@ private_unit = "यह किसी निजी फ्लैट के अं�
 "notify_channel.coordinator_notice" = "मामला ज़रूरी होने के कारण मैं अभी समन्वयक और {specialist} को सूचित कर रही हूँ। {specialist_capitalized} जल्द से जल्द {contact} यह बताने के लिए कि वे कब आ सकते हैं; मैं अभी समय की पुष्टि नहीं कर सकती।"
 "notify_channel.administrator_notice" = "मैं इसे प्रॉपर्टी मैनेजर को भेज रही हूँ, जो आज ही इसे देखेंगे और {contact} यह बताने के लिए कि इसे कैसे सुलझाया जाएगा।"
 "notify_channel.specialist_notice" = "मैं अभी {specialist} को सूचित कर रही हूँ, जो विज़िट तय करने के लिए {contact}। मैं अभी समय नहीं बता सकती क्योंकि यह उनकी उपलब्धता पर निर्भर है; अगला कदम उनकी कॉल है।"
+"notify_channel.visit_notice" = "मैं अभी {specialist} को सूचित कर रही हूँ। मैंने {slot} एक अस्थायी विज़िट बुक कर दी है, जो तकनीशियन की पुष्टि पर निर्भर है; वे इसकी पुष्टि के लिए {contact}।"
 "notify_channel.phone_contact" = "आपको इसी नंबर पर कॉल करेंगे"
 "notify_channel.generic_contact" = "आपसे संपर्क करेंगे"

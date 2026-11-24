@@ -44,8 +44,8 @@ from building_call import i18n
 from building_call.graph.ledger import cut_by_words
 from building_call.settings import settings
 from building_call.stt_streaming import validate_eu_endpoint
-from building_call.telephony.tts import voice_for
 from building_call.telephony import sip
+from building_call.telephony.tts import voice_for
 from building_call.voice.control import CallControl
 
 logger = logging.getLogger(__name__)

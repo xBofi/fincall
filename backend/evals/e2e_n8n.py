@@ -46,6 +46,23 @@ CALLERS: dict[str, tuple[list[str], str]] = {
         ],
         "yes, correct",
     ),
+    # Catalan uses the Spanish demo buildings; Arabic, Hindi and Urdu the US ones
+    "ca": (
+        ["Visc al carrer Major 12", "sí", "tercer B", "Hi ha una fuita d'aigua al bany"],
+        "sí, correcte",
+    ),
+    "ar": (
+        ["أسكن في 12 Main Street", "نعم", "شقة 3B", "يوجد تسرب ماء في الحمام"],
+        "نعم، صحيح",
+    ),
+    "hi": (
+        ["मैं 12 Main Street में रहता हूँ", "हाँ", "फ्लैट 3B", "बाथरूम में पानी का रिसाव है"],
+        "हाँ, सही है",
+    ),
+    "ur": (
+        ["میں 12 Main Street میں رہتا ہوں", "جی ہاں", "فلیٹ 3B", "باتھ روم میں پانی لیک ہو رہا ہے"],
+        "جی ہاں، درست ہے",
+    ),
 }
 
 

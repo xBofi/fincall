@@ -63,7 +63,7 @@ export const ca: Messages = {
   'sim.cannot.2': "Sense l'habitatge identificat no crea incidència: avisa l'administrador.",
   'sim.cannot.3': "Si cap professional cobreix l'avaria, la incidència queda pendent per a l'administrador.",
   'sim.cannot.4': "Si el veí demana parlar amb una persona, no transfereix la trucada: avisa l'administrador.",
-  'sim.cannot.5': 'No promet hora de visita: encara ningú no ha parlat amb el professional.',
+  'sim.cannot.5': 'No dona una hora ferma: encara ningú no ha parlat amb el professional. Amb l\'agenda d\'n8n activada ofereix una franja provisional, pendent que el professional la confirmi.',
   'sim.footer': "En aquesta demostració els avisos a professionals i administradors se simulen: no s'envia cap correu ni trucada.",
   'sim.live': 'En temps real',
   'sim.understood': "El que ha entès l'assistent",

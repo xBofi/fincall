@@ -18,6 +18,7 @@ elevenlabs_language = "ar"
 piper_voice = "ar_JO-kareem-medium"
 twilio_say_language = "ar-AE"
 twilio_say_voice = "Polly.Hala-Neural"
+vonage_talk_language = "ar"
 browser_lang = "ar-AE"
 
 [formats]
@@ -230,5 +231,6 @@ private_unit = "يبدو أنه داخل شقة خاصة، وليس في منط�
 "notify_channel.coordinator_notice" = "بسبب الاستعجال، أبلغ الآن المنسق و{specialist}. {specialist_capitalized} {contact} في أقرب وقت ممكن ليخبرك متى يمكنه الحضور؛ لا أستطيع تأكيد الموعد بعد."
 "notify_channel.administrator_notice" = "سأحوله إلى إدارة العقار، التي ستراجعه اليوم و{contact} لتشرح لك كيف ستتم معالجته."
 "notify_channel.specialist_notice" = "سأبلغ {specialist} الآن، و{contact} لتحديد موعد الزيارة. لا أستطيع إعطاءك موعدا بعد لأنه يعتمد على توفره؛ الخطوة التالية هي اتصاله بك."
+"notify_channel.visit_notice" = "سأبلغ {specialist} الآن. حجزت لك زيارة مبدئية {slot}، بانتظار تأكيد الفني؛ و{contact} لتأكيدها."
 "notify_channel.phone_contact" = "سيتصل بك على هذا الرقم"
 "notify_channel.generic_contact" = "سيتواصل معك"

@@ -55,7 +55,11 @@ Activar Vonage (cuando haya cuenta): en la aplicación de Vonage, *Answer URL*
 `BC_TELEPHONY=vonage` (o `twilio,vonage`) y `BC_VONAGE_SIGNATURE_SECRET` por SecretBroker.
 Idioma: el webhook de Vonage no lo trae, así que va en la *Answer URL* de cada número
 (`…/answer?language=en`); sin él, `BC_LANGUAGE`. Viaja en las cabeceras del NCCO hasta el puente
-(STT, TTS y grafo en ese idioma) y la disculpa de «servicio no disponible» se dice en él.
+(STT, TTS y grafo en ese idioma) y la disculpa de «servicio no disponible» se dice en él, con el
+código de `talk` de Vonage que fija cada idioma (`vonage_talk_language` en
+`i18n/locales/<idioma>.toml`, de su tabla de idiomas leída el 2026-11-24): `es-ES`, `en-US`,
+`ca-ES`, `ar` (sin región) e `hi-IN`. Vonage no tiene voz en urdu: en urdu la disculpa se dice en
+el idioma por defecto, igual que hace Twilio.
 `GET /api/telephony/vonage/health` dice qué falta. Antes de dar por bueno el adaptador hay que
 hacer una llamada real: los campos salen de la documentación oficial (leída el 2026-11-24) y
 de tests con tramas falsas, nada más.
