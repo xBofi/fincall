@@ -1,6 +1,6 @@
 """Nodos del flujo de llamada.
 
-Reglas (bóveda, 04 Arquitectura): el LLM interpreta y extrae; el código valida y decide.
+Reglas (notas de arquitectura): el LLM interpreta y extrae; el código valida y decide.
 Cada nodo es una función reutilizable por cualquier grafo del registro.
 
 Naturalidad: cada turno del vecino pasa por una interpretación (determinista si basta, LLM si
@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
@@ -22,6 +21,7 @@ from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
+from building_call import i18n
 from building_call.domain.config import (
     DEFAULTS,
     UNCLASSIFIABLE_CATEGORY,
@@ -34,23 +34,25 @@ from building_call.graph.manifest import verify_transition
 from building_call.graph.state import CallState, Trace
 from building_call.graph.templates import CATALOG as TEMPLATE_CATALOG
 from building_call.graph.templates import render
+from building_call.i18n.models import Phrases
+from building_call.i18n.parsing import Parser
 from building_call.llm import wire
 from building_call.llm.base import LanguageModel
 from building_call.llm.interpretation import (
-    INTERPRETATION_VERSION,
     Interpretation,
     interpret,
+    interpretation_version,
 )
 from building_call.llm.prompts import (
-    CLASSIFICATION_VERSION,
     classification_schema,
     classification_system_prompt,
+    classification_version,
 )
 from building_call.repos.base import Repository
 
 logger = logging.getLogger(__name__)
 
-ESTATE_THRESHOLD = 0.6  # Pendiente: calibrar con datos reales (bóveda, 02 Flujos)
+ESTATE_THRESHOLD = 0.6  # Pendiente: calibrar con datos reales (notas de diseño)
 
 
 @dataclass
@@ -75,27 +77,26 @@ def speculation_key(text: str) -> str:
     return _basic_normalize(text)
 
 
-# Cómo se dice cada categoría en voz alta (los códigos van sin tildes)
-_SPOKEN_CATEGORY = {
-    "plumbing": "fontanería",
-    "locksmith": "cerrajería",
-    "masonry": "albañilería",
-    "gardening": "jardinería",
-    "administrative": "gestión administrativa",
-}
+def _p() -> Parser:
+    """The deterministic rules of the call's language (`i18n`: set around each turn)."""
+    return i18n.parser()
+
+
+def _phrases() -> Phrases:
+    return i18n.current().phrases
 
 
 def spoken_category(category: str) -> str:
-    return _SPOKEN_CATEGORY.get(category, category.replace("_", " "))
+    return _p().spoken_category(category)
 
 
 def _capitalize_first(text: str) -> str:
-    """Como `str.capitalize` pero sin pasar a minúsculas el resto ("Fontanería Pérez")."""
+    """Like `str.capitalize` but without lowercasing the rest ("Smith Plumbing")."""
     return text[:1].upper() + text[1:]
 
 
 def equipment_for(state: CallState) -> list[tuple[str, str]] | None:
-    """(id, descripción) de los equipos de la finca, para que el modelo sepa a cuál afecta."""
+    """(id, description) of the building's equipment, so the model knows which one is affected."""
     return [(e["id"], e["description"]) for e in state.get("equipment_list", [])] or None
 
 
@@ -103,7 +104,8 @@ def catalog_for(state: CallState) -> list[str]:
     return _catalog(state)
 
 
-# --------------------------------------------------------------------------- normalización
+# --------------------------------------------------------------------------- normalization
+# The rules live in `i18n.parsing`, per language; these names keep the nodes readable.
 
 
 def _new_id(prefix: str) -> str:
@@ -111,194 +113,59 @@ def _new_id(prefix: str) -> str:
 
 
 def _basic_normalize(text: str) -> str:
-    """Minúsculas, sin acentos ni signos. No elimina palabras."""
-    # º/ª se descomponen en "o"/"a" con NFKD ("3º" -> "3o"); se eliminan antes.
-    text = re.sub(r"[ºª°]", " ", text.lower())
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(c for c in text if not unicodedata.combining(c))
-    text = re.sub(r"[^a-z0-9\s]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-_NUMBERS = {
-    "cero": 0, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6,
-    "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12, "trece": 13,
-    "catorce": 14, "quince": 15, "dieciseis": 16, "diecisiete": 17, "dieciocho": 18,
-    "diecinueve": 19, "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
-    "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26, "veintisiete": 27, "veintiocho": 28,
-    "veintinueve": 29, "treinta": 30, "cuarenta": 40, "cincuenta": 50, "sesenta": 60,
-    "setenta": 70, "ochenta": 80, "noventa": 90, "cien": 100,
-}  # fmt: skip
+    return _p().normalize(text)
 
 
 def _numbers_to_digits(text: str) -> str:
-    """'treinta y dos' -> '32', 'doce' -> '12'. El STT puede dictar números en letra."""
-    tokens = text.split()
-    output: list[str] = []
-    i = 0
-    while i < len(tokens):
-        t = tokens[i]
-        if t in _NUMBERS:
-            value = _NUMBERS[t]
-            if (
-                value >= 30
-                and value % 10 == 0
-                and i + 2 < len(tokens)
-                and tokens[i + 1] == "y"
-                and tokens[i + 2] in _NUMBERS
-                and _NUMBERS[tokens[i + 2]] < 10
-            ):
-                value += _NUMBERS[tokens[i + 2]]
-                i += 2
-            output.append(str(value))
-        else:
-            output.append(t)
-        i += 1
-    return " ".join(output)
+    return _p().numbers_to_digits(_basic_normalize(text))
 
 
 def _normalize(text: str) -> str:
-    """Normalización para direcciones: números en letra a cifras y sin palabras vacías."""
-    text = _numbers_to_digits(_basic_normalize(text))
-    text = re.sub(
-        r"\b(calle|c|avenida|avda|av|plaza|pza|paseo|numero|n|del|de|la|el|los|las|en|vivo|llamo|desde|es)\b",
-        " ",
-        text,
-    )
-    return re.sub(r"\s+", " ", text).strip()
+    """Normalization for addresses: spelled-out numbers to digits and no stop words."""
+    return _p().normalize_address(text)
 
 
 def _address_similarity(utterance: str, address: str) -> float:
-    a, b = _normalize(utterance), _normalize(address)
-    if not a or not b:
-        return 0.0
-    tokens_b = set(b.split())
-    contained = sum(1 for t in tokens_b if t in a.split())
-    coverage = contained / len(tokens_b)
-    return max(SequenceMatcher(None, a, b).ratio(), coverage)
-
-
-# Lo que puede acompañar a una dirección sin aportar nada más
-_ADDRESS_FILLER = frozenset(
-    "vivo en la el es estoy llamo desde de del numero calle avenida plaza paseo finca mire "
-    "pues hola buenas".split()
-)
+    return _p().address_similarity(utterance, address)
 
 
 def _only_address(utterance: str, address: str) -> bool:
-    """La frase es solo la dirección (con muletillas). "Calle Mayor 12, el portero no funciona"
-    no: el resto es la avería y la tiene que leer el modelo (2026-10-21)."""
-    own = set(_normalize(address).split())
-    sobra = [
-        t
-        for t in _normalize(utterance).split()
-        if t not in own and t not in _ADDRESS_FILLER and t not in _VERBAL_TICS
-    ]
-    return not sobra
-
-
-_YES = {
-    "si",
-    "correcto",
-    "exacto",
-    "vale",
-    "claro",
-    "afirmativo",
-    "eso es",
-    "asi es",
-    "ok",
-    "efectivamente",
-    "perfecto",
-}
-_NO = {"no", "incorrecto", "negativo", "para nada", "que no", "no es", "tampoco"}
+    return _p().only_address(utterance, address)
 
 
 def _yes_no_answer(text: str) -> bool | None:
-    t = _basic_normalize(text)
-    # AssemblyAI transcribe un "sí" corto como "S." y un "no" como "N." (medido 2026-08-28)
-    if t in {"s", "si si", "s s"}:
-        return True
-    if t in {"n", "no no"}:
-        return False
-    words = set(t.split())
-    si = {_basic_normalize(s) for s in _YES}
-    no = {_basic_normalize(s) for s in _NO}
-    # Frases de varias palabras ("eso es", "así es") se buscan como subcadena; el STT puede
-    # anteponer ruido ("Ese, eso es.")
-    has_yes = bool(words & si) or any(" " in s and s in t for s in si)
-    has_no = bool(words & no) or any(" " in s and s in t for s in no)
-    if has_yes and not has_no:
-        return True
-    if has_no or t.startswith("no"):
-        return False
-    return None
+    return _p().yes_no(text)
 
 
-_FLOORS = {
-    "bajo": "0", "primero": "1", "primer": "1", "primera": "1", "segundo": "2", "segunda": "2",
-    "tercero": "3", "tercer": "3", "tercera": "3", "cuarto": "4", "cuarta": "4", "quinto": "5",
-    "quinta": "5", "sexto": "6", "sexta": "6", "septimo": "7", "septima": "7", "octavo": "8",
-    "octava": "8", "noveno": "9", "novena": "9", "decimo": "10", "decima": "10", "atico": "atico",
-    "entresuelo": "entresuelo", "principal": "principal",
-}  # fmt: skip
+def _moves_on_to_problem(interp: Interpretation, utterance: str) -> bool:
+    return _p().moves_on_to_problem(interp.problem, interp.address, utterance)
+
+
+def _ordinal(floor: str) -> str:
+    return _p().ordinal(floor)
 
 
 def _normalize_entrance(value: str | None) -> str | None:
-    if value is None:
-        return None
-    v = _numbers_to_digits(_basic_normalize(str(value)))
-    v = re.sub(r"\bportal\b", "", v).strip()
-    # Un portal es un número (1-2 cifras) o una sola letra; "el", "ese", "sin"... son ruido
-    if not v or not re.fullmatch(r"\d{1,2}|[a-z]", v):
-        return None
-    return v
+    return _p().normalize_entrance(value)
 
 
 def _normalize_floor(value: str | None) -> str | None:
-    if value is None:
-        return None
-    v = _basic_normalize(str(value))
-    v = re.sub(r"\b(piso|planta)\b", "", v).strip()
-    v = _FLOORS.get(v, v)
-    v = _numbers_to_digits(v)
-    m = re.match(r"(\d+)", v)
-    return m.group(1) if m else (v or None)
+    return _p().normalize_floor(value)
 
 
 def _normalize_door(value: str | None) -> str | None:
-    if value is None:
-        return None
-    v = _basic_normalize(str(value)).replace("puerta", "").replace("letra", "").strip()
-    v = {"izquierda": "izq", "derecha": "dcha"}.get(v, v)
-    return v.upper() or None
-
-
-_ORDINALS = "|".join(k for k in _FLOORS if k not in {"bajo", "atico", "entresuelo", "principal"})
+    return _p().normalize_door(value)
 
 
 def _extract_home_regex(text: str) -> tuple[str | None, str | None, str | None]:
-    """Respaldo determinista para formatos habituales: 'portal 2', '3º B', 'tercero B'."""
-    t = _basic_normalize(text)
-    m_entrance = re.search(r"\bportal\s+(\w+)", t)
-    entrance = _normalize_entrance(m_entrance.group(1)) if m_entrance else None
-    remainder = re.sub(r"\bportal\s+\w+", " ", t)
-    m_floor = re.search(rf"\b(\d{{1,2}}|{_ORDINALS}|bajo|atico)\b\s*(?:piso|planta)?", remainder)
-    floor = _normalize_floor(m_floor.group(1)) if m_floor else None
-    door = None
-    m_explicit = re.search(r"\b(?:puerta|letra)\s+([a-z]|\d{1,2}|izquierda|derecha)\b", remainder)
-    if m_explicit:
-        door = _normalize_door(m_explicit.group(1))
-    else:
-        m_door = re.search(r"\b([a-z]|\d{1,2}|izquierda|derecha)\b\s*$", remainder.strip())
-        if m_door and (m_floor is None or m_door.start() > m_floor.start()):
-            door = _normalize_door(m_door.group(1))
-    return entrance, floor, door
+    return _p().extract_home(text)
 
 
 def _home_candidates(
     homes: list[Home], entrance: str | None, floor: str | None, door: str | None
 ) -> list[Home]:
-    """Viviendas compatibles con lo dicho. Varias => falta el portal; ninguna => no existe."""
+    """Apartments that match what was said. Several => the entrance is missing; none => it
+    does not exist."""
     candidates = [
         v
         for v in homes
@@ -309,134 +176,23 @@ def _home_candidates(
     return candidates
 
 
-_META_BOT = (
-    "clasific",
-    "urgencia",
-    "resumen",
-    "entendido",
-    "has dicho",
-    "diras",
-    "dices",
-    "asistente",
-    "maquina",
-)
-
-
 def _is_real_correction(fresh: str, previous: str, utterance: str) -> bool:
-    """Una corrección del problema debe aportar algo nuevo y hablar del problema, no del bot.
-
-    'Dirás que has podido clasificarlo con urgencia baja' es un comentario sobre el asistente:
-    el modelo lo devolvió como `problem` y el grafo lo tomó como corrección (2026-08-28)."""
-    e = _basic_normalize(utterance)
-    if any(m in e for m in _META_BOT):
-        return False
-    a, b = set(_basic_normalize(fresh).split()), set(_basic_normalize(previous).split())
-    if not a:
-        return False
-    return len(a - b) / len(a) >= 0.4  # al menos un 40% de palabras nuevas
-
-
-_NOT_HEARD = (
-    "estas ahi",
-    "esta ahi",
-    "sigues ahi",
-    "sigue ahi",
-    "me lo repite",
-    "me lo repites",
-    "repite",
-    "repita",
-    "no le he oido",
-    "no le oigo",
-    "no te oigo",
-    "que has dicho",
-    "que ha dicho",
-    "como dice",
-)
-
-
-# Palabras que pueden acompañar a una frase hecha sin cambiar su sentido. Todo lo demás es
-# contenido: "se repite el ruido" o "espere, que el ascensor no va" no son frases hechas.
-_VERBAL_TICS = frozenset(
-    "ah ay eh oh pues vale bueno mire oiga oye perdone perdona perdon disculpe hola buenas "
-    "como que bien por favor si no lo le me te usted senor senora es".split()
-)
-
-
-def _only_set_phrase(text: str, phrases: tuple[str, ...]) -> bool:
-    """La frase aparece entera y el resto son muletillas. Sustituye a la búsqueda por subcadena,
-    que secuestraba incidencias reales ("tarda", "cuando", "repite") (2026-10-21)."""
-    words = _basic_normalize(text).split()
-    if not words or any(p.isdigit() for p in words):
-        return False
-    for phrase in phrases:
-        f = phrase.split()
-        for i in range(len(words) - len(f) + 1):
-            if words[i : i + len(f)] == f:
-                remainder = words[:i] + words[i + len(f) :]
-                if all(p in _VERBAL_TICS for p in remainder):
-                    return True
-    return False
+    return _p().is_real_correction(fresh, previous, utterance)
 
 
 def _did_not_hear(text: str, state: CallState) -> bool:
-    """Pide repetir, o saluda/pregunta si hay alguien tras un mensaje que no llegó a sonar entero."""
-    t = _basic_normalize(text)
-    if _only_set_phrase(text, _NOT_HEARD):
-        return True
-    delivery = state.get("last_delivery") or {}
-    not_delivered = delivery.get("state") in ("interrupted", "not_played") or (
-        delivery.get("ratio") is not None and delivery.get("ratio", 1.0) < 0.8
-    )
-    return bool(
-        not_delivered and (t in {"hola", "oiga", "oye", "diga", "hola hola"} or t.startswith("hola"))
-    )
-
-
-_FILLER = (
-    "espere",
-    "esperame",
-    "espereme",
-    "un momento",
-    "un segundo",
-    "ahora mismo",
-    "a ver",
-    "dejeme",
-    "voy a mirar",
-    "no cuelgue",
-)
+    return _p().did_not_hear(text, state.get("last_delivery"))
 
 
 def _is_filler(text: str) -> bool:
-    """'Ah, vale, espéreme': el vecino pide tiempo. Ni dato ni fallo: se espera."""
-    return _only_set_phrase(text, _FILLER)
-
-
-_GREETINGS = (
-    "hola",
-    "buenas",
-    "buenos dias",
-    "buenas tardes",
-    "buenas noches",
-    "que tal",
-    "oiga",
-    "digame",
-)
+    return _p().is_filler(text)
 
 
 def _is_greeting(text: str) -> bool:
-    """Solo saludo/muletilla, sin datos: no debe contar como intento fallido."""
-    return _only_set_phrase(text, _GREETINGS)
+    return _p().is_greeting(text)
 
 
-# --------------------------------------------------------------------------- a quién se avisa
-
-_WORK_TYPE_REASON = {
-    "replacement": "Hay que cambiarlo entero o hacer obra: necesita presupuesto y aprobación.",
-    "insurance_claim": "Vandalismo o daños de un tercero: valorar el parte al seguro de la comunidad.",
-    "neighbour_dispute": "Es un problema de convivencia entre vecinos, no una avería.",
-    "private_unit": "Parece estar dentro de una vivienda particular, no en zona común.",
-}
-
+# --------------------------------------------------------------------------- who is notified
 
 def _suggestion(
     work_type: str,
@@ -445,35 +201,34 @@ def _suggestion(
     maintainer: Any,
     proposed: Any,
 ) -> str | None:
-    """Texto para quien recibe la incidencia: equipo, contrato y por qué le llega."""
+    """Text for whoever receives the issue: equipment, contract and why it reaches them."""
+    language = i18n.current()
+    ph = language.phrases
     parts: list[str] = []
     if objection:
-        parts.append(f"El vecino discrepa: «{objection}».")
-    if work_type in _WORK_TYPE_REASON:
-        parts.append(_WORK_TYPE_REASON[work_type])
+        parts.append(ph.objection.format(objection=objection))
+    if work_type in language.work_type_reasons:
+        parts.append(language.work_type_reasons[work_type])
     if equipment:
-        data = [f"Equipo: {equipment['description']}"]
+        data = [ph.equipment.format(description=equipment["description"])]
         if maintainer:
-            data.append(f"mantenedor {maintainer.name} ({maintainer.target})")
+            data.append(ph.maintainer.format(name=maintainer.name, target=maintainer.target))
         if equipment.get("contract"):
-            data.append(f"contrato {equipment['contract']}")
+            data.append(ph.contract.format(contract=equipment["contract"]))
         if equipment.get("warranty_until"):
-            data.append(f"garantía hasta {equipment['warranty_until']}")
+            data.append(ph.warranty.format(date=equipment["warranty_until"]))
         parts.append(", ".join(data) + ".")
     if proposed is not None and (objection or work_type != "repair"):
-        parts.append(f"Profesional que se habría avisado: {proposed.name}.")
+        parts.append(ph.proposed.format(name=proposed.name))
     return " ".join(parts) or None
 
 
 def _emergency_suggestion(state: CallState) -> str | None:
-    """La incidencia de una emergencia lleva delante que los avisos están pendientes."""
+    """An emergency's issue starts by saying that the alerts are still pending."""
     suggestion = state.get("suggestion")
     if state.get("urgency") != "emergency":
         return suggestion
-    note = (
-        "EMERGENCIA: llamar al teléfono oficial de la finca y avisar al coordinador. "
-        "Avisos simulados: el asistente todavía no llama ni envía nada."
-    )
+    note = _phrases().emergency_note
     return f"{note} {suggestion}" if suggestion else note
 
 
@@ -510,7 +265,8 @@ def _annotate_template(state: CallState, node: str, text: Any, extra: dict[str, 
         return
     if TEMPLATE_CATALOG[template_id].notice:
         # El aviso es lo que va antes de la pregunta (el saludo acaba preguntando la finca)
-        notice = str(text).split("¿", 1)[0]
+        start = _p().question_start(str(text))
+        notice = str(text)[:start].strip() if start else str(text)
         extra["turn_notices"] = [*state.get("turn_notices", []), notice]
     base = extra.get("trace", state.get("trace", []))
     extra["trace"] = [
@@ -532,10 +288,19 @@ def _ask(state: CallState, node: str, text: str, **extra: Any) -> dict[str, Any]
         "bot_messages": [*state.get("bot_messages", []), text],
         "history": [*base, {"role": "bot", "text": text}],
         # Para repetir/retomar se guarda solo la pregunta, sin saludos ni avisos
-        "last_question": text[text.index("¿") :]
-        if text.startswith("Hola") and "¿" in text
-        else text,
+        "last_question": _question_only(text),
     }
+
+
+#: Templates that start with a greeting before their question
+_GREETING_TEMPLATES = frozenset({"identify_estate.greeting", "identify_estate.greeting_reply"})
+
+
+def _question_only(text: str) -> str:
+    if getattr(text, "template_id", None) not in _GREETING_TEMPLATES:
+        return text
+    start = _p().question_start(text)
+    return text[start:] if start else text
 
 
 def _advance(
@@ -603,7 +368,7 @@ def _call_from(state: CallState, result: str, reason: str | None = None) -> Call
 
 
 def _without_repeat_tag(text: str) -> str:
-    """'Claro, le repito. X' -> 'X', para que repetir dos veces no encadene la coletilla."""
+    """'Sure, let me repeat that. X' -> 'X', so repeating twice does not chain the tag."""
     tag_phrases = tuple(render(c, message="") for c in ("global.repeat", "global.not_heard"))
     while text.startswith(tag_phrases):
         text = next(text[len(c) :] for c in tag_phrases if text.startswith(c))
@@ -612,9 +377,54 @@ def _without_repeat_tag(text: str) -> str:
 
 # Mientras se piden finca o vivienda, un "problema" que el modelo no sabe clasificar suele ser la
 # respuesta mal transcrita ("Primero abre la"), no una avería: guardarlo saltaba "¿qué ocurre?".
-_IDENTIFICATION_NODES = frozenset({"identify_estate", "identify_home"})
+_IDENTIFICATION_NODES = frozenset({"identify_estate", "identify_home", "confirm_home"})
 #: "Primero abre la": lo que el STT deja de una respuesta cortada cabe en pocas palabras
 _CUT_PHRASE_WORDS = 3
+
+
+def known_context(state: CallState) -> dict[str, str] | None:
+    """What the call has already established, for the model: the building and the apartment.
+    With it, "I meant the B" comes back as the whole apartment. The prompt words it."""
+    known: dict[str, str] = {}
+    if state.get("estate_id") and state.get("estate_address"):
+        known["address"] = str(state["estate_address"])
+    home = state.get("home_parts") or {}
+    if not home:
+        pending = state.get("pending", {})
+        home = {k: pending[k] for k in ("entrance", "floor", "door") if pending.get(k)}
+    known.update({k: str(v) for k, v in home.items() if v})
+    return known or None
+
+
+def _mid_sentence(text: str) -> str:
+    """'The elevator is stuck' -> 'the elevator is stuck', to read it after 'right: '."""
+    return _p().mid_sentence(text)
+
+
+def _home_parts(home: Home) -> dict[str, str]:
+    parts = {"floor": home.floor, "door": home.door}
+    if home.entrance:
+        parts["entrance"] = home.entrance
+    return parts
+
+
+def _home_label(home: Home) -> str:
+    """The apartment as the call's language writes it ('Apt 3A', '3º B')."""
+    return _p().home_label(home.entrance, home.floor, home.door)
+
+
+def _spoken_home(state: CallState) -> str:
+    """The apartment as it is read out: 'entrance 1, apartment 3A', 'tercero B'."""
+    parts = state.get("home_parts") or {}
+    if not parts.get("floor"):
+        return state.get("home_label") or ""
+    return _p().spoken_home(parts.get("entrance"), parts["floor"], parts.get("door", ""))
+
+
+def _is_emergency(state: CallState, queued: dict[str, str]) -> bool:
+    """Only when emergency handling is on: otherwise the call follows the normal flow."""
+    urgencies = (state.get("urgency"), state.get("declared_urgency"), queued.get("urgency"))
+    return "emergency" in urgencies and _config(state).emergencies_enabled
 
 
 def _merge_pending(state: CallState, interp: Interpretation) -> dict[str, str]:
@@ -626,8 +436,10 @@ def _merge_pending(state: CallState, interp: Interpretation) -> dict[str, str]:
         interp.category in (None, UNCLASSIFIABLE_CATEGORY)
         and state.get("current_node") in _IDENTIFICATION_NODES
         and len((interp.problem or "").split()) <= _CUT_PHRASE_WORDS
+        # "Huele a gas" is short and has no category, but it is never a cut phrase
+        and interp.urgency != "emergency"
     )
-    # The name is never kept (Andreu, 2026-10-22): the address and the home are enough
+    # The name is never kept (2026-10-22): the address and the home are enough
     for attr in ("address", "entrance", "floor", "door", "problem"):
         value = getattr(interp, attr)
         if value and not (attr == "problem" and doubtful_problem):
@@ -646,117 +458,26 @@ def _merge_pending(state: CallState, interp: Interpretation) -> dict[str, str]:
     return queued
 
 
-_PERSON_WORDS = (
-    "persona",
-    "humano",
-    "operador",
-    "operadora",
-    "alguien",
-    "hablar con",
-    "que me atienda",
-    "maquina",
-    "robot",
-    "administrador",
-)
-_FAREWELL_WORDS = (
-    "adios",
-    "hasta luego",
-    "hasta pronto",
-    "nada mas",
-    "ya llamare",
-    "dejalo",
-    "olvidalo",
-    "no quiero seguir",
-    "cuelgo",
-    "gracias adios",
-)
-
-
 def _asks_for_person(text: str) -> bool:
-    t = _basic_normalize(text)
-    return any(p in t for p in _PERSON_WORDS)
+    return _p().asks_for_person(text)
 
 
 def _says_goodbye(text: str) -> bool:
-    t = _basic_normalize(text)
-    return any(p in t for p in _FAREWELL_WORDS)
-
-
-_DETAIL_QUESTIONS: dict[str, str] = {
-    "electrical": "Para orientar al electricista: ¿es una sola luz o varias, y no encienden o parpadean?",
-    "plumbing": "Para orientar al fontanero: ¿gotea o sale agua con fuerza, y sabe de dónde viene?",
-    "elevator": "¿El ascensor está parado del todo o funciona a ratos? ¿Hay alguien dentro?",
-    "locksmith": "¿La puerta no cierra, no abre, o es la cerradura? ¿Desde cuándo?",
-    "cleaning": "¿En qué zona exactamente y desde cuándo?",
-    "masonry": "¿Dónde exactamente está el daño y qué tamaño tiene, aproximadamente?",
-    "painting": "¿Qué zona hay que pintar exactamente y qué le pasa: humedad, desconchones, pintadas?",
-    "_": "¿Puede darme algún detalle más: dónde exactamente y desde cuándo ocurre?",
-    # Sin saber qué falla ("está parado") no se adivina la categoría: se pregunta
-    UNCLASSIFIABLE_CATEGORY: "¿Qué es lo que falla exactamente y dónde está?",
-}
-
-
-_FAQ: tuple[tuple[tuple[str, ...], str], ...] = (
-    (
-        ("grab", "registr"),
-        "Sí: la llamada se registra para gestionar su incidencia y para control de calidad. ",
-    ),
-    (
-        ("tard", "when", "plazo", "vend"),
-        "El plazo depende del especialista; el administrador le informará del seguimiento. ",
-    ),
-    (
-        (
-            "para que necesita",
-            "para que quiere",
-            "para que mi nombre",
-            "por que mi nombre",
-            "para que el nombre",
-        ),
-        "No necesito su nombre: con la dirección y la vivienda es suficiente. ",
-    ),
-    (
-        ("quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"),
-        "Soy el asistente automático del administrador de su comunidad. ",
-    ),
-    (("coste", "cuesta", "pagar", "precio"), "Esta llamada no tiene coste adicional para usted. "),
-)
-
-
-# Indicación de seguridad de una emergencia según lo que cuenta el vecino. Por palabras clave:
-# es un camino determinista (0 ms) y el texto de seguridad nunca lo decide el modelo.
-_GAS_WORDS = frozenset({"gas", "butano", "propano"})
-_FIRE_WORDS = frozenset(
-    {
-        "fuego",
-        "humo",
-        "humareda",
-        "incendio",
-        "incendiando",
-        "incendiado",
-        "llamas",
-        "ardiendo",
-        "quemando",
-        "quemado",
-    }
-)
+    return _p().says_goodbye(text)
 
 
 def _safety_instruction(text: str) -> str:
-    words = set(_basic_normalize(text).split())
-    if words & _GAS_WORDS:
+    """Safety advice for an emergency, by what the caller says (gas, fire, the rest)."""
+    kind = _p().safety_kind(text)
+    if kind == "gas":
         return render("handle_emergency.gas_safety")
-    if words & _FIRE_WORDS:
+    if kind == "fire":
         return render("handle_emergency.fire_safety")
     return render("handle_emergency.general_safety")
 
 
 def _answer_question(text: str) -> str:
-    t = _basic_normalize(text)
-    for keys, reply in _FAQ:
-        if any(c in t for c in keys):
-            return reply
-    return "Solo puedo gestionar incidencias y solicitudes de su finca. "
+    return _p().answer_question(text)
 
 
 def build_nodes(deps: Dependencies) -> dict[str, Any]:
@@ -768,7 +489,10 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         """Determinista cuando basta; si no, una llamada al LLM. Devuelve (interp, tiempos)."""
         if yes_no:
             r = _yes_no_answer(utterance)
-            if r is not None and len(utterance.split()) <= 4:
+            # A "no" read only from "isn't" / "it's not" is usually the problem itself
+            # ("the intercom isn't working"): that one goes to the model
+            words = _basic_normalize(utterance).split()
+            if r is not None and len(words) <= 4 and (r or _p().explicit_no(utterance)):
                 interp = Interpretation(confirms=r, origin="deterministic")
                 return interp, _timings(state, interpretation_origin="deterministic")
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
@@ -814,6 +538,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             catalog=_catalog(state),
             heard_text=heard_text_if_cut(state.get("last_delivery")),
             equipment_list=equipment_for(state),
+            known=known_context(state),
         )
         return interp, _timings(
             state, interpretation_ms=interp.llm_ms, llm_calls=1, interpretation_origin="llm"
@@ -835,7 +560,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         extra: dict[str, Any],
     ) -> dict[str, Any] | None:
         """Atiende repetir/pregunta/fuera_ambito/humano/colgar. None si el turno sigue su curso."""
-        last = state.get("last_question") or "¿En qué puedo ayudarle?"
+        last = state.get("last_question") or _phrases().default_question
         provides_data = bool(interp.present_fields()) or interp.confirms is not None
         if interp.intent == "repeat":
             # Se repite el mensaje completo (resumen incluido), no solo la pregunta final
@@ -1007,20 +732,22 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 nf_, nd = _normalize_floor(floor), _normalize_door(door)
                 homes = await deps.repo.homes_of(state["estate_id"])  # type: ignore[arg-type]
                 if entrance and not any(v.entrance for v in homes):
-                    entrance = None  # la finca no tiene portales: el "portal" es ruido
+                    entrance = None  # the building has no entrances: the "entrance" is noise
                 candidates = _home_candidates(homes, entrance, nf_, nd)
                 trace.append(
                     Trace(
                         node=node,
                         action="home",
-                        detail=f"entrance={entrance} piso={nf_} puerta={nd} candidatas={len(candidates)}",
+                        detail=f"entrance={entrance} floor={nf_} door={nd} candidates={len(candidates)}",
                     )
                 )
                 if len(candidates) == 1:
                     home = candidates[0]
                     for k in ("entrance", "floor", "door"):
                         queued.pop(k, None)
-                    changes.update(home_id=home.id, home_label=home.label())
+                    changes.update(
+                        home_id=home.id, home_label=_home_label(home), home_parts=_home_parts(home)
+                    )
                     validations.append("home_exists_in_estate")
                     state = {**state, **changes}  # type: ignore[typeddict-item]
                 elif len(candidates) > 1:
@@ -1034,7 +761,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                             "identify_home.several_entrances",
                             floor=nf_,
                             door=nd,
-                            entrances=" o ".join(entrances),
+                            entrances=_p().join_or(entrances),
                         ),
                         pending=queued,
                         trace=trace,
@@ -1056,11 +783,13 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 )
                 if no_progress:
                     return await _retry_home(state, queued, trace)
-                falta = "la puerta" if floor else "el piso" if door else "el piso y la puerta"
-                has = ", ".join(
-                    f"{k} {v}"
-                    for k, v in (("entrance", queued.get("entrance")), ("floor", floor), ("door", door))
-                    if v
+                falta = _p().missing_home_part(floor, door)
+                has = _p().given_home_parts(
+                    (
+                        ("entrance", queued.get("entrance")),
+                        ("floor", _normalize_floor(floor) if floor else None),
+                        ("door", _normalize_door(door) if door else None),
+                    )
                 )
                 return _ask(
                     state,
@@ -1074,6 +803,19 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 return _advance(
                     state, "identify_home", pending=queued, trace=trace, **changes
                 )
+
+        if not state.get("home_confirmed") and not _is_emergency(state, queued):
+            # Building and apartment are read back together before going on, so a misheard
+            # floor or letter is caught here and not after the whole report (an emergency
+            # skips it: the safety instruction comes first)
+            return _advance(
+                state,
+                "confirm_home",
+                pending=queued,
+                trace=trace,
+                validations=validations,
+                **changes,
+            )
 
         if not state.get("request"):
             problem = queued.pop("problem", None)
@@ -1091,7 +833,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                     changes.setdefault("summary", queued.pop("short_problem", None) or problem)
                     changes["confidence_signals"] = {
                         "model": deps.llm.name,
-                        "prompt_version": INTERPRETATION_VERSION,
+                        "prompt_version": interpretation_version(),
                         "category_in_catalog": changes["category"] in _catalog(state),
                         "merged_with_interpretation": True,
                     }
@@ -1181,16 +923,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         )
         doors = sorted({v.door for v in homes})
         entrances = sorted({v.entrance for v in homes if v.entrance})
-        parts = []
-        if entrances:
-            parts.append("portales " + " y ".join(entrances))
-        parts.append(
-            f"pisos del {floors[0]} al {floors[-1]}" if len(floors) > 1 else f"piso {floors[0]}"
-        )
-        parts.append(
-            "puertas " + " o ".join(doors) if len(doors) > 1 else f"puerta {doors[0]}"
-        )
-        return "En esa finca hay " + ", ".join(parts) + ". "
+        return _p().describe_homes(entrances, floors, doors)
 
     async def _ask_floor_door(state: CallState, queued: dict[str, str]) -> str | None:
         """Con un piso que existe pero sin puerta válida: '¿la A o la B?' en vez de empezar de cero."""
@@ -1211,8 +944,8 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             return None
         return render(
             "identify_home.floor_door",
-            floor=f"{floor}º" if floor.isdigit() else floor,
-            doors=" o ".join(doors),
+            floor=_ordinal(floor),
+            doors=_p().join_or(doors),
         )
 
     async def _retry_home(
@@ -1246,9 +979,79 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             **(extra or {}),
         )
 
+    def _home_no_progress(
+        state: CallState,
+        history: list[dict[str, str]],
+        queued: dict[str, str],
+        extra: dict[str, Any],
+    ) -> dict[str, Any]:
+        """The apartment question gets no new data: repeat it, using up an attempt."""
+        attempts = state.get("home_attempts", 0) + 1
+        if attempts >= _config(state).home_attempts:
+            return _advance(
+                state,
+                "home_not_identified",
+                history=history,
+                home_attempts=attempts,
+                pending=queued,
+                trace=_with_trace(state, "identify_home", "attempts_exhausted", str(attempts)),
+                **extra,
+            )
+        return _ask(
+            state,
+            "identify_home",
+            state.get("last_question") or render("identify_home.reask"),
+            history=history,
+            home_attempts=attempts,
+            pending=queued,
+            trace=_with_trace(state, "identify_home", "no_progress", str(attempts)),
+            **extra,
+        )
+
     async def _estate_matches(address: str) -> bool:
         estates = await deps.repo.list_estates()
         return any(_address_similarity(address, f.address) >= ESTATE_THRESHOLD for f in estates)
+
+    async def _corrected_home(
+        state: CallState, interp: Interpretation, utterance: str, *, by_format: bool = False
+    ) -> dict[str, str] | None:
+        """The full apartment after a correction, or None if the turn corrects no apartment.
+
+        The model often returns only the part it thinks changed ("I meant the 3B" -> door B):
+        a "3B" said in so many words wins over it, and whatever was not corrected stays as in
+        the apartment on file ("it's B, not A" keeps the floor), so the bot never asks again
+        for a floor the caller has just said. `by_format`: a turn with no apartment from the
+        model still counts if it has one by format (used where a short "no" skips the model).
+        """
+        fields = {
+            k: str(getattr(interp, k)) for k in ("entrance", "floor", "door") if getattr(interp, k)
+        }
+        if not fields and not by_format:
+            return None
+        if not ("floor" in fields and "door" in fields):
+            # Only when the model gave part of it: with the whole apartment the model wins
+            # ("earlier I said 3B but it's 3A" names two)
+            entrance, floor, door = _extract_home_regex(utterance)
+            if floor and door:
+                fields.update(floor=floor, door=door)
+                if entrance:
+                    fields["entrance"] = entrance
+            elif fields:
+                for k, v in (("entrance", entrance), ("floor", floor), ("door", door)):
+                    if v and k not in fields:
+                        fields[k] = v
+            # With nothing from the model, a lone floor by format is not a correction: problems
+            # name floors too ("no funciona la luz del pasillo del segundo")
+        if not fields:
+            return None
+        if state.get("home_id") and state.get("estate_id"):
+            homes = await deps.repo.homes_of(state["estate_id"])  # type: ignore[arg-type]
+            current = next((h for h in homes if h.id == state["home_id"]), None)
+            if current is not None:
+                for k in ("entrance", "floor", "door"):
+                    if k not in fields and getattr(current, k):
+                        fields[k] = str(getattr(current, k))
+        return fields
 
     # ------------------------------------------------------------------ nodos que preguntan
 
@@ -1266,9 +1069,33 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             interp, history, extra, output = await _turn(state, node, yes_no=True)
             if output:
                 return output
-            if interp.confirms is True and not interp.address:
-                estate = await deps.repo.get_estate(candidate)
-                assert estate is not None
+            estate = await deps.repo.get_estate(candidate)
+            assert estate is not None
+            # "Yes, 12 Main Street, yes": repeating the building just read back is a yes, not
+            # another address (otherwise the same question is asked again)
+            repeats_it = bool(interp.address) and (
+                _address_similarity(interp.address or "", estate.address) >= ESTATE_THRESHOLD
+            )
+            if repeats_it:
+                interp = interp.model_copy(update={"address": None})
+            if not (interp.floor or interp.door):
+                # "The home is in the 2A" sometimes comes back without the apartment (1 in 3,
+                # eval 2026-11-16): a whole apartment by format is taken. Floor and door both,
+                # so the number of an address ("12 Main Street") never passes for a floor
+                entrance, floor, door = _extract_home_regex(state.get("user_utterance") or "")
+                if floor and door:
+                    interp = interp.model_copy(
+                        update={"entrance": entrance, "floor": floor, "door": door}
+                    )
+            # Answering the building question with the apartment ("it's 3A") moves the call
+            # forward: the caller accepts the building implicitly. The model sometimes marks it
+            # as a "no" because it is not the yes/no that was asked, so it is decided here.
+            implicit_yes = (
+                (not interp.address and bool(interp.floor or interp.door))
+                or (repeats_it and interp.confirms is not False)
+                or _moves_on_to_problem(interp, state.get("user_utterance") or "")
+            )
+            if (interp.confirms is True or implicit_yes) and not interp.address:
                 cfg, cfg_id = await deps.repo.effective_config(estate.id)
                 equipment_list = [
                     {**e.model_dump(mode="json"), "description": e.description()}
@@ -1297,7 +1124,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                     history=history,
                     candidate_estate_id=None,
                     pending=_merge_pending(state, interp),
-                    trace=_with_trace(state, node, "candidate_rejected", "nueva dirección"),
+                    trace=_with_trace(state, node, "candidate_rejected", "new address"),
                     **extra,
                 )
             if interp.confirms is False:
@@ -1402,7 +1229,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             request=utterance,
             result="estate_not_identified",
             finished=True,
-            trace=_with_trace(state, node, "call_logged", "sin incidencia técnica"),
+            trace=_with_trace(state, node, "call_logged", "no technical issue"),
         )
 
     async def identify_home(state: CallState) -> dict[str, Any]:
@@ -1422,15 +1249,16 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             and len(utterance.split()) <= 3
             and (previous_pending.get("floor") or previous_pending.get("door") or previous_pending.get("entrance"))
         ):
-            return _ask(
+            return _home_no_progress(
                 state,
-                node,
-                state.get("last_question") or render("identify_home.reask"),
-                history=_record_utterance(state),
-                turn_timings=_timings(state, interpretation_origin="deterministic"),
-                interpretation={"confirms": True, "origin": "deterministic", "llm_ms": 0},
+                _record_utterance(state),
+                dict(previous_pending),
+                {
+                    "turn_timings": _timings(state, interpretation_origin="deterministic"),
+                    "interpretation": {"confirms": True, "origin": "deterministic", "llm_ms": 0},
+                },
             )
-        # Formato corto y reconocible: sin LLM (bóveda: regex solo para formatos)
+        # Formato corto y reconocible: sin LLM (regla: regex solo para formatos)
         entrance, floor, door = _extract_home_regex(utterance)
         if floor and door and len(utterance.split()) <= 5:
             queued = {**state.get("pending", {}), "floor": floor, "door": door}
@@ -1450,7 +1278,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                     "llm_ms": 0,
                 },
                 trace=_with_trace(
-                    state, node, "regex_extraction", f"entrance={entrance} piso={floor} puerta={door}"
+                    state, node, "regex_extraction", f"entrance={entrance} floor={floor} door={door}"
                 ),
             )
         interp, history, extra, output = await _turn(state, node)
@@ -1487,6 +1315,12 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         for k, v in (("entrance", entrance), ("floor", floor), ("door", door)):
             if v and not queued.get(k):
                 queued[k] = v
+        said_home = any((interp.entrance, interp.floor, interp.door, entrance, floor, door))
+        if not said_home and any(previous_pending.get(k) for k in ("entrance", "floor", "door")):
+            # Mid-question ("which entrance, 1 or 2?") with nothing about the apartment in the
+            # answer: the question is asked again, but it uses up an attempt (no endless loop);
+            # whatever else was said, like the problem, stays pending
+            return _home_no_progress({**state, "history": history}, history, queued, extra)
         if not (queued.get("floor") and queued.get("door")):
             # Sin piso ni puerta ni portal: no ha dado ningún dato de vivienda -> reintento.
             # Con algún dato parcial, `next_step` lo conserva y pide solo lo que falta.
@@ -1502,32 +1336,129 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
     async def home_not_identified(state: CallState) -> dict[str, Any]:
         node = "home_not_identified"
         utterance = state.get("user_utterance")
-        if utterance is None:
+        already_said = state.get("request") or state.get("pending", {}).get("problem")
+        if utterance is None and not already_said:
             return _ask(
                 state,
                 node,
                 render("home_not_identified.collect"),
             )
-        history = _record_utterance(state)
+        if utterance is None:
+            # The problem was already told while the apartment was being asked: it is not
+            # asked for again
+            history = list(state.get("history", []))
+            request = str(already_said)
+            message = render("home_not_identified.noted")
+        else:
+            history = _record_utterance(state)
+            request = utterance
+            message = render("home_not_identified.farewell")
         cfg = _config(state)
         target = cfg.contact.email if cfg.contact else "administrator"
         call = _call_from(
-            {**state, "history": history, "request": utterance}, "home_not_identified"
+            {**state, "history": history, "request": request}, "home_not_identified"
         )
         await deps.repo.save_call(call)
         return _advance(
             state,
             "end",
-            render("home_not_identified.farewell"),
+            message,
             history=history,
-            request=utterance,
+            request=request,
             result="home_not_identified",
             finished=True,
             notice_channel="email",
             notice_target=target,
             trace=_with_trace(
-                state, node, "simulated_email", f"resumen al administrador -> {target}"
+                state, node, "simulated_email", f"summary to the property manager -> {target}"
             ),
+        )
+
+    async def confirm_home(state: CallState) -> dict[str, Any]:
+        node = "confirm_home"
+        utterance = state.get("user_utterance")
+        values = {
+            "address": state.get("estate_address") or "",
+            "home": _spoken_home(state),
+        }
+        if utterance is None:
+            return _ask(state, node, render("confirm_home.ask", **values))
+        interp, history, extra, output = await _turn(state, node, yes_no=True)
+        if output:
+            return output
+        queued = _merge_pending(state, interp)
+        # A short "No, it's 3B" is decided as a plain "no" without the model, so the apartment
+        # in it is also read by format here
+        corrected = await _corrected_home(state, interp, utterance, by_format=True)
+        if corrected:
+            # "No, it's 3B": next_step looks the new apartment up and it is read back again
+            queued.update(corrected)
+            return _advance(
+                state,
+                "next_step",
+                history=history,
+                pending=queued,
+                home_id=None,
+                home_label=None,
+                home_parts=None,
+                home_confirmed=None,
+                trace=_with_trace(state, node, "correction", "apartment"),
+                **extra,
+            )
+        if (
+            interp.address
+            and interp.confirms is not True
+            and await _estate_matches(interp.address)
+        ):
+            return _advance(
+                state,
+                "next_step",
+                history=history,
+                pending=queued,
+                estate_id=None,
+                estate_address=None,
+                home_id=None,
+                home_label=None,
+                home_parts=None,
+                home_confirmed=None,
+                trace=_with_trace(state, node, "correction", "building"),
+                **extra,
+            )
+        if interp.confirms is True or _moves_on_to_problem(interp, utterance):
+            # Going straight to the problem ("the elevator is stuck") accepts the read-back
+            return _advance(
+                state,
+                "next_step",
+                history=history,
+                pending=queued,
+                home_confirmed=True,
+                validations=[*state.get("validations", []), "home_confirmed_verbally"],
+                trace=_with_trace(state, node, "home_confirmed", state.get("home_label") or ""),
+                **extra,
+            )
+        if interp.confirms is False:
+            for k in ("entrance", "floor", "door"):
+                queued.pop(k, None)
+            return _ask(
+                state,
+                "identify_home",
+                render("confirm_home.wrong"),
+                history=history,
+                pending=queued,
+                home_id=None,
+                home_label=None,
+                home_parts=None,
+                home_confirmed=None,
+                trace=_with_trace(state, node, "home_rejected", state.get("home_label") or ""),
+                **extra,
+            )
+        return _ask(
+            state,
+            node,
+            render("confirm_home.yes_no", **values),
+            history=history,
+            pending=queued,
+            **extra,
         )
 
     async def collect_request(state: CallState) -> dict[str, Any]:
@@ -1540,11 +1471,39 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         if output:
             return output
         queued = _merge_pending(state, interp)
-        if not queued.get("problem"):
-            # Aquí lo que diga el vecino es la solicitud, aunque el modelo no lo haya marcado
-            queued["problem"] = utterance.strip()
-        else:
-            queued["problem"] = utterance.strip()  # la descripción literal manda; el resumen va aparte
+        if not interp.problem:
+            corrected = await _corrected_home(state, interp, utterance)
+            if corrected:
+                # The caller corrects the apartment instead of describing the problem: update
+                # the apartment and ask for the problem again (never file it as the request)
+                queued.pop("problem", None)
+                queued.update(corrected)
+                return _advance(
+                    state,
+                    "next_step",
+                    history=history,
+                    pending=queued,
+                    confirmed=None,
+                    home_id=None,
+                    home_label=None,
+                    home_parts=None,
+                    home_confirmed=None,
+                    trace=_with_trace(state, node, "correction", "apartment"),
+                    **extra,
+                )
+            if interp.confirms is not None or _is_filler(utterance):
+                # A bare "yes", "okay" or filler is not a problem description
+                queued.pop("problem", None)
+                return _ask(
+                    state,
+                    node,
+                    render("collect_request.retry"),
+                    history=history,
+                    pending=queued,
+                    **extra,
+                )
+        # La descripción literal manda; el resumen va aparte
+        queued["problem"] = utterance.strip()
         return _advance(
             state, "next_step", history=history, pending=queued, confirmed=None, **extra
         )
@@ -1581,7 +1540,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             )
             signals = {
                 "model": deps.llm.name,
-                "prompt_version": CLASSIFICATION_VERSION,
+                "prompt_version": classification_version(),
                 "valid_urgency": urgency in URGENCIES,
             }
         if category not in catalog:
@@ -1624,27 +1583,33 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             equipment = next(
                 (e for e in state.get("equipment_list", []) if e["id"] == state.get("equipment_id")), None
             )
-            if equipment:
+            if equipment and equipment["kind"] == state.get("category"):
+                # The elevator question (stopped or on and off, anyone inside?) fits the
+                # building's elevator too, and does not ask "since when" again
+                question = _p().detail_question(equipment["kind"])
+            elif equipment:
                 # La pregunta de la categoría ("para orientar al electricista") no sirve para un
                 # portero o un ascensor concretos
-                question = f"¿Qué le pasa exactamente al {equipment['kind']} y desde cuándo?"
+                question = _phrases().equipment_detail.format(kind=equipment["kind"])
             else:
-                question = _DETAIL_QUESTIONS.get(
-                    state.get("category") or "", _DETAIL_QUESTIONS["_"]
-                )
+                question = _p().detail_question(state.get("category"))
             return _ask(state, node, question, detail_requested=True)
         interp, history, extra, output = await _turn(state, node)
         if output:
             return output
         detail = utterance.strip()
         if _yes_no_answer(utterance) is not None and len(utterance.split()) <= 3:
-            detail = ""  # "no", "no sé": sin detalle útil
+            detail = ""  # "no", "I don't know": no useful detail
         request = state.get("request") or ""
         if detail:
-            request = f"{request} Detalle: {detail}"
+            request = f"{request} {_phrases().detail_prefix} {detail}"
         summary = state.get("summary") or ""
         if interp.problem and interp.problem.lower() not in summary.lower():
-            summary = f"{summary}; {interp.problem}" if summary else interp.problem
+            if _phrases().lowercase_summary:
+                # Read as one sentence: "the elevator is stuck, with people inside"
+                summary = f"{summary}, {_mid_sentence(interp.problem)}" if summary else interp.problem
+            else:
+                summary = f"{summary}; {interp.problem}" if summary else interp.problem
         reclassify: dict[str, Any] = {}
         if detail and state.get("category") == UNCLASSIFIABLE_CATEGORY:
             # El detalle suele nombrar lo que falla: se clasifica de nuevo con la solicitud entera
@@ -1679,7 +1644,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         node = "confirm_summary"
         utterance = state.get("user_utterance")
         if utterance is None:
-            # La categoría y la urgencia son internas: no se leen al vecino (Andreu, 2026-10-21).
+            # La categoría y la urgencia son internas: no se leen al vecino (2026-10-21).
             # Se siguen pasando para que una plantilla publicada que las use no se rompa.
             category = state.get("category") or ""
             # `who` stays empty: the caller's name is not kept. It is still passed so that a
@@ -1691,7 +1656,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 render(
                     "confirm_summary.summary",
                     who=who,
-                    summary=(state.get("summary") or "").rstrip(". "),
+                    summary=_mid_sentence((state.get("summary") or "").rstrip(". ")),
                     category=spoken_category(category),
                     urgency=state.get("urgency"),
                 ),
@@ -1723,11 +1688,15 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             for k in ("category", "urgency"):
                 if getattr(interp, k):
                     queued[k] = getattr(interp, k)
-        elif interp.floor or interp.door or interp.entrance:
-            changes.update(home_id=None, home_label=None, confirmed=None)
-            for k in ("entrance", "floor", "door"):
-                if getattr(interp, k):
-                    queued[k] = getattr(interp, k)
+        elif corrected := await _corrected_home(state, interp, utterance):
+            changes.update(
+                home_id=None,
+                home_label=None,
+                home_parts=None,
+                home_confirmed=None,
+                confirmed=None,
+            )
+            queued.update(corrected)
         elif (
             interp.address
             and interp.confirms is not True
@@ -1740,6 +1709,8 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 estate_address=None,
                 home_id=None,
                 home_label=None,
+                home_parts=None,
+                home_confirmed=None,
                 confirmed=None,
             )
             queued["address"] = interp.address
@@ -1783,7 +1754,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 urgency=None,
                 declared_urgency=None,
                 summary=None,
-                trace=_with_trace(state, node, "rechazado", "vuelve a recoger_solicitud"),
+                trace=_with_trace(state, node, "rejected", "back to collect_request"),
                 **extra,
             )
         return _ask(
@@ -1795,7 +1766,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         )
 
     async def handle_emergency(state: CallState) -> dict[str, Any]:
-        """Emergencia con el tratamiento especial activado (bóveda, Confirmado por Andreu).
+        """Emergencia con el tratamiento especial activado (Confirmado).
 
         Primero la indicación de seguridad y una confirmación mínima (finca y emergencia). Un
         "no" sin más la deja en urgencia alta y el flujo sigue normal; cualquier otra respuesta
@@ -1812,7 +1783,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 render(
                     "handle_emergency.notice",
                     seguridad=seguridad.strip(),
-                    address=state.get("estate_address") or "su finca",
+                    address=state.get("estate_address") or _phrases().your_building,
                 ),
                 trace=_with_trace(
                     state,
@@ -1838,6 +1809,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 estate_address=None,
                 home_id=None,
                 home_label=None,
+                home_parts=None,
                 urgency=None,
                 pending={**state.get("pending", {}), "address": interp.address},
                 trace=_with_trace(state, node, "correction", "address"),
@@ -1854,7 +1826,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             )
         request = state.get("request") or ""
         if not (_yes_no_answer(utterance) is not None and len(utterance.split()) <= 3):
-            request = f"{request} Detalle: {utterance.strip()}"
+            request = f"{request} {_phrases().detail_prefix} {utterance.strip()}"
         return _advance(
             state,
             "next_step",
@@ -1882,12 +1854,12 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             problems.append("no_estate")
         if not state.get("home_id"):
             problems.append("no_home")
-        # Regla de Andreu (2026-08-28): nosotros sustituimos al administrador. Con finca, vivienda
+        # Regla de diseño (2026-08-28): el bot sustituye al administrador. Con finca, vivienda
         # y solicitud confirmadas SIEMPRE se crea la incidencia; sin categoría o sin especialista
         # queda pendiente a nombre del administrador, nunca "escapa a lo que puedo gestionar".
         category = state.get("category")
         if category == UNCLASSIFIABLE_CATEGORY or category not in cfg.category_catalog:
-            validations.append("sin_categoria->pending_administrator")
+            validations.append("no_category->pending_administrator")
         elif category not in cfg.specialist_by_category:
             validations.append("no_specialist->pending_administrator")
         if problems:
@@ -1923,7 +1895,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             notice_channel="email",
             notice_target=target,
             trace=_with_trace(
-                state, node, "simulated_email", f"resumen para revisión -> {target}"
+                state, node, "simulated_email", f"summary for review -> {target}"
             ),
         )
 
@@ -1932,7 +1904,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         cfg = _config(state)
         target = cfg.contact.email if cfg.contact else "administrator"
         await deps.repo.save_call(
-            _call_from(state, "handed_to_administrator", "vecino pide persona")
+            _call_from(state, "handed_to_administrator", "caller asked for a person")
         )
         return _advance(
             state,
@@ -1942,7 +1914,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             finished=True,
             notice_channel="email",
             notice_target=target,
-            trace=_with_trace(state, node, "simulated_email", f"derivación -> {target}"),
+            trace=_with_trace(state, node, "simulated_email", f"handoff -> {target}"),
         )
 
     async def farewell(state: CallState) -> dict[str, Any]:
@@ -1958,7 +1930,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         )
 
     async def assign_specialist(state: CallState) -> dict[str, Any]:
-        """A quién va la incidencia (regla de Andreu, 2026-10-21, Provisional).
+        """A quién va la incidencia (regla de diseño, 2026-10-21, Provisional).
 
         Se avisa directamente solo a una reparación con alguien que la atienda: primero el
         mantenedor del equipo afectado, si no el especialista de la categoría. Si no es una
@@ -2070,7 +2042,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                     state,
                     node,
                     "simulated_emergency_notice",
-                    f"llamada pendiente -> {phone}; correo pendiente -> {coordinator}",
+                    f"call pending -> {phone}; email pending -> {coordinator}",
                 ),
             )
         rule = cfg.rule_for(state["urgency"])  # type: ignore[arg-type]
@@ -2078,7 +2050,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         rule_target = rule.target if rule else "specialist"
         specialist = state.get("specialist_name")
         # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. No prometemos
-        # hora: nadie ha hablado aún con el profesional (regla de Andreu, 2026-08-28).
+        # hora: nadie ha hablado aún con el profesional (regla de diseño, 2026-08-28).
         contact = (
             render("notify_channel.phone_contact")
             if state.get("caller_phone")
@@ -2126,6 +2098,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         "estate_not_identified": estate_not_identified,
         "identify_home": identify_home,
         "home_not_identified": home_not_identified,
+        "confirm_home": confirm_home,
         "collect_request": collect_request,
         "classify_problem": classify_problem,
         "ask_detail": ask_detail,

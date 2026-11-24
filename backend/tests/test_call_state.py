@@ -13,7 +13,7 @@ from time import perf_counter
 from typing import Any
 
 import pytest
-from conftest import FakeLLM
+from es_helpers import FakeLLM
 from sqlalchemy.dialects import postgresql
 
 from building_call.audit.install import STAMPS

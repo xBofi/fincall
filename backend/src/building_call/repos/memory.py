@@ -9,10 +9,10 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from building_call import i18n
 from building_call.audit.erasure import CallNotErasable
 from building_call.audit.install import DELETED_CALL
 from building_call.domain.config import (
-    Contact,
     EffectiveConfig,
     PartialConfig,
     resolve,
@@ -28,169 +28,28 @@ from building_call.domain.entities import (
     Specialist,
 )
 from building_call.domain.operations import User
+from building_call.repos import demo_data
 from building_call.repos.call_state import MemoryStateStore
 from building_call.repos.catalog import ReferenceField, Scope
 from building_call.repos.operational import AccessSession
 
 
-def _homes(
-    estate_id: str, entrances: list[str | None], floors: int, doors: list[str]
-) -> list[Home]:
-    out: list[Home] = []
-    for entrance in entrances:
-        for floor in range(1, floors + 1):
-            for door in doors:
-                hid = f"{estate_id}-{entrance or 'u'}-{floor}{door}"
-                out.append(
-                    Home(
-                        id=hid, estate_id=estate_id, entrance=entrance, floor=str(floor), door=door
-                    )
-                )
-    return out
-
-
 class MemoryRepository:
-    def __init__(self) -> None:
+    # Demo data, filled by `demo_data.load` in the language of the set
+    administrators: dict[str, Administrator]
+    specialists: dict[str, Specialist]
+    equipment_list: dict[str, list[Equipment]]
+    estates: dict[str, Estate]
+    homes: dict[str, list[Home]]
+    administrator_config: dict[str, PartialConfig]
+    administrator_config_id: dict[str, str]
+    estate_config: dict[str, tuple[str, PartialConfig]]
+
+    def __init__(self, demo: str | None = None) -> None:
+        """`demo`: language of the demo data set (`repos.demo_data`); None = `BC_LANGUAGE`."""
         # Estado vivo de las llamadas en curso (lo usa `CallManager`)
         self.call_state_store = MemoryStateStore()
-        self.administrators = {
-            "adm-demo": Administrator(id="adm-demo", name="Administraciones Demo SL"),
-        }
-        self.specialists = {
-            "esp-fontanero": Specialist(
-                id="esp-fontanero",
-                administrator_id="adm-demo",
-                name="Fontanería Pérez",
-                main_category="plumbing",
-                contact_channel="email",
-                target="fontaneria@demo.test",
-            ),
-            "esp-electricista": Specialist(
-                id="esp-electricista",
-                administrator_id="adm-demo",
-                name="Electricidad Gómez",
-                main_category="electrical",
-                contact_channel="email",
-                target="electricidad@demo.test",
-            ),
-            "esp-ascensores": Specialist(
-                id="esp-ascensores",
-                administrator_id="adm-demo",
-                name="Ascensores Norte",
-                main_category="elevator",
-                contact_channel="call",
-                target="+34600000001",
-            ),
-            "esp-cerrajero": Specialist(
-                id="esp-cerrajero",
-                administrator_id="adm-demo",
-                name="Cerrajería Rápida",
-                main_category="locksmith",
-                contact_channel="email",
-                target="cerrajeria@demo.test",
-            ),
-            # Mantenedores de equipos concretos (no son el especialista de ninguna categoría)
-            "esp-porteros": Specialist(
-                id="esp-porteros",
-                administrator_id="adm-demo",
-                name="Porteros Levante",
-                main_category="electrical",
-                contact_channel="email",
-                target="soporte@porteroslevante.demo.test",
-            ),
-            "esp-automatismos": Specialist(
-                id="esp-automatismos",
-                administrator_id="adm-demo",
-                name="Automatismos Sur",
-                main_category="locksmith",
-                contact_channel="call",
-                target="+34600000002",
-            ),
-        }
-        # Inventario de demostración, hasta que el administrador dé el real (Pendiente)
-        self.equipment_list: dict[str, list[Equipment]] = {
-            "finca-mayor-12": [
-                Equipment(
-                    id="eq-mayor12-portero",
-                    estate_id="finca-mayor-12",
-                    kind="portero automático",
-                    location="portal",
-                    brand="Fermax",
-                    model="Citymax",
-                    installer="Porteros Levante",
-                    maintainer_id="esp-porteros",
-                    contract="PL-2024-118",
-                ),
-                Equipment(
-                    id="eq-mayor12-ascensor",
-                    estate_id="finca-mayor-12",
-                    kind="ascensor",
-                    brand="Orona",
-                    installer="Orona",
-                    maintainer_id="esp-ascensores",
-                    contract="AN-5531",
-                ),
-            ],
-            "finca-alameda-5": [
-                Equipment(
-                    id="eq-alameda5-garaje",
-                    estate_id="finca-alameda-5",
-                    kind="puerta de garaje automática",
-                    location="garaje",
-                    brand="Nice",
-                    installer="Automatismos Sur",
-                    maintainer_id="esp-automatismos",
-                ),
-            ],
-        }
-        self.estates = {
-            "finca-mayor-12": Estate(
-                id="finca-mayor-12",
-                administrator_id="adm-demo",
-                address="Calle Mayor 12",
-                email="mayor12@demo.test",
-                official_phone="+34910000001",
-            ),
-            "finca-alameda-5": Estate(
-                id="finca-alameda-5",
-                administrator_id="adm-demo",
-                address="Avenida de la Alameda 5",
-                email="alameda5@demo.test",
-                official_phone="+34910000002",
-            ),
-        }
-        self.homes: dict[str, list[Home]] = {
-            "finca-mayor-12": _homes("finca-mayor-12", [None], 4, ["A", "B"]),
-            "finca-alameda-5": _homes("finca-alameda-5", ["1", "2"], 3, ["A", "B", "C"]),
-        }
-        self.administrator_config: dict[str, PartialConfig] = {
-            "adm-demo": PartialConfig(
-                specialist_by_category={
-                    "plumbing": "esp-fontanero",
-                    "electrical": "esp-electricista",
-                    "elevator": "esp-ascensores",
-                    "locksmith": "esp-cerrajero",
-                },
-            ),
-        }
-        # Id de la versión vigente de cada capa de administrador (como en `configs`)
-        self.administrator_config_id: dict[str, str] = {"adm-demo": "cfg-adm-demo-v1"}
-        # Versión de configuración por finca: (id_version, documento)
-        self.estate_config: dict[str, tuple[str, PartialConfig]] = {
-            "finca-mayor-12": (
-                "cfg-mayor-12-v1",
-                PartialConfig(
-                    contact=Contact(email="mayor12@demo.test", official_phone="+34910000001"),
-                ),
-            ),
-            "finca-alameda-5": (
-                "cfg-alameda-5-v1",
-                PartialConfig(
-                    contact=Contact(email="alameda5@demo.test", official_phone="+34910000002"),
-                    home_attempts=4,
-                ),
-            ),
-        }
+        demo_data.load(self, demo or i18n.default_code())
         self.calls: dict[str, Call] = {}
         self.incidents: dict[str, Incident] = {}
         self.incident_history: list[IncidentHistoryEntry] = []

@@ -89,7 +89,7 @@ class FakeTts:
     def available(self) -> bool:
         return True
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
         self.texts.append(text)
         return _tone(16000, 40)  # 2 trozos de 20 ms
 
@@ -130,7 +130,7 @@ async def _wait(cond, timeout: float = 2.0) -> None:  # type: ignore[no-untyped-
 async def test_bridge_greets_answers_and_hangs_up(manager: CallManager) -> None:
     stt, tts, channel = FakeStt(), FakeTts(), FakeChannel()
     bridge = CallBridge(
-        manager, lambda _rate, _vocab: stt, tts, channel, vocabulary=[], phone="+34600000000"
+        manager, lambda _rate, _vocab, _lang: stt, tts, channel, vocabulary=[], phone="+34600000000"
     )
     call_id = await bridge.begin()
     # Saludo sintetizado y enviado en μ-law con marca del turno 0
@@ -177,7 +177,7 @@ async def test_bridge_saves_both_voices_and_the_mix(manager: CallManager, tmp_pa
     store = AudioStore(tmp_path, "secret", retention_days=14, url_seconds=60)
     stt, tts, channel = FakeStt(), FakeTts(), FakeChannel()
     bridge = CallBridge(
-        manager, lambda _t, _v: stt, tts, channel, vocabulary=[], phone=None,
+        manager, lambda _t, _v, _lang: stt, tts, channel, vocabulary=[], phone=None,
         repo=repo, audio_store=store,
     )  # fmt: skip
     cid = await bridge.begin()
@@ -222,7 +222,7 @@ async def client(deps: Dependencies, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(global_settings, "twilio_account_sid", "AC1")
     monkeypatch.setattr(global_settings, "twilio_auth_token", "tok")
     monkeypatch.setattr(global_settings, "tts", "none")
-    app = create_app(deps, streaming_factory=lambda _t, _v: FakeStt())
+    app = create_app(deps, streaming_factory=lambda _t, _v, _lang: FakeStt())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as c:
         yield c
 
@@ -328,7 +328,7 @@ class FailingCallManager(CallManager):
 async def test_bridge_asks_to_repeat_if_a_turn_fails(deps: Dependencies) -> None:
     manager = FailingCallManager(deps, failures=1)
     stt, tts, channel = FakeStt(), FakeTts(), FakeChannel()
-    bridge = CallBridge(manager, lambda _t, _v: stt, tts, channel, vocabulary=[], phone=None)
+    bridge = CallBridge(manager, lambda _t, _v, _lang: stt, tts, channel, vocabulary=[], phone=None)
     call_id = await bridge.begin()
     await stt.queue.put(TurnEvent("final", "Calle Mayor 12"))
     await _wait(lambda: len(tts.texts) == 2)
@@ -345,7 +345,7 @@ async def test_bridge_closes_with_apology_and_leaves_the_call_for_review(
 ) -> None:
     manager = FailingCallManager(deps, failures=2)
     stt, tts, channel = FakeStt(), FakeTts(), FakeChannel()
-    bridge = CallBridge(manager, lambda _t, _v: stt, tts, channel, vocabulary=[], phone=None)
+    bridge = CallBridge(manager, lambda _t, _v, _lang: stt, tts, channel, vocabulary=[], phone=None)
     call_id = await bridge.begin()
     for _ in range(2):
         n = len(tts.texts)
@@ -362,7 +362,7 @@ async def test_bridge_closes_with_apology_and_leaves_the_call_for_review(
 
 async def test_bridge_apologises_if_the_stt_drops(manager: CallManager) -> None:
     stt, tts, channel = FakeStt(), FakeTts(), FakeChannel()
-    bridge = CallBridge(manager, lambda _t, _v: stt, tts, channel, vocabulary=[], phone=None)
+    bridge = CallBridge(manager, lambda _t, _v, _lang: stt, tts, channel, vocabulary=[], phone=None)
     call_id = await bridge.begin()
     await stt.queue.put(None)  # AssemblyAI cierra el stream sin que nadie haya colgado
     await _wait(lambda: bridge.finished)

@@ -521,8 +521,8 @@ async def test_a_call_in_progress_is_not_erased_in_postgres(db: AsyncEngine) -> 
 async def test_a_change_from_the_console_is_recorded_as_the_person(
     db: AsyncEngine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from conftest import TEST_SECRET, FakeLLM
     from httpx import ASGITransport, AsyncClient
+    from session_helpers import TEST_SECRET, FakeLLM
 
     from building_call.api.main import create_app
     from building_call.auth import hash_session_token

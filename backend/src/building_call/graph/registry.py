@@ -23,6 +23,7 @@ _STANDARD_ORDER = [
     "estate_not_identified",
     "identify_home",
     "home_not_identified",
+    "confirm_home",
     "collect_request",
     "classify_problem",
     "ask_detail",

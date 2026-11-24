@@ -25,10 +25,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
-import unicodedata
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, Protocol
+
+from building_call import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -46,28 +46,34 @@ FILLER_WAIT_S = 0.8
 #: si habla en un instante
 FINAL_WAIT_S = 1.2
 
-#: Palabras que solas no dicen nada al grafo: tras ellas el vecino suele seguir. Sin "sí" ni "no"
-#: (son respuestas) y "vale" o "bueno" sin nada más tampoco (valen por un "sí"). "a ver" y
-#: "o sea" van juntas: "A." u "O." sueltas son la letra de una puerta
-_VERBAL_TICS = frozenset(
-    "ah eh oh ay uy pues mire mira oiga oye perdon perdone perdona disculpe hola buenas "
-    "bueno vale a_ver entonces este esto y o_sea".split()
-)
-_LOOSE_ANSWERS = frozenset({"vale", "bueno"})
+def _fillers(language: str) -> tuple[list[list[str]], frozenset[str]]:
+    """Muletillas del idioma (`lexicon.turn_fillers`) como listas de palabras, las largas primero
+    ("a ver" antes que "a": "A." suelta es la letra de una puerta), y las respuestas sueltas."""
+    parser = i18n.parser_for(language)
+    lexicon = parser.language.lexicon
+    phrases = sorted(
+        (parser.normalize(f).split() for f in lexicon.turn_fillers), key=len, reverse=True
+    )
+    return phrases, frozenset(parser.normalize(w) for w in lexicon.loose_answers)
 
 
-def _words(text: str) -> list[str]:
-    without_accents = unicodedata.normalize("NFKD", text.lower()).encode("ascii", "ignore").decode()
-    words = " ".join(re.findall(r"[a-z0-9]+", without_accents))
-    return re.sub(r"\b(a) (ver)\b|\b(o) (sea)\b", r"\1\3_\2\4", words).split()
-
-
-def only_fillers(text: str) -> bool:
-    """El turno no trae nada que el grafo pueda usar: el vecino aún no ha dicho lo que quiere."""
-    words = _words(text)
-    if not words or all(p in _LOOSE_ANSWERS for p in words):
+def only_fillers(text: str, language: str | None = None) -> bool:
+    """El turno no trae nada que el grafo pueda usar: el vecino aún no ha dicho lo que quiere.
+    Sin "sí" ni "no" (son respuestas), y "vale" u "okay" sin nada más tampoco (valen por un sí)."""
+    code = language or i18n.active_code()
+    phrases, loose = _fillers(code)
+    words = i18n.parser_for(code).normalize(text).split()
+    if not words or all(p in loose for p in words):
         return False
-    return all(p in _VERBAL_TICS for p in words)
+    i = 0
+    while i < len(words):
+        for phrase in phrases:
+            if phrase and words[i : i + len(phrase)] == phrase:
+                i += len(phrase)
+                break
+        else:
+            return False
+    return True
 
 
 class TurnsApi(Protocol):
@@ -79,8 +85,9 @@ class TurnsApi(Protocol):
 
 
 class CallControl:
-    def __init__(self, call_id: str) -> None:
+    def __init__(self, call_id: str, language: str | None = None) -> None:
         self.call_id = call_id
+        self.language = language
         self.turn = 0
         self.finished = False
         self.text = ""
@@ -138,7 +145,7 @@ class CallControl:
         with_voice, self._close_with_voice = self._close_with_voice, False
         clock = asyncio.get_running_loop().time
         if not with_voice:
-            if not only_fillers(text):
+            if not only_fillers(text, self.language):
                 return False
             limit = clock() + filler_wait_s
             while not speaking():

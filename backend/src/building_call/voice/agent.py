@@ -39,6 +39,7 @@ from livekit.agents import (
 )
 from livekit.plugins import assemblyai, elevenlabs, silero
 
+from building_call import i18n
 from building_call.graph.ledger import cut_by_words
 from building_call.settings import settings
 from building_call.stt_streaming import validate_eu_endpoint
@@ -60,13 +61,14 @@ class ApiClient:
         r.raise_for_status()
         return r.json()  # type: ignore[no-any-return]
 
-    async def vocabulary(self) -> list[str]:
-        r = await self._http.get("/api/voice/vocabulary")
+    async def vocabulary(self, language: str | None = None) -> list[str]:
+        params = {"language": language} if language else None
+        r = await self._http.get("/api/voice/vocabulary", params=params)
         r.raise_for_status()
         return r.json()  # type: ignore[no-any-return]
 
-    async def begin(self, phone: str | None) -> dict[str, Any]:
-        return await self._post("/api/calls", {"caller_phone": phone})
+    async def begin(self, phone: str | None, language: str | None = None) -> dict[str, Any]:
+        return await self._post("/api/calls", {"caller_phone": phone, "language": language})
 
     async def get(self, call_id: str) -> dict[str, Any]:
         r = await self._http.get(f"/api/calls/{call_id}")
@@ -161,7 +163,7 @@ class FincallAgent(Agent):
 _MODELS_WITH_LANGUAGE = ("u3-rt-pro", "u3-rt-pro-beta-1", "universal-3-5-pro", "universal-3-6-pro")
 
 
-def stt_options(vocabulary: list[str]) -> dict[str, Any]:
+def stt_options(vocabulary: list[str], language: str | None = None) -> dict[str, Any]:
     """Argumentos de `assemblyai.STT`. Separado para probarlo sin abrir conexiones."""
     host = settings.assemblyai_streaming_host
     validate_eu_endpoint(host)  # solo el endpoint europeo, como el resto del sistema
@@ -179,12 +181,12 @@ def stt_options(vocabulary: list[str]) -> dict[str, Any]:
     }
     # Solo los Universal-3 Pro aceptan fijar el idioma; el multilingüe lo detecta
     if model in _MODELS_WITH_LANGUAGE:
-        options["language_codes"] = "es"
+        options["language_codes"] = i18n.get(language).stt.language_code
     return options
 
 
-def _stt(vocabulary: list[str]) -> assemblyai.STT:
-    return assemblyai.STT(**stt_options(vocabulary))
+def _stt(vocabulary: list[str], language: str) -> assemblyai.STT:
+    return assemblyai.STT(**stt_options(vocabulary, language))
 
 
 def vad_options() -> dict[str, Any]:
@@ -218,12 +220,13 @@ def turn_options() -> dict[str, Any]:
     }
 
 
-def _tts() -> elevenlabs.TTS:
+def _tts(language: str) -> elevenlabs.TTS:
+    spec = i18n.get(language).tts
     return elevenlabs.TTS(
         api_key=settings.elevenlabs_api_key,
-        voice_id=settings.elevenlabs_voice,
+        voice_id=spec.elevenlabs_voice or settings.elevenlabs_voice,
         model=settings.elevenlabs_model,
-        language="es",
+        language=spec.elevenlabs_language,
         encoding="pcm_24000",  # con v4 las marcas por palabra solo son exactas en PCM
     )
 
@@ -243,12 +246,14 @@ async def session(ctx: JobContext) -> None:
     if call_id := metadata.get("call_id"):
         view = await api.get(call_id)
     else:
-        view = await api.begin(metadata.get("phone"))
-    control = CallControl(view["call_id"])
+        view = await api.begin(metadata.get("phone"), metadata.get("language"))
+    # The call's language: ears, mouth and turn fillers all follow it
+    language = view.get("language") or i18n.default_code()
+    control = CallControl(view["call_id"], language)
 
     session: AgentSession[None] = AgentSession(
-        stt=_stt(await api.vocabulary()),
-        tts=_tts(),
+        stt=_stt(await api.vocabulary(language), language),
+        tts=_tts(language),
         vad=silero.VAD.load(**vad_options()),
         use_tts_aligned_transcript=True,
         turn_handling=turn_options(),  # type: ignore[arg-type]

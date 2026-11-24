@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from building_call import i18n
 from building_call.access import Access
 from building_call.domain.config import resolve
 from building_call.domain.operations import Role, User
@@ -168,77 +169,103 @@ def create_flow_router(
 
     # ------------------------------------------------------------------------------- plantillas
 
-    def _view(id_: str) -> dict[str, Any]:
+    def _language(language: str | None) -> str:
+        """`?language=en`: the templates of that language; none = the default one."""
+        if language is None:
+            return i18n.default_code()
+        code = i18n.normalize_code(language)
+        if code is None:
+            raise HTTPException(422, f"Idioma no soportado: {language}")
+        return code
+
+    def _view(id_: str, language: str) -> dict[str, Any]:
         p = tpl.CATALOG[id_]
         return {
             "id": id_,
+            "language": language,
             "node": p.node,
             "description": p.description,
-            "text": tpl.effective_text(id_),
-            "original_text": p.text,
+            "text": tpl.effective_text(id_, language),
+            "original_text": tpl.base_text(id_, language),
             "variables": list(p.variables),
             "question": p.question,
             "question_in": p.question_in,
-            "overridden": tpl.is_overridden(id_),
-            "version": tpl.effective_version(id_),
+            "overridden": tpl.is_overridden(id_, language),
+            "version": tpl.effective_version(id_, language),
         }
 
     @r.get("/templates")
-    async def list_templates(_: User = Depends(reviewer)) -> list[dict[str, Any]]:
-        return [_view(id_) for id_ in tpl.CATALOG]
+    async def list_templates(
+        language: str | None = None, _: User = Depends(reviewer)
+    ) -> list[dict[str, Any]]:
+        code = _language(language)
+        return [_view(id_, code) for id_ in tpl.CATALOG]
 
     @r.get("/templates/{template_id}")
-    async def view_template(template_id: str, _: User = Depends(reviewer)) -> dict[str, Any]:
+    async def view_template(
+        template_id: str, language: str | None = None, _: User = Depends(reviewer)
+    ) -> dict[str, Any]:
         if template_id not in tpl.CATALOG:
             raise HTTPException(404, "Plantilla desconocida")
-        return {**_view(template_id), "history": await repo.template_history(template_id)}
+        code = _language(language)
+        history = await repo.template_history(tpl.storage_key(template_id, code))
+        return {**_view(template_id, code), "history": history}
 
     @r.put("/templates/{template_id}")
     async def publish_template(
-        template_id: str, body: TemplateText, actor: User = Depends(owner)
+        template_id: str,
+        body: TemplateText,
+        language: str | None = None,
+        actor: User = Depends(owner),
     ) -> dict[str, Any]:
         if template_id not in tpl.CATALOG:
             raise HTTPException(404, "Plantilla desconocida")
+        code = _language(language)
         problems = tpl.validate(template_id, body.text)
         if problems:
             raise HTTPException(422, {"problems": problems})
-        previous = tpl.effective_text(template_id)
-        version = await repo.save_template(template_id, body.text.strip(), actor.id)
-        tpl.apply(template_id, body.text, version)
+        previous = tpl.effective_text(template_id, code)
+        key = tpl.storage_key(template_id, code)
+        version = await repo.save_template(key, body.text.strip(), actor.id)
+        tpl.apply(template_id, body.text, version, code)
         await record_audit(
             actor,
             "template_published",
-            template_id,
+            key,
             previous=previous,
-            fresh=tpl.effective_text(template_id),
+            fresh=tpl.effective_text(template_id, code),
             version=version,
         )
-        return _view(template_id)
+        return _view(template_id, code)
 
     @r.delete("/templates/{template_id}")
     async def restore_template(
-        template_id: str, actor: User = Depends(owner)
+        template_id: str, language: str | None = None, actor: User = Depends(owner)
     ) -> dict[str, Any]:
         if template_id not in tpl.CATALOG:
             raise HTTPException(404, "Plantilla desconocida")
-        previous = tpl.effective_text(template_id)
-        await repo.delete_template(template_id)
-        tpl.restore(template_id)
-        await record_audit(actor, "template_restored", template_id, previous=previous)
-        return _view(template_id)
+        code = _language(language)
+        previous = tpl.effective_text(template_id, code)
+        key = tpl.storage_key(template_id, code)
+        await repo.delete_template(key)
+        tpl.restore(template_id, code)
+        await record_audit(actor, "template_restored", key, previous=previous)
+        return _view(template_id, code)
 
     @r.post("/templates/{template_id}/validate")
     async def validate_template(
-        template_id: str, body: TemplateText, _: User = Depends(owner)
+        template_id: str,
+        body: TemplateText,
+        language: str | None = None,
+        _: User = Depends(owner),
     ) -> dict[str, Any]:
         """Previsualiza sin publicar: qué problemas tiene y qué hechos tendrán que sobrevivir."""
         if template_id not in tpl.CATALOG:
             raise HTTPException(404, "Plantilla desconocida")
         from building_call.llm.phrasing import required_facts
 
-        return {
-            "problems": tpl.validate(template_id, body.text),
-            "required_facts": sorted(required_facts(body.text)),
-        }
+        with i18n.use(_language(language)):
+            facts = sorted(required_facts(body.text))
+        return {"problems": tpl.validate(template_id, body.text), "required_facts": facts}
 
     return r

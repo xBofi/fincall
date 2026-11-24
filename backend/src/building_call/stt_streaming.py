@@ -57,6 +57,8 @@ class AssemblyAIStreamingSession:
         eot_silence_ms: int = 220,
         max_silence_ms: int = 800,
         keyterms: list[str] | None = None,
+        language: str | None = None,
+        speech_model: str = "",
     ) -> None:
         """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
         terminado supera `eot_confidence` y hay `eot_silence_ms` de silencio; si no está
@@ -76,6 +78,13 @@ class AssemblyAIStreamingSession:
             "min_end_of_turn_silence_when_confident": eot_silence_ms,
             "max_turn_silence": max_silence_ms,
         }
+        if speech_model:
+            params["speech_model"] = speech_model
+        if language:
+            # Steers the multilingual model to the call's language (ISO 639-1; JSON list, as the
+            # LiveKit plugin sends it). Universal-Streaming covers es, en, ca, ar, hi and ur
+            params["language_codes"] = json.dumps([language])
+        self.language = language
         if keyterms:
             # Vocabulario de la finca: sin él AssemblyAI se come las letras sueltas
             # ("puerta A" -> "Puerta.", "tercero A" -> "tercero"). Medido 2026-08-28.

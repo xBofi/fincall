@@ -9,9 +9,9 @@ from urllib.parse import parse_qs, urlparse
 
 import jwt
 import pytest
-from conftest import TEST_SECRET
 from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient
+from session_helpers import TEST_SECRET
 
 from building_call.api.main import create_app
 from building_call.graph.nodes import Dependencies

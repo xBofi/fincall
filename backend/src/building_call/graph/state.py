@@ -22,6 +22,11 @@ class Trace(TypedDict):
 class CallState(TypedDict, total=False):
     call_id: str
     started_at: str
+    # Language of the call (ISO 639-1, `i18n` registry): what the bot speaks and how the
+    # deterministic paths read the caller. `language_locked`: chosen explicitly (number, console,
+    # the caller asking for it), so automatic detection no longer changes it
+    language: str
+    language_locked: bool
     caller_phone: str | None
     turn: int
     current_node: str
@@ -72,6 +77,10 @@ class CallState(TypedDict, total=False):
     estate_attempts: int
     home_id: str | None
     home_label: str | None
+    # The caller has confirmed building + apartment read back together
+    home_confirmed: bool | None
+    # entrance / floor / door of the identified apartment, for reading it back in any language
+    home_parts: dict[str, str] | None
     home_attempts: int
 
     # Solicitud
@@ -93,10 +102,14 @@ class CallState(TypedDict, total=False):
     review_reason: str | None
 
 
-def initial_state(call_id: str, started_at: str, graph: str) -> CallState:
+def initial_state(
+    call_id: str, started_at: str, graph: str, language: str = "es", locked: bool = False
+) -> CallState:
     return CallState(
         call_id=call_id,
         started_at=started_at,
+        language=language,
+        language_locked=locked,
         caller_phone=None,
         turn=0,
         current_node="next_step",
@@ -132,6 +145,8 @@ def initial_state(call_id: str, started_at: str, graph: str) -> CallState:
         estate_attempts=0,
         home_id=None,
         home_label=None,
+        home_confirmed=None,
+        home_parts=None,
         home_attempts=0,
         request=None,
         category=None,

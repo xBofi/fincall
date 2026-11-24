@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_session
 from httpx import ASGITransport, AsyncClient
+from session_helpers import TEST_SECRET, make_session
 
 from building_call.access import Access
 from building_call.api.main import MIN_SECRET_LENGTH, create_app, signing_secret

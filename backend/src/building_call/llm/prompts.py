@@ -5,8 +5,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from building_call import i18n
 from building_call.domain.config import UNCLASSIFIABLE_CATEGORY
-from building_call.llm import wire
+from building_call.llm import prompts_en, wire
 
 CLASSIFICATION_VERSION = "clasificacion-v6"
 
@@ -36,7 +37,25 @@ def described_catalog(catalog: list[str]) -> str:
     )
 
 
-def classification_system_prompt(catalog: list[str], equipment_list: list[tuple[str, str]] | None = None) -> str:
+def _spanish(language: str | None) -> bool:
+    return i18n.get(language or i18n.active_code()).prompts == "es"
+
+
+def classification_version(language: str | None = None) -> str:
+    return CLASSIFICATION_VERSION if _spanish(language) else prompts_en.CLASSIFICATION_VERSION
+
+
+def classification_system_prompt(
+    catalog: list[str],
+    equipment_list: list[tuple[str, str]] | None = None,
+    language: str | None = None,
+) -> str:
+    """In the call's prompt set: Spanish, or English with a note on the caller's language."""
+    code = language or i18n.active_code()
+    if not _spanish(code):
+        return prompts_en.classification_system_prompt(
+            catalog, equipment_list
+        ) + prompts_en.language_note(i18n.get(code).name)
     return _base_classification(catalog) + (
         " Si la incidencia afecta a uno de los equipos de esta finca, da su id en 'equipo', "
         f"exactamente uno de: {'; '.join(f'{i} ({d})' for i, d in equipment_list)}. Si nombra el tipo "
@@ -69,7 +88,20 @@ def _base_classification(catalog: list[str]) -> str:
     )
 
 
-def classification_schema(catalog: list[str]) -> dict[str, Any]:
+def classification_schema(catalog: list[str], language: str | None = None) -> dict[str, Any]:
+    if not _spanish(language):
+        return {
+            "title": "classification",
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "enum": list(catalog)},
+                "urgency": {"type": "string", "enum": list(wire.URGENCIES.values())},
+                "summary": {"type": "string"},
+                "work_type": {"type": "string", "enum": list(wire.WORK_TYPES.values())},
+                "equipment": {"type": "string"},
+            },
+            "required": ["category", "urgency", "summary", "work_type"],
+        }
     return {
         "title": "classification",
         "type": "object",

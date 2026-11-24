@@ -14,8 +14,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_session
 from httpx import ASGITransport, AsyncClient
+from session_helpers import TEST_SECRET, make_session
 
 from building_call.api.main import create_app
 from building_call.audit.access_log import AccessLog, MemoryAccessStore, NotAuditable
