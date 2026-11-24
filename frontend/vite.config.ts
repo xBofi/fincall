@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     host: tunel ? '127.0.0.1' : undefined,
     // Vite rechaza los Host que no conoce; sin esto el túnel responde "Blocked request"
-    allowedHosts: ['.ngrok-free.app', '.ngrok.app', '.ngrok.io'],
+    allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app', '.ngrok.io'],
     hmr: tunel ? { protocol: 'wss', clientPort: 443 } : undefined,
     proxy: {
       // Mismo origen para la API y el WebSocket de voz: así no hace falta CORS ni tocar la cookie
