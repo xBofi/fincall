@@ -53,6 +53,7 @@ const es: Messages = {
   'routing.replay.empty': 'Aún no hay llamadas guardadas.',
   'routing.replay.legacy': 'Llamada anterior a la traza por nodo: secuencia reconstruida de las decisiones, sin tiempos ni motivos.',
   'routing.replay.loading': 'Cargando la llamada…',
+  'routing.replay.active': 'en curso',
 
   'routing.demo.note': 'Llamada guionizada grabada a través del grafo real ({llm}, {date}). Sin telefonía: se reproduce en el navegador.',
   'routing.demo.speed': 'Velocidad',
@@ -173,6 +174,7 @@ const en: Messages = {
   'routing.replay.empty': 'No saved calls yet.',
   'routing.replay.legacy': 'Call recorded before per-node tracing: sequence rebuilt from decisions, without timings or reasons.',
   'routing.replay.loading': 'Loading the call…',
+  'routing.replay.active': 'in progress',
 
   'routing.demo.note': 'Scripted call recorded through the real graph ({llm}, {date}). No telephony: it plays in the browser.',
   'routing.demo.speed': 'Speed',

@@ -74,6 +74,9 @@ const RoutingNode = memo(function RoutingNode({ data, selected }: NodeProps<Node
       {/* Vueltas al reparto: salen por la entrada del nodo y llegan por la salida del reparto */}
       <Handle type="source" position={inSide} id="back" className="rv-handle" isConnectable={false} />
       <Handle type="target" position={outSide} id="loopin" className="rv-handle" isConnectable={false} />
+      {/* Saltos a la fila siguiente cuando ELK pliega el grafo: de abajo a arriba */}
+      <Handle type="source" position={Position.Bottom} id="down" className="rv-handle" isConnectable={false} />
+      <Handle type="target" position={Position.Top} id="up" className="rv-handle" isConnectable={false} />
       {terminal ? (
         <div className="rv-node-pill">
           <span className="rv-node-icon" aria-hidden>{ROLE_ICON[node.role]}</span>
@@ -133,6 +136,17 @@ const RoutingEdge = memo(function RoutingEdge(props: EdgeProps<Edge<EdgeData>>) 
     </>
   )
 })
+
+/** Qué asas usa una arista según su tipo y dónde quedaron sus extremos. */
+function handlesFor(kind: EdgeKind, from?: Placed, to?: Placed, rtl = false): { sourceHandle: string; targetHandle: string } {
+  if (kind === 'return') return { sourceHandle: 'back', targetHandle: 'loopin' }
+  if (from && to) {
+    const backwards = rtl ? to.x > from.x + from.width : to.x + to.width < from.x
+    // El destino quedó en una fila de abajo y por detrás: el grafo se plegó aquí
+    if (backwards && to.y > from.y + from.height) return { sourceHandle: 'down', targetHandle: 'up' }
+  }
+  return { sourceHandle: 'out', targetHandle: 'in' }
+}
 
 const nodeTypes = { routing: RoutingNode }
 const edgeTypes = { routing: RoutingEdge }
@@ -226,8 +240,7 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
         target: e.target,
         type: 'routing',
         hidden,
-        sourceHandle: e.kind === 'return' ? 'back' : 'out',
-        targetHandle: e.kind === 'return' ? 'loopin' : 'in',
+        ...handlesFor(e.kind, placed?.get(e.source), placed?.get(e.target), rtl),
         markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
         zIndex: state === 'current' ? 10 : state === 'turn' ? 5 : 0,
         data: {
@@ -240,7 +253,7 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
       })
     }
     return list
-  }, [structure, view, selected, turnEdges, tracing, compact])
+  }, [structure, view, selected, turnEdges, tracing, compact, placed, rtl])
 
   const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
     if (sel.length === 1 && sel[0].id !== selected) onSelect(sel[0].id)

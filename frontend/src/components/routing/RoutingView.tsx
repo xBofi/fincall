@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Badge, Button, Empty, Segmented, Select, Skeleton, Tabs } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { operations, type CallRecord, type CallView } from '../../api'
+import { result as resultLabel } from '../../texts'
 import type { DemoRecording, GraphStructure, Role, TurnRecord } from './types'
 import { emptyTrace, firstStepOfTurn, fromDecisions, fromTurns, viewAt, type TraceModel } from './trace'
 import { RoutingGraph } from './RoutingGraph'
@@ -224,7 +225,7 @@ export function RoutingView({
               value={replayId ?? undefined}
               onChange={setReplayId}
               notFoundContent={t('routing.replay.empty')}
-              options={(calls ?? []).map((c) => ({ value: c.id, label: `${new Date(c.started_at).toLocaleString()} · ${c.result ?? c.state}` }))}
+              options={(calls ?? []).map((c) => ({ value: c.id, label: `${new Date(c.started_at).toLocaleString()} · ${c.result ? resultLabel(c.result)?.short ?? c.result : t('routing.replay.active')}` }))}
             />
           )}
           {modes.length > 1 && <Segmented

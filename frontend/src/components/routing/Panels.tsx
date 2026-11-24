@@ -10,6 +10,10 @@ import { t } from './i18n'
 const show = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '—'
   if (typeof v === 'string') return v
+  if (typeof v === 'object' && Object.keys(v as object).length === 0) return '—'
+  if (typeof v === 'object' && !Array.isArray(v)) {
+    return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${k}: ${typeof x === 'string' ? x : JSON.stringify(x)}`).join(' · ')
+  }
   return JSON.stringify(v)
 }
 

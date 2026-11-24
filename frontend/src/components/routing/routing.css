@@ -315,3 +315,11 @@
 .rv-demo-tag { font: 600 .66rem var(--font-mono, monospace); letter-spacing: .06em; text-transform: uppercase; padding: .15rem .5rem; border-radius: 999px; background: oklch(58% 0.2 256 / .14); color: oklch(58% 0.2 256); }
 .rv-demo-tools { margin-inline-start: auto; display: flex; gap: .5rem; }
 .rv-demo-main { max-width: var(--ancho-max, 3200px); margin: 0 auto; padding: var(--space-md, 1.5rem) var(--margen-lateral, 1rem); }
+
+/* Lo que dicen el vecino y el asistente, y lo que extrae el modelo, conserva su propia dirección
+   dentro de una interfaz RTL (y al revés): sin esto la puntuación salta al otro extremo */
+.rv-said q, .rv-condition, .rv-kv > span, .rv-bubble, .rv-list li, .rv-table td, .rv-compact-line, .rv-note { unicode-bidi: plaintext; }
+
+@media (max-width: 640px) {
+  .rv .react-flow__minimap { display: none; }
+}
