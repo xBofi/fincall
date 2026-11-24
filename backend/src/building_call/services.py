@@ -17,6 +17,7 @@ from building_call.graph.registry import get_graph
 from building_call.graph.state import CallState, Trace, initial_state
 from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import detection, personas
+from building_call.integrations.events import EventSink, publish
 from building_call.llm.phrasing import phrase
 from building_call.metrics import MetricsRegistry, TurnTimings
 from building_call.repos.call_state import CallStateStore, MemoryStateStore
@@ -88,6 +89,7 @@ class CallManager:
         phraser: Any | None = None,
         clock: Callable[[], float] = time,
         store: CallStateStore | None = None,
+        events: EventSink | None = None,
     ) -> None:
         """`phraser`: modelo que reformula las respuestas del grafo (paráfrasis controlada).
         None = plantillas tal cual.
@@ -111,6 +113,8 @@ class CallManager:
         self._last_use: dict[str, float] = {}
         self._last_purge = float("-inf")
         self._clock = clock
+        # Where call events go (signed n8n webhooks, `integrations.webhooks`). Best-effort
+        self.events = events
 
     async def _save_state(self, state: CallState) -> bool:
         """Devuelve False si no se guardó porque en el almacén ya había un estado más nuevo
@@ -196,6 +200,7 @@ class CallManager:
         stt_ms: int | None = None,
         *,
         reprompt: bool = False,
+        new_call: bool = False,
     ) -> CallState:
         """One turn of the graph. `reprompt`: the caller's words are already in the history
         (they asked for another language) and the current node asks its question again."""
@@ -296,6 +301,7 @@ class CallManager:
                 "timings": timings,
             },
         )
+        publish(self.events, None if new_call else state, fresh)
         return fresh
 
     async def _save_traceability(
@@ -356,7 +362,7 @@ class CallManager:
         )
         state["caller_phone"] = caller_phone
         state["persona"] = persona or personas.default_id()
-        return await self._run(state, None)
+        return await self._run(state, None, new_call=True)
 
     async def message(
         self,
@@ -432,7 +438,7 @@ class CallManager:
     async def close_on_failure(self, call_id: str, reason: str) -> CallState:
         """El asistente no puede seguir (LLM, STT o TTS caídos): se cierra la llamada y queda
         derivada al administrador y marcada para revisar, en vez de quedarse "activa"."""
-        state = await self.get(call_id)
+        state = previous = await self.get(call_id)
         if not state.get("finished"):
             state = {
                 **state,
@@ -442,6 +448,7 @@ class CallManager:
             }
             await self._save_state(state)
             await self._save_operation(state)
+            publish(self.events, previous, state)
         return state
 
     async def record_delivery(

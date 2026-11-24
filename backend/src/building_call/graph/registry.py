@@ -37,6 +37,7 @@ _STANDARD_ORDER = [
     "farewell",
     "assign_specialist",
     "create_ticket",
+    "book_visit",
     "notify_channel",
 ]
 

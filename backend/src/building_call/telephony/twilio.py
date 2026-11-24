@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebS
 from building_call import i18n
 from building_call.telephony.bridge import CallBridge
 from building_call.telephony.browser import CLIENT_PREFIX
+from building_call.telephony.carrier import MULAW_8K
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,9 @@ def ws_url_from_public(public_url: str) -> str:
 
 
 class TwilioChannel:
-    """Implementa `PhoneChannel` sobre el WebSocket de Media Streams."""
+    """Reference `CarrierChannel`: Twilio Media Streams (μ-law 8 kHz, base64 in JSON)."""
+
+    audio_format = MULAW_8K
 
     def __init__(self, ws: WebSocket, stream_sid: str) -> None:
         self.ws = ws
@@ -109,7 +112,7 @@ class TwilioChannel:
             {"event": "mark", "streamSid": self.stream_sid, "mark": {"name": name}}
         )
 
-    async def clean_up(self) -> None:
+    async def clear(self) -> None:
         await self.ws.send_json({"event": "clear", "streamSid": self.stream_sid})
 
     async def hang_up(self) -> None:
@@ -234,9 +237,11 @@ def create_twilio_router(
                 elif event == "media" and bridge is not None:
                     midpoint = m.get("media") or {}
                     if midpoint.get("track", "inbound") == "inbound":
-                        await bridge.receive_ulaw(base64.b64decode(midpoint.get("payload", "")))
+                        await bridge.receive_audio(base64.b64decode(midpoint.get("payload", "")))
                 elif event == "mark" and bridge is not None:
                     await bridge.mark_played(str((m.get("mark") or {}).get("name", "")))
+                elif event == "dtmf" and bridge is not None:
+                    await bridge.receive_dtmf(str((m.get("dtmf") or {}).get("digit", "")))
                 elif event == "stop":
                     break
         except WebSocketDisconnect:

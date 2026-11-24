@@ -1,10 +1,11 @@
 """Puente entre una llamada telefónica y el grafo, independiente del proveedor.
 
-El adaptador del proveedor (Twilio u otro) implementa `PhoneChannel` y llama a:
-- `iniciar()` al empezar la llamada (crea el expediente, abre el STT y reproduce el saludo),
-- `recibir_ulaw(bytes)` con cada trozo de audio del vecino,
-- `marca_reproducida(nombre)` cuando el proveedor confirma que un turno terminó de sonar,
-- `cerrar()` al colgar.
+El adaptador del proveedor (Twilio, Vonage...) implementa `carrier.CarrierChannel` y llama a:
+- `begin()` al empezar la llamada (crea el expediente, abre el STT y reproduce el saludo),
+- `receive_audio(bytes)` con cada trozo de audio del vecino, en el formato del canal,
+- `mark_played(nombre)` cuando el proveedor confirma que un turno terminó de sonar,
+- `receive_dtmf(digito)` si el proveedor entrega teclas pulsadas,
+- `close()` al colgar.
 
 El puente se encarga de STT en streaming (misma sesión AssemblyAI que la consola web), del grafo
 (`CallManager`), del TTS de servidor, del *barge-in* (si el vecino habla ≥2 palabras mientras
@@ -19,11 +20,12 @@ import asyncio
 import logging
 from collections.abc import Callable
 from time import perf_counter
-from typing import Any, Protocol
+from typing import Any
 
 from building_call import i18n
 from building_call.recording import ConversationRecorder
-from building_call.telephony.audio import PhoneInput, PhoneOutput, energy
+from building_call.telephony.audio import InboundAudio, OutboundAudio, energy
+from building_call.telephony.carrier import MULAW_8K, AudioFormat, CarrierChannel, PhoneChannel
 from building_call.telephony.tts import fragments, voice_for
 
 logger = logging.getLogger(__name__)
@@ -38,16 +40,7 @@ MAX_CONSECUTIVE_FAILURES = 2
 # `Phrases.technical_failure` in `i18n/locales/<language>.toml`
 
 
-class PhoneChannel(Protocol):
-    """Lo que el puente necesita del proveedor."""
-
-    async def send_audio(self, ulaw: bytes) -> None: ...
-
-    async def mark(self, name: str) -> None: ...
-
-    async def clean_up(self) -> None: ...
-
-    async def hang_up(self) -> None: ...
+__all__ = ["CallBridge", "CarrierChannel", "PhoneChannel"]
 
 
 class CallBridge:
@@ -56,7 +49,7 @@ class CallBridge:
         manager: Any,
         streaming_factory: Callable[[int, list[str], str | list[str]], Any],
         tts: Any,
-        channel: PhoneChannel,
+        channel: CarrierChannel,
         *,
         vocabulary: list[str],
         phone: str | None,
@@ -92,7 +85,9 @@ class CallBridge:
         self.finished = False
         self._session: Any = None
         self._events_task: asyncio.Task[None] | None = None
-        self._utterance = PhoneInput()
+        self.audio_format: AudioFormat = getattr(channel, "audio_format", MULAW_8K)
+        self._utterance = InboundAudio(self.audio_format)
+        self.dtmf: list[str] = []
         self._recorder = ConversationRecorder()  # las dos voces sobre el mismo reloj
         self._last_voice_at: float | None = None
         self._closed = False
@@ -144,14 +139,26 @@ class CallBridge:
 
     # ------------------------------------------------------------------ entrada
 
-    async def receive_ulaw(self, ulaw: bytes) -> None:
+    async def receive_audio(self, frame: bytes) -> None:
+        """One inbound frame from the carrier, in the channel's `audio_format`."""
         if self._session is None or self._closed:
             return
-        pcm = self._utterance.convert(ulaw)
+        pcm = self._utterance.convert(frame)
         if energy(pcm) > VOICE_THRESHOLD:
             self._last_voice_at = perf_counter()
         self._recorder.write_client(pcm)
         await self._session.send_audio(pcm)
+
+    async def receive_ulaw(self, ulaw: bytes) -> None:
+        """Compatibility alias from when every carrier was μ-law (Twilio)."""
+        await self.receive_audio(ulaw)
+
+    async def receive_dtmf(self, digit: str) -> None:
+        """A key press. Only recorded: the flow is driven by voice, and a keypad menu would be
+        a product decision, not a carrier one."""
+        if len(digit) == 1 and digit in "0123456789*#":
+            self.dtmf.append(digit)
+            logger.info("DTMF en la llamada %s: %s", self.call_id, digit)
 
     async def mark_played(self, name: str) -> None:
         """El proveedor confirma que el audio hasta la marca ya sonó en el teléfono."""
@@ -171,7 +178,7 @@ class CallBridge:
         if self.playing_turn is None or self.call_id is None:
             return
         turn, self.playing_turn = self.playing_turn, None
-        await self.channel.clean_up()
+        await self.channel.clear()
         await self.manager.record_delivery(self.call_id, turn, "interrupted", 0.5, None)
 
     async def _say(self, state: dict[str, Any]) -> None:
@@ -183,7 +190,7 @@ class CallBridge:
                 await self.channel.hang_up()
             return
         t0 = perf_counter()
-        output = PhoneOutput(self.tts.rate)
+        output = OutboundAudio(self.tts.rate, self.audio_format)
         first_at: float | None = None
         pcm = bytearray()
         try:

@@ -17,6 +17,7 @@ elevenlabs_language = "ca"
 piper_voice = "ca_ES-upc_ona-medium"
 twilio_say_language = "ca-ES"
 twilio_say_voice = "Polly.Arlet-Neural"
+vonage_talk_language = "ca-ES"
 browser_lang = "ca-ES"
 
 [formats]
@@ -286,5 +287,6 @@ private_unit = "Sembla que és dins d'un habitatge particular, no en una zona co
 "notify_channel.coordinator_notice" = "Per la urgència aviso ara mateix el coordinador i {specialist}. {specialist_capitalized} {contact} com més aviat millor per dir-li quan hi pot anar; encara no li puc confirmar l'hora."
 "notify_channel.administrator_notice" = "La passo a l'administrador, que la revisarà avui mateix i {contact} per explicar-li com es resoldrà."
 "notify_channel.specialist_notice" = "Ho comunico ara a {specialist}, que {contact} per concertar la visita. Encara no li puc donar hora perquè depèn de la seva disponibilitat; el pas següent és la seva trucada."
+"notify_channel.visit_notice" = "Ho comunico ara a {specialist}. Li deixo reservada una visita provisional {slot}, pendent que el professional la confirmi: {contact} per confirmar-la."
 "notify_channel.phone_contact" = "el trucarà a aquest mateix número"
 "notify_channel.generic_contact" = "es posarà en contacte amb vostè"

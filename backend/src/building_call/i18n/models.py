@@ -40,6 +40,10 @@ class TtsSpec(_Strict):
     #: TwiML <Say> fallback (only for the "service unavailable" message)
     twilio_say_language: str = ""
     twilio_say_voice: str = ""
+    #: Vonage NCCO `talk` language (only for the "service unavailable" message). Codes from
+    #: Vonage's TTS table (read 2026-11-24): Arabic is plain "ar"; Urdu is not supported, so
+    #: it stays empty and the default language's message is said instead
+    vonage_talk_language: str = ""
     #: BCP-47 tag for the browser's speechSynthesis / SpeechRecognition in the console
     browser_lang: str
 

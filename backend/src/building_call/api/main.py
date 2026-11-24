@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import secrets
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from time import perf_counter
@@ -51,6 +51,8 @@ from building_call.graph.state import CallState
 from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
+from building_call.integrations.n8n_tool import N8nTools
+from building_call.integrations.webhooks import FanOut, RetryPolicy, WebhookSender
 from building_call.kpis_api import create_kpis_router
 from building_call.livekit_api import (
     create_livekit_router,
@@ -73,16 +75,19 @@ from building_call.services import CallManager, CallNotFound
 from building_call.settings import settings
 from building_call.stt import UnavailableRecognizer, VoiceRecognizer, WhisperRecognizer
 from building_call.stt_streaming import AssemblyAIStreamingSession, validate_eu_endpoint
-from building_call.telephony.bridge import CallBridge, PhoneChannel
+from building_call.telephony.bridge import CallBridge
 from building_call.telephony.browser import (
     browser_ready_reason,
     console_identity,
     voice_access_token,
 )
 from building_call.telephony.browser_line import BrowserLineChannel, create_browser_line_router
+from building_call.telephony.carrier import CarrierChannel
 from building_call.telephony.configure import not_ready_reason
 from building_call.telephony.tts import create_tts, fragments
 from building_call.telephony.twilio import create_twilio_router
+from building_call.telephony.vonage import create_vonage_router
+from building_call.telephony.vonage import not_ready_reason as vonage_not_ready
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +346,38 @@ def signing_secret() -> str:
     return secrets.token_urlsafe(48)
 
 
+def create_webhook_sender(s: Any) -> FanOut | None:
+    """One sender per URL in BC_N8N_WEBHOOK_URL (comma-separated)."""
+    urls = [u.strip() for u in s.n8n_webhook_url.split(",") if u.strip()]
+    if not urls:
+        return None
+    if not s.n8n_webhook_secret:
+        logger.error("BC_N8N_WEBHOOK_URL sin BC_N8N_WEBHOOK_SECRET: los eventos no se envían")
+        return None
+    only = frozenset(e.strip() for e in s.n8n_webhook_events.split(",") if e.strip())
+    return FanOut(
+        [
+            WebhookSender(
+                url=url,
+                secret=s.n8n_webhook_secret,
+                timeout_s=s.n8n_webhook_timeout_s,
+                policy=RetryPolicy(attempts=max(1, s.n8n_webhook_attempts)),
+                only=only,
+            )
+            for url in urls
+        ]
+    )
+
+
+def create_n8n_tools(s: Any) -> N8nTools | None:
+    if not s.n8n_tool_url:
+        return None
+    if not s.n8n_webhook_secret:
+        logger.error("BC_N8N_TOOL_URL sin BC_N8N_WEBHOOK_SECRET: la herramienta queda apagada")
+        return None
+    return N8nTools(s.n8n_tool_url, s.n8n_webhook_secret, s.n8n_tool_timeout_s)
+
+
 def create_app(
     deps: Dependencies | None = None,
     stt: VoiceRecognizer | None = None,
@@ -366,7 +403,11 @@ def create_app(
     if streaming_factory is AUTO:
         streaming_factory = _default_streaming_factory()
     recognizer: VoiceRecognizer = stt
-    manager = CallManager(deps, phraser=create_phraser())
+    # n8n: outgoing call events and the agent's tools. Both off without their URL
+    webhooks = create_webhook_sender(settings)
+    if deps.tools is None:
+        deps.tools = create_n8n_tools(settings)
+    manager = CallManager(deps, phraser=create_phraser(), events=webhooks)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):  # type: ignore[no-untyped-def]
@@ -391,6 +432,8 @@ def create_app(
         purge_task = asyncio.create_task(periodic_purge())
         yield
         purge_task.cancel()
+        if webhooks is not None:
+            await webhooks.drain()
 
     app = FastAPI(title="Building Call Assistant", version="0.4.0", lifespan=lifespan)
     app.state.repo = deps.repo
@@ -421,11 +464,19 @@ def create_app(
     # Telefonía: puente proveedor-agnóstico + adaptador Twilio. Sin configurar, solo expone /salud
     tts = create_tts(settings)
 
-    def telephony_ready() -> str | None:
+    def twilio_ready() -> str | None:
         return not_ready_reason(settings, tts.available(), streaming_factory is not None)
 
+    def vonage_ready() -> str | None:
+        return vonage_not_ready(settings, tts.available(), streaming_factory is not None)
+
+    def telephony_ready() -> str | None:
+        """None if at least one carrier can take calls; else why the first one cannot."""
+        reasons = [twilio_ready(), vonage_ready()]
+        return None if None in reasons else reasons[0]
+
     async def bridge_factory(
-        channel: PhoneChannel,
+        channel: CarrierChannel,
         phone: str | None,
         existing_call_id: str | None = None,
         language: str | None = None,
@@ -451,7 +502,8 @@ def create_app(
             persona=persona if persona in personas.personas() else None,
         )
 
-    app.include_router(create_twilio_router(settings, bridge_factory, telephony_ready))
+    app.include_router(create_twilio_router(settings, bridge_factory, twilio_ready))
+    app.include_router(create_vonage_router(settings, bridge_factory, vonage_ready))
 
     # The phone path without Twilio: the console's microphone as a phone line (same bridge)
     def browser_line_ready() -> str | None:
@@ -487,7 +539,7 @@ def create_app(
     @app.post("/api/telephony/twilio/browser-token")
     async def twilio_browser_token(user: Any = Depends(access.requires())) -> dict[str, str]:
         """Access Token so the console can call the agent through Twilio from the browser."""
-        reason = telephony_ready() or browser_ready_reason(settings)
+        reason = twilio_ready() or browser_ready_reason(settings)
         if reason is not None:
             raise HTTPException(503, reason)
         identity = console_identity(user.username)
@@ -545,7 +597,8 @@ def create_app(
             "provider": settings.telephony,
             "items": reason is None,
             "reason": reason,
-            "number": settings.twilio_number or None,
+            "number": settings.twilio_number or settings.vonage_number or None,
+            "carriers": {"twilio": twilio_ready(), "vonage": vonage_ready()},
             "public_url": settings.public_url or None,
             "tts": tts.name,
             "tts_available": tts.available(),
@@ -594,8 +647,9 @@ def create_app(
             "livekit": livekit_configured(),
             "access": access.mode,
             "telephony": settings.telephony if telephony_ready() is None else None,
-            "twilio_browser": telephony_ready() is None and browser_ready_reason(settings) is None,
+            "twilio_browser": twilio_ready() is None and browser_ready_reason(settings) is None,
             "browser_line": browser_line_ready() is None,
+            "n8n": {"events": webhooks is not None, "tool": deps.tools is not None},
             "server_tts": tts.name if tts.available() else None,
             "graphs": sorted(REGISTRY),
             "thresholds_ms": {name: limit for limit, name in THRESHOLDS_MS},
@@ -979,7 +1033,7 @@ def create_app(
             payload = json.dumps(event, ensure_ascii=False, default=str)
             return f"event: {event['type']}\ndata: {payload}\n\n"
 
-        async def stream():  # type: ignore[no-untyped-def]
+        async def stream() -> AsyncIterator[str]:
             try:
                 yield frame({"type": "snapshot", **_view(state)})
                 if state.get("finished"):

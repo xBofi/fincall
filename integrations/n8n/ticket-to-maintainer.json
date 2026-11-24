@@ -1,0 +1,187 @@
+{
+  "name": "Fincall · ticket to maintainer (e-mail + Slack)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fincall-ticket",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "caf2ec18-6bc7-578f-921d-1427846d0e51",
+      "name": "Fincall webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "73cc8873-d904-528b-b61a-82ce183ee477"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fincall signs every request: X-Fincall-Signature = v1=HMAC-SHA256(secret, \"<ts>.<body>\").\n// The body is canonical JSON (sorted keys, compact), so it can be rebuilt from the parsed object.\n// Needs NODE_FUNCTION_ALLOW_BUILTIN=crypto and FINCALL_WEBHOOK_SECRET in n8n's environment.\nconst crypto = require('crypto');\nconst secret = $env.FINCALL_WEBHOOK_SECRET;\nif (!secret) throw new Error('FINCALL_WEBHOOK_SECRET is not set in n8n');\n\nconst canonical = (v) =>\n  Array.isArray(v) ? '[' + v.map(canonical).join(',') + ']'\n  : v !== null && typeof v === 'object'\n    ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}'\n    : JSON.stringify(v);\n\nconst req = $input.first().json;\nconst h = req.headers || {};\nconst ts = Number(h['x-fincall-timestamp']);\nif (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {\n  throw new Error('Missing or stale X-Fincall-Timestamp (replay?)');\n}\nconst expected = 'v1=' + crypto.createHmac('sha256', secret).update(ts + '.' + canonical(req.body)).digest('hex');\nconst got = String(h['x-fincall-signature'] || '');\nif (got.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {\n  throw new Error('Invalid X-Fincall-Signature');\n}\nreturn [{ json: { ...req.body, idempotency_key: h['idempotency-key'] || req.body.id } }];"
+      },
+      "id": "9f496b13-6704-57b3-84a6-b7d5e93dce39",
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fincall sends every call event to this URL; this workflow only cares about new tickets.\nreturn $input.all().filter((i) => i.json.type === 'ticket.created');"
+      },
+      "id": "5fa1f869-9df7-5d55-ae26-660ccb303cca",
+      "name": "Only new tickets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.idempotency_key }}",
+        "options": {}
+      },
+      "id": "7c550caa-a173-5dfb-b17b-b6a00d5934ee",
+      "name": "Skip retried events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// One plain-text message for e-mail and Slack, in the call's language (`language` in the\n// event: the building's market). Adding a language = one entry in L; unknown -> English.\nconst L = {\n  es: { title: 'Nueva incidencia', urgency: 'urgencia', building: 'Finca', home: 'Vivienda',\n        summary: 'Resumen', pending: 'Pendiente del administrador', noPro: 'sin profesional',\n        assigned: 'Asignada a', call: 'Llamada' },\n  en: { title: 'New maintenance request', urgency: 'urgency', building: 'Building', home: 'Unit',\n        summary: 'Summary', pending: 'Waiting for the property manager', noPro: 'no contractor',\n        assigned: 'Assigned to', call: 'Call' },\n  ca: { title: 'Nova incidència', urgency: 'urgència', building: 'Finca', home: 'Habitatge',\n        summary: 'Resum', pending: \"Pendent de l'administrador\", noPro: 'sense professional',\n        assigned: 'Assignada a', call: 'Trucada' },\n  ar: { title: 'بلاغ صيانة جديد', urgency: 'الأولوية', building: 'المبنى', home: 'الشقة',\n        summary: 'الملخص', pending: 'بانتظار مدير العقار', noPro: 'بدون فني',\n        assigned: 'مسند إلى', call: 'المكالمة' },\n  hi: { title: 'नई रखरखाव शिकायत', urgency: 'प्राथमिकता', building: 'इमारत', home: 'फ्लैट',\n        summary: 'सारांश', pending: 'प्रॉपर्टी मैनेजर के निर्णय की प्रतीक्षा', noPro: 'कोई तकनीशियन नहीं',\n        assigned: 'सौंपा गया', call: 'कॉल' },\n  ur: { title: 'نئی مرمت کی شکایت', urgency: 'ترجیح', building: 'عمارت', home: 'فلیٹ',\n        summary: 'خلاصہ', pending: 'پراپرٹی مینیجر کے فیصلے کا انتظار', noPro: 'کوئی ٹیکنیشن نہیں',\n        assigned: 'سپرد کیا گیا', call: 'کال' },\n};\nreturn $input.all().map(({ json: e }) => {\n  const t = L[e.language] || L.en;\n  const d = e.data || {};\n  const lines = [\n    `${t.title} ${d.incident_id} (${d.category}, ${t.urgency} ${d.urgency})`,\n    `${t.building}: ${d.building || d.estate_id || '-'} · ${t.home}: ${d.apartment || '-'}`,\n    `${t.summary}: ${d.summary || '-'}`,\n    d.needs_administrator\n      ? `${t.pending} (${d.review_reason || t.noPro})`\n      : `${t.assigned}: ${d.specialist_name}`,\n    `${t.call}: ${e.call_id} · ${e.created_at}`,\n  ];\n  return { json: { ...e, subject: `[Fincall] ${d.category} · ${d.urgency} · ${d.building || ''}`, text: lines.join('\\n') } };\n});"
+      },
+      "id": "e981d567-828d-5900-a2e5-5bc07b637f88",
+      "name": "Write the message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "fincall@example.com",
+        "toEmail": "mantenimiento@example.com",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {}
+      },
+      "id": "2080a365-405c-55b7-8545-587c073e7304",
+      "name": "E-mail the maintainer",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#mantenimiento",
+          "mode": "name"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "4bb56df0-8639-545e-88d9-de9b5e700686",
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Fincall webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Only new tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only new tickets": {
+      "main": [
+        [
+          {
+            "node": "Skip retried events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip retried events": {
+      "main": [
+        [
+          {
+            "node": "Write the message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write the message": {
+      "main": [
+        [
+          {
+            "node": "E-mail the maintainer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

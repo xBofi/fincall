@@ -363,7 +363,28 @@ MANIFEST: dict[str, ManifestNode] = {
         kind="effect",
         uses_llm=False,
         effects=("guarda la llamada", "crea la incidencia"),
-        targets=(Edge("notify_channel", "incidencia creada"),),
+        targets=(
+            Edge("notify_channel", "incidencia creada"),
+            Edge(
+                "book_visit",
+                "incidencia creada con profesional, sin emergencia y con herramienta de agenda",
+            ),
+        ),
+    ),
+    "book_visit": ManifestNode(
+        id="book_visit",
+        stage=7,
+        title="Reservar visita (n8n)",
+        summary=(
+            "Herramienta: pide a un flujo de n8n un hueco en la agenda del profesional y lo "
+            "reserva de forma provisional; al vecino se le ofrece como provisional, pendiente de "
+            "que lo confirme el profesional. Con tiempo límite corto; si falla, el cierre es el "
+            "de siempre. Apagada por defecto: solo existe si hay BC_N8N_TOOL_URL."
+        ),
+        kind="effect",
+        uses_llm=False,
+        effects=("llama al webhook de n8n y guarda la reserva provisional (o el motivo del fallo)",),
+        targets=(Edge("notify_channel", "con hueco reservado o sin él"),),
     ),
     "notify_channel": ManifestNode(
         id="notify_channel",
@@ -371,8 +392,9 @@ MANIFEST: dict[str, ManifestNode] = {
         title="Avisar y despedir",
         summary=(
             "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué "
-            "va a pasar y quién le llamará. Nunca promete una hora: nadie ha hablado aún con el "
-            "profesional."
+            "va a pasar y quién le llamará. No da una hora firme: nadie ha hablado aún con el "
+            "profesional. Con la herramienta de agenda (n8n) activada puede ofrecer un hueco, "
+            "siempre como provisional y pendiente de que lo confirme el profesional."
         ),
         kind="effect",
         uses_llm=False,

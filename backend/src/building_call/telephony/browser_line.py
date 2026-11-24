@@ -26,6 +26,7 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from building_call.telephony.bridge import CallBridge
+from building_call.telephony.carrier import MULAW_8K
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,9 @@ MAX_FRAME_BYTES = 8000
 
 
 class BrowserLineChannel:
-    """`PhoneChannel` over the console's WebSocket: the same events Twilio would get."""
+    """`CarrierChannel` over the console's WebSocket: the same events Twilio would get."""
+
+    audio_format = MULAW_8K
 
     def __init__(self, ws: WebSocket) -> None:
         self.ws = ws
@@ -47,7 +50,7 @@ class BrowserLineChannel:
     async def mark(self, name: str) -> None:
         await self.ws.send_json({"event": "mark", "mark": {"name": name}})
 
-    async def clean_up(self) -> None:
+    async def clear(self) -> None:
         await self.ws.send_json({"event": "clear"})
 
     async def hang_up(self) -> None:
@@ -97,7 +100,7 @@ def create_browser_line_router(
                 elif event == "media" and bridge is not None:
                     payload = base64.b64decode((m.get("media") or {}).get("payload", ""))
                     if len(payload) <= MAX_FRAME_BYTES:
-                        await bridge.receive_ulaw(payload)
+                        await bridge.receive_audio(payload)
                 elif event == "mark" and bridge is not None:
                     await bridge.mark_played(str((m.get("mark") or {}).get("name", "")))
                 elif event == "stop":

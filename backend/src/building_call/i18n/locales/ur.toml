@@ -16,6 +16,8 @@ fallback = "browser"
 [tts]
 elevenlabs_language = "ur"
 browser_lang = "ur-PK"
+# No vonage_talk_language: Vonage has no Urdu TTS voice (its table, 2026-11-24); the
+# "service unavailable" apology falls back to the default language, as with Twilio
 
 [formats]
 currency = "PKR"
@@ -221,5 +223,6 @@ private_unit = "یہ کسی نجی فلیٹ کے اندر لگتا ہے، مشت
 "notify_channel.coordinator_notice" = "معاملہ فوری ہونے کی وجہ سے میں ابھی کوآرڈینیٹر اور {specialist} کو اطلاع دے رہی ہوں۔ {specialist_capitalized} جلد از جلد {contact} یہ بتانے کے لیے کہ وہ کب آ سکتے ہیں؛ میں ابھی وقت کی تصدیق نہیں کر سکتی۔"
 "notify_channel.administrator_notice" = "میں اسے پراپرٹی مینیجر کو بھیج رہی ہوں، جو آج ہی اسے دیکھیں گے اور {contact} یہ بتانے کے لیے کہ اسے کیسے حل کیا جائے گا۔"
 "notify_channel.specialist_notice" = "میں ابھی {specialist} کو اطلاع دے رہی ہوں، جو وزٹ طے کرنے کے لیے {contact}۔ میں ابھی وقت نہیں بتا سکتی کیونکہ یہ ان کی دستیابی پر منحصر ہے؛ اگلا قدم ان کی کال ہے۔"
+"notify_channel.visit_notice" = "میں ابھی {specialist} کو اطلاع دے رہی ہوں۔ میں نے {slot} ایک عارضی وزٹ بک کر دیا ہے، جو ٹیکنیشن کی تصدیق سے مشروط ہے؛ وہ اس کی تصدیق کے لیے {contact}۔"
 "notify_channel.phone_contact" = "آپ کو اسی نمبر پر کال کریں گے"
 "notify_channel.generic_contact" = "آپ سے رابطہ کریں گے"

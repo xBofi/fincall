@@ -171,6 +171,9 @@ async def run(
                     "ok": False,
                     "reason": f"sin voz tras {text!r}",
                 }
+            if verbose:  # reloj de pared: se cruza con los logs del agente
+                print(f"    t_fin_voz={time.time() - (time.monotonic() - t_end):.3f} "
+                      f"t_bot={time.time() - (time.monotonic() - heard_text.voice_start):.3f}")
             latencies.append(int((heard_text.voice_start - t_end) * 1000))
         if cut := scenario.get("cut_with"):
             await asyncio.sleep(scenario["cut_after_s"])  # el resumen está sonando

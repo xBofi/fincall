@@ -73,11 +73,52 @@ services:
     image: livekit/livekit-server:v1.13.8
     profiles: ["voice"]
     container_name: building-call-livekit
-    command: ["--dev", "--bind", "0.0.0.0", "--node-ip", "127.0.0.1"]
+    # Redis: lo necesita livekit-sip para hablar con el servidor
+    command: ["--dev", "--bind", "0.0.0.0", "--node-ip", "127.0.0.1", "--redis-host", "redis:6379"]
     ports:
       - "127.0.0.1:7880:7880" # señalización (ws)
       - "127.0.0.1:7881:7881" # ICE por TCP
       - "127.0.0.1:7882:7882/udp" # medios (UDP)
+      # livekit-sip comparte la red de este contenedor (ver abajo): sus puertos se publican aquí
+      - "127.0.0.1:5060:5060/udp" # SIP
+      - "127.0.0.1:5060:5060/tcp"
+      - "127.0.0.1:30000-30199:30000-30199/udp" # audio RTP de las llamadas SIP
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7.4.1-alpine
+    profiles: ["voice"]
+    container_name: building-call-redis
+
+  # Entrada de llamadas SIP (spec 2026-10-22-telnyx-sip-pilot-design). En local, un softphone
+  # (Linphone, MicroSIP) llama a sip:<BC_SIP_NUMBER>@127.0.0.1; luego se configura con
+  #   cd backend; uv run --extra voice python -m building_call.telephony.configure_sip
+  # Comparte la red de `livekit` para que 127.0.0.1 (la IP que anuncia el servidor) sea él.
+  livekit-sip:
+    image: livekit/sip:v1.17.0
+    profiles: ["voice"]
+    container_name: building-call-livekit-sip
+    network_mode: "service:livekit"
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: devkey
+        api_secret: secret
+        ws_url: ws://127.0.0.1:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+        rtp_port: 30000-30199
+        use_external_ip: false
+        nat_1_to_1_ip: 127.0.0.1
+        listen_ip: 0.0.0.0 # Docker publica los puertos hacia eth0, no hacia el loopback
+        # Sin G.722 (HD) se negocia G.711, el audio de una línea telefónica normal
+        codecs:
+          G722: false
+        logging:
+          level: info
+    depends_on:
+      - livekit
 
   web:
     build: ./frontend
@@ -87,6 +128,32 @@ services:
     depends_on:
       - api
 
+  # n8n for the integrations (integrations/n8n/README.md). Optional, local only:
+  #   sb run -- docker compose --profile n8n up -d n8n      (UI on http://localhost:5678)
+  # The API on the host reaches it at http://localhost:5678/webhook/...; the `api` container at
+  # http://n8n:5678/webhook/... The shared secret comes from the environment, never from a file.
+  n8n:
+    image: n8nio/n8n:2.49.5
+    profiles: ["n8n"]
+    container_name: building-call-n8n
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      GENERIC_TIMEZONE: Europe/Madrid
+      TZ: Europe/Madrid
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # The Code node that verifies Fincall's HMAC needs `crypto` and the shared secret
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      FINCALL_WEBHOOK_SECRET: ${BC_N8N_WEBHOOK_SECRET:-}
+      # true: the booking workflow answers a demo slot without touching Google Calendar
+      FINCALL_CALENDAR_DEMO: ${FINCALL_CALENDAR_DEMO:-true}
+    volumes:
+      - n8n_datos:/home/node/.n8n
+      - ./integrations/n8n:/workflows:ro
+
 volumes:
   db_datos:
   audio_privado:
+  n8n_datos:

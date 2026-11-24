@@ -102,6 +102,8 @@ class CallState(TypedDict, total=False):
     notice_channel: str | None
     notice_target: str | None
     incident_id: str | None
+    # Outcome of the `book_visit` tool (n8n): status, slot, booking id, reason, ms
+    visit: dict[str, Any] | None
     result: str | None
     review_reason: str | None
 
@@ -166,6 +168,7 @@ def initial_state(
         notice_channel=None,
         notice_target=None,
         incident_id=None,
+        visit=None,
         result=None,
         review_reason=None,
     )

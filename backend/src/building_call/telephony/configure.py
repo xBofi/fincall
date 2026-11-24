@@ -25,8 +25,8 @@ API_TWILIO = "https://api.twilio.com/2010-04-01"
 
 def not_ready_reason(settings: Any, tts_available: bool, stt_available: bool) -> str | None:
     """Explica (sin secretos) por qué la telefonía aún no puede atender llamadas."""
-    if settings.telephony != "twilio":
-        return "BC_TELEPHONY no es 'twilio'"
+    if "twilio" not in {p.strip() for p in str(settings.telephony).split(",")}:
+        return "BC_TELEPHONY no incluye 'twilio'"
     if not settings.public_url.startswith("https://"):
         return "BC_PUBLIC_URL debe ser una URL https pública (túnel o dominio)"
     if not (settings.twilio_account_sid and settings.twilio_auth_token):

@@ -1,0 +1,91 @@
+{
+  "language": "en",
+  "finished": true,
+  "result": "incident_created",
+  "visit": {
+    "status": "booked",
+    "slot": "on Wednesday, November 25, between 9 and 11 AM",
+    "booking_id": "demo-inc-cedf51395a78",
+    "reason": null,
+    "ms": 536
+  },
+  "closing": [
+    "I've logged your issue. I'm passing it to Smith Plumbing now. Their calendar has an opening on Wednesday, November 25, between 9 and 11 AM; I've held it for you and they will call you back at this number to confirm it. If no one has contacted you within twenty-four hours, please call us again. Thanks for calling, goodbye."
+  ],
+  "turns": [
+    {
+      "caller": "I live at number 12 Main Street",
+      "ms": 387,
+      "node": "identify_estate"
+    },
+    {
+      "caller": "yes",
+      "ms": 3,
+      "node": "identify_home"
+    },
+    {
+      "caller": "third floor, B",
+      "ms": 18,
+      "node": "confirm_home"
+    },
+    {
+      "caller": "There's a water leak in the bathroom and it's flooding the floor",
+      "ms": 1268,
+      "node": "ask_detail"
+    },
+    {
+      "caller": "yes, correct",
+      "ms": 670,
+      "node": "confirm_summary"
+    },
+    {
+      "caller": "yes, correct",
+      "ms": 542,
+      "node": "end"
+    }
+  ],
+  "deliveries": [
+    {
+      "type": "call.started",
+      "event_id": "evt_8cbe4d5e00ed5fc36c54eda8",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    },
+    {
+      "type": "call.started",
+      "event_id": "evt_8cbe4d5e00ed5fc36c54eda8",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    },
+    {
+      "type": "ticket.created",
+      "event_id": "evt_ce6b3a4a6b504c0585ed86a9",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    },
+    {
+      "type": "ticket.created",
+      "event_id": "evt_ce6b3a4a6b504c0585ed86a9",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    },
+    {
+      "type": "call.ended",
+      "event_id": "evt_2ee8fca619b47b5e6cf2aa14",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    },
+    {
+      "type": "call.ended",
+      "event_id": "evt_2ee8fca619b47b5e6cf2aa14",
+      "delivered": true,
+      "attempts": 1,
+      "status": 200
+    }
+  ]
+}

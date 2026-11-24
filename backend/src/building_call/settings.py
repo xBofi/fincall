@@ -122,7 +122,8 @@ class Settings(BaseSettings):
     # Telefonía real (proveedor Pendiente en la bóveda; Twilio es la primera implementación).
     # Cuando haya número: BC_TELEPHONY=twilio, BC_PUBLIC_URL=https://... (túnel o dominio),
     # credenciales de Twilio y `python -m building_call.telephony.configure`.
-    telephony: str = "none"  # none | twilio
+    # none | twilio | vonage | "twilio,vonage" (several carriers can be live at once)
+    telephony: str = "none"
     public_url: str = ""
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
@@ -137,6 +138,22 @@ class Settings(BaseSettings):
     twilio_number_languages: dict[str, str] = {}
     twilio_number_personas: dict[str, str] = {}
     telephony_bargein_words: int = 2
+    # Vonage Voice API (adapter built from the docs, NOT tested live: no account yet). The
+    # signature secret verifies the signed answer/event webhooks (JWT HS256).
+    vonage_signature_secret: str = ""
+    vonage_number: str = ""  # E.164, informative
+
+    # n8n (or any automation endpoint). Outgoing call events: signed webhooks (HMAC-SHA256 over
+    # "<timestamp>.<body>"), retries with backoff, Idempotency-Key. Empty URL = off.
+    n8n_webhook_url: str = ""
+    n8n_webhook_secret: str = ""  # shared with the receiver; SecretBroker id bc-n8n-webhook-secret
+    n8n_webhook_events: str = ""  # comma list of event types; empty = all
+    n8n_webhook_timeout_s: float = 5.0
+    n8n_webhook_attempts: int = 4
+    # Tool the agent calls during the call (`book_visit` node). Empty URL = no tool node. The
+    # timeout is spent inside the caller's last turn: keep it short and measure response_ms.
+    n8n_tool_url: str = ""
+    n8n_tool_timeout_s: float = 1.5
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
     tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
     # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).
@@ -189,6 +206,16 @@ class Settings(BaseSettings):
     livekit_end_of_turn_min_s: float = 0.0  # espera de LiveKit tras el fin de turno de AssemblyAI
     livekit_interruption_min_s: float = 0.5  # voz mínima del vecino para cortar al bot
     livekit_interruption_min_words: int = 0  # palabras mínimas para cortar al bot
+    # Entrada por SIP (spec 2026-10-22-telnyx-sip-pilot-design, `telephony/sip.py`). El número
+    # al que llaman (en local uno ficticio); quién puede entregar llamadas: usuario y contraseña
+    # (softphone) o IPs/redes separadas por comas (operador). Sin ninguno no se configura.
+    sip_number: str = ""
+    sip_auth_username: str = ""
+    sip_auth_password: str = ""
+    sip_allowed_addresses: str = ""
+    # A quién pasar la llamada cuando el vecino pide una persona (tel:+34… o sip:…). Vacío:
+    # se cuelga y el caso queda para el administrador, como en la consola
+    handoff_target: str = ""
     # El agente entra en la API con este secreto (cabecera Authorization: Bearer). Vacío = no
     agent_secret: str = ""
     agent_api_url: str = "http://127.0.0.1:8000"
