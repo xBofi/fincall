@@ -18,6 +18,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Request,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -47,6 +48,7 @@ from building_call.graph.nodes import (
 )
 from building_call.graph.registry import REGISTRY
 from building_call.graph.state import CallState
+from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
 from building_call.livekit_api import (
@@ -185,6 +187,7 @@ def _view(state: CallState) -> dict[str, Any]:
         "last_delivery": state.get("last_delivery"),
         "pieces": state.get("bot_pieces", []),
         "timings": state.get("turn_timings", {}),
+        "visits": state.get("turn_visits", []),
         "config": state.get("config"),
         "data": {c: state.get(c) for c in fields},
     }
@@ -904,6 +907,44 @@ def create_app(
             return _view(await manager.get(call_id))
         except CallNotFound as e:
             raise HTTPException(404, "Llamada no encontrada") from e
+
+    @app.get("/api/calls/{call_id}/events", dependencies=protected)
+    async def trace_events(call_id: str, request: Request) -> StreamingResponse:
+        """Traza en vivo para la vista de enrutado (SSE): entrada y salida de cada nodo y fin
+        de turno. Empieza con una instantánea para no perder lo ya ocurrido y se cierra cuando
+        la llamada termina."""
+        try:
+            state = await manager.get(call_id)
+        except CallNotFound as e:
+            raise HTTPException(404, "Llamada no encontrada") from e
+        queue = TRACE_BUS.subscribe(call_id)
+
+        def frame(event: dict[str, Any]) -> str:
+            payload = json.dumps(event, ensure_ascii=False, default=str)
+            return f"event: {event['type']}\ndata: {payload}\n\n"
+
+        async def stream():  # type: ignore[no-untyped-def]
+            try:
+                yield frame({"type": "snapshot", **_view(state)})
+                if state.get("finished"):
+                    return
+                while not await request.is_disconnected():
+                    try:
+                        event = await asyncio.wait_for(queue.get(), timeout=15)
+                    except TimeoutError:
+                        yield ": keep-alive\n\n"
+                        continue
+                    yield frame(event)
+                    if event["type"] == "turn_end" and event.get("finished"):
+                        return
+            finally:
+                TRACE_BUS.unsubscribe(call_id, queue)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.get("/api/calls/{call_id}/metrics", dependencies=protected)
     async def call_metrics(call_id: str) -> dict[str, Any]:

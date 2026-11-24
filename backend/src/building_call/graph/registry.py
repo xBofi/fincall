@@ -14,6 +14,7 @@ from langgraph.graph import END, StateGraph
 
 from building_call.graph.nodes import Dependencies, build_nodes
 from building_call.graph.state import CallState
+from building_call.graph.tracing import instrument
 
 GraphBuilder = Callable[[Dependencies], Any]
 
@@ -56,13 +57,17 @@ def build_standard(deps: Dependencies) -> Any:
     # Los genéricos de StateGraph cambian entre versiones de LangGraph: no aportan aquí
     g: Any = StateGraph(CallState)
     for name in _STANDARD_ORDER:
-        g.add_node(name, nodes[name])
+        # Cada visita queda medida y explicada para la vista de enrutado (graph/tracing.py)
+        g.add_node(name, instrument(name, nodes[name]))
     targets = {**{n: n for n in _STANDARD_ORDER}, END: END}
     g.set_conditional_entry_point(_utterance, targets)
     for name in _STANDARD_ORDER:
         g.add_conditional_edges(name, _next, targets)
     return g.compile()
 
+
+#: Funciones de enrutado del grafo estándar, por si la vista quiere nombrarlas
+ROUTERS = {"entry": _utterance.__name__, "edges": _next.__name__}
 
 REGISTRY: dict[str, GraphBuilder] = {
     "standard": build_standard,

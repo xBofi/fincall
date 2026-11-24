@@ -15,6 +15,7 @@ from building_call.graph.ledger import evaluate, split_pieces, unheard_notices
 from building_call.graph.nodes import Dependencies
 from building_call.graph.registry import get_graph
 from building_call.graph.state import CallState, Trace, initial_state
+from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import detection, personas
 from building_call.llm.phrasing import phrase
 from building_call.metrics import MetricsRegistry, TurnTimings
@@ -215,6 +216,7 @@ class CallManager:
             "turn": turn,
             "turn_timings": {},
             "turn_notices": [],
+            "turn_visits": [],
         }
         t0 = perf_counter()
         # Everything the graph says or reads in this turn is in the call's language
@@ -281,6 +283,19 @@ class CallManager:
         await self._save_state(fresh)
         await self._save_operation(fresh)
         await self._save_traceability(state, fresh, utterance, timings)
+        TRACE_BUS.publish(
+            fresh["call_id"],
+            {
+                "type": "turn_end",
+                "turn": turn,
+                "caller": utterance,
+                "assistant": fresh.get("bot_messages", []),
+                "current_node": fresh.get("current_node"),
+                "awaiting_user": bool(fresh.get("awaiting_user")),
+                "finished": bool(fresh.get("finished")),
+                "timings": timings,
+            },
+        )
         return fresh
 
     async def _save_traceability(
@@ -306,6 +321,7 @@ class CallManager:
                 "final_node": fresh.get("current_node"),
                 "interpretation": fresh.get("interpretation"),
                 "timings": timings,
+                "visits": fresh.get("turn_visits", []),
             },
         )
         prior_count = len(previous.get("trace", []))
