@@ -66,10 +66,17 @@ def _read(path: Path) -> list[dict[str, Any]]:
     return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
 
 
+#: The production LLM (BC_LLM=vertex): the default price of the cost column
+PRODUCTION_LLM = "vertex:gemini-3.5-flash-lite"
+
+
 def _price(llm_name: str) -> tuple[float, float]:
-    if ":" not in llm_name:
-        return (0.0, 0.0)  # Ollama, local
-    return PRICES.get(llm_name, (float("nan"), float("nan")))
+    """USD per 1M tokens. Unknown cloud models are NaN; any other name is a local Ollama model."""
+    if llm_name in PRICES:
+        return PRICES[llm_name]
+    if llm_name.split(":", 1)[0] in ("vertex", "openai", "bedrock", "cf"):
+        return (float("nan"), float("nan"))
+    return (0.0, 0.0)
 
 
 # --------------------------------------------------------------------------- LLM runs
@@ -239,7 +246,7 @@ async def main() -> None:
         help="as compare_models.py: ollama name, vertex:, openai:, bedrock:",
     )
     ap.add_argument("--model-dir", default=str(HERE.parent / "nlp" / "models" / "turn-classifier"))
-    ap.add_argument("--threshold", type=float, default=0.85)
+    ap.add_argument("--threshold", type=float, default=0.8)
     ap.add_argument(
         "--thresholds", default="", help="extra thresholds to sweep, e.g. 0.7,0.8,0.9,0.95"
     )
@@ -250,6 +257,18 @@ async def main() -> None:
     )
     ap.add_argument("--llm-turns-per-call", type=float, default=4.0)
     ap.add_argument("--url", default="http://localhost:11434")
+    ap.add_argument(
+        "--price-as",
+        default=PRODUCTION_LLM,
+        help="price the LLM requests as this model (default: the production LLM), so a local run "
+        "still compares the systems on production cost; 'self' = the --llm model's own price",
+    )
+    ap.add_argument(
+        "--llm-cache",
+        default="",
+        help="JSON file with the LLM answers of a previous run (same --llm and --language): "
+        "reused instead of calling the LLM again, to compare classifier variants",
+    )
     ap.add_argument("--entities-only", action="store_true")
     ap.add_argument("--out", default="", help="default: evals/last_nlp_result[_<lang>].json")
     args = ap.parse_args()
@@ -297,8 +316,15 @@ async def _run(args: argparse.Namespace, suffix: str) -> None:
         print(f"LLM {args.llm} not available: {e}")
         return
     print(f"LLM {args.llm}: running {len(intents) + len(classes)} requests...")
-    llm_out = await run_llm(llm, intents, classes)
-    price = _price(args.llm)
+    cache = Path(args.llm_cache) if args.llm_cache else None
+    if cache and cache.exists():
+        llm_out = json.loads(cache.read_text(encoding="utf-8"))
+        print(f"LLM answers from {cache}")
+    else:
+        llm_out = await run_llm(llm, intents, classes)
+        if cache:
+            cache.write_text(json.dumps(llm_out, ensure_ascii=False), encoding="utf-8")
+    price = _price(args.llm if args.price_as == "self" else args.price_as)
 
     results = [
         evaluate(

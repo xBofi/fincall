@@ -46,7 +46,7 @@ class HybridRouter:
     def __init__(
         self,
         classifier: TurnClassifier,
-        threshold: float = 0.85,
+        threshold: float = 0.8,
         entities: EntityExtractor | None = None,
     ) -> None:
         self.classifier = classifier

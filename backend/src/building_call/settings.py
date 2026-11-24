@@ -82,7 +82,8 @@ class Settings(BaseSettings):
     # and the weights from nlp/train_classifier.py
     nlp_hybrid: bool = False
     nlp_model_dir: str = "nlp/models/turn-classifier"
-    nlp_threshold: float = 0.85
+    # 0.8: the lowest with no accuracy loss vs LLM-only on both gold sets (evals/compare_nlp.py)
+    nlp_threshold: float = 0.8
 
     # STT por lotes en servidor: "none" (el navegador transcribe) | "whisper" (faster-whisper local)
     stt: str = "none"
