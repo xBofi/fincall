@@ -20,6 +20,7 @@ pricing pages, read 2026-11-24; local models cost 0 (energy not counted).
 
 Usage:
     uv run python evals/compare_nlp.py --llm qwen3.5:4b
+    uv run python evals/compare_nlp.py --llm qwen3.5:4b --language en
     uv run python evals/compare_nlp.py --llm vertex:gemini-3.5-flash-lite --threshold 0.9
     uv run python evals/compare_nlp.py --entities-only
 """
@@ -39,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from compare_models import _create_llm, _matches  # noqa: E402
 
+from building_call import i18n  # noqa: E402
 from building_call.domain.config import DEFAULTS, UNCLASSIFIABLE_CATEGORY  # noqa: E402
 from building_call.llm import wire  # noqa: E402
 from building_call.llm.interpretation import interpret  # noqa: E402
@@ -180,7 +182,19 @@ ENTITY_FIELDS = ("address", "entrance", "floor", "door", "name")
 def compare_entities(cases: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, float]]]:
     from building_call.nlp.entities import extract_entities, regex_entities, spacy_entities
 
-    systems = {"regex": regex_entities, "spacy": spacy_entities, "combined": extract_entities}
+    def regex_then_spacy(text: str) -> dict[str, str]:
+        return {**spacy_entities(text), **regex_entities(text)}
+
+    def spacy_then_regex(text: str) -> dict[str, str]:
+        return {**regex_entities(text), **spacy_entities(text)}
+
+    systems = {
+        "regex": regex_entities,
+        "spacy": spacy_entities,
+        "regex>spacy": regex_then_spacy,
+        "spacy>regex": spacy_then_regex,
+        "combined": extract_entities,
+    }
     out: dict[str, dict[str, dict[str, float]]] = {}
     for sname, fn in systems.items():
         out[sname] = {}
@@ -237,17 +251,26 @@ async def main() -> None:
     ap.add_argument(
         "--thresholds", default="", help="extra thresholds to sweep, e.g. 0.7,0.8,0.9,0.95"
     )
-    ap.add_argument("--gold", action="append", default=[], help="extra gold files (e.g. English)")
+    ap.add_argument(
+        "--language",
+        default="es",
+        help="es: gold_*.jsonl; en: gold_*_en.jsonl (prompts and parsing in that language)",
+    )
     ap.add_argument("--llm-turns-per-call", type=float, default=4.0)
     ap.add_argument("--url", default="http://localhost:11434")
     ap.add_argument("--entities-only", action="store_true")
-    ap.add_argument("--out", default=str(HERE / "last_nlp_result.json"))
+    ap.add_argument("--out", default="", help="default: evals/last_nlp_result[_<lang>].json")
     args = ap.parse_args()
+    suffix = "" if args.language == "es" else f"_{args.language}"
+    args.out = args.out or str(HERE / f"last_nlp_result{suffix}.json")
+    with i18n.use(args.language):
+        await _run(args, suffix)
 
+
+async def _run(args: argparse.Namespace, suffix: str) -> None:
     gold_paths = [
-        HERE / "gold_interpretation.jsonl",
-        HERE / "gold_classification.jsonl",
-        *map(Path, args.gold),
+        HERE / f"gold_interpretation{suffix}.jsonl",
+        HERE / f"gold_classification{suffix}.jsonl",
     ]
     intents = [r for p in gold_paths if "interpretation" in p.name for r in _read(p)]
     classes = [r for p in gold_paths if "classification" in p.name for r in _read(p)]
@@ -335,7 +358,7 @@ async def main() -> None:
                 f"  {task}: " + ", ".join(f"{k} {v:.2f}" for k, v in r[task]["per_class"].items())
             )
     Path(args.out).write_text(
-        json.dumps({"llm": args.llm, "classifier": clf.name, "results": results, "entities": entities},
+        json.dumps({"language": args.language, "llm": args.llm, "classifier": clf.name, "results": results, "entities": entities},
                    ensure_ascii=False, indent=2),
         encoding="utf-8",
     )  # fmt: skip

@@ -506,6 +506,9 @@ def _vary(text: str, lang: str, rng: random.Random, copies: int) -> list[str]:
     return sorted(out)
 
 
+_dropped = 0
+
+
 def build(seed: int, copies: int = 2) -> list[dict[str, object]]:
     rng = random.Random(seed)
     rows: list[dict[str, object]] = []
@@ -523,10 +526,12 @@ def build(seed: int, copies: int = 2) -> list[dict[str, object]]:
         for text in answers:
             rows.append({"text": text, "lang": lang, "intent": "continue"})
     gold = _gold_texts()
+    global _dropped
     kept = [
         r for r in rows
         if not any(SequenceMatcher(None, _norm(str(r["text"])), g).ratio() >= 0.85 for g in gold)
     ]  # fmt: skip
+    _dropped = len(rows) - len(kept)
     rng.shuffle(kept)
     return kept
 
@@ -538,6 +543,7 @@ def main() -> None:
     ap.add_argument("--out", default=str(HERE / "train.jsonl"))
     args = ap.parse_args()
     rows = build(args.seed, args.copies)
+    print(f"leakage check: {_dropped} generated rows dropped for being too close to a gold row")
     Path(args.out).write_text(
         "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8"
     )

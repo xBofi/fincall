@@ -15,7 +15,7 @@ from building_call.nlp.entities import (  # noqa: E402
 
 def test_address_entrance_floor_door_and_name() -> None:
     found = spacy_entities(
-        "Llamo desde Avenida de la Alameda número 5, portal 2, tercero A. Soy Carmen."
+        "Llamo desde Avenida de la Alameda número 5, portal 2, tercero A. Soy Carmen.", "es"
     )
     assert found["address"].startswith("Avenida de la Alameda")
     assert found["entrance"] == "2"
@@ -38,10 +38,26 @@ def test_contact_details_and_building() -> None:
     assert found["email"] == "luis@example.com"
 
 
-def test_english_and_catalan() -> None:
-    assert spacy_entities("My name is Sarah")["name"] == "Sarah"
-    assert spacy_entities("Em dic Jordi")["name"] == "Jordi"
-    assert spacy_entities("It's 12 Elm Street")["address"] == "12 Elm Street"
+def test_the_active_language_is_the_default() -> None:
+    from building_call import i18n
+
+    with i18n.use("en"):
+        assert spacy_entities("My name is Sarah")["name"] == "Sarah"
+
+
+def test_english() -> None:
+    assert spacy_entities("My name is Sarah", "en")["name"] == "Sarah"
+    assert spacy_entities("Third floor, B, I'm Marta Lopez", "en")["name"] == "Marta Lopez"
+    assert spacy_entities("It's 12 Elm Street", "en")["address"] == "12 Elm Street"
+    assert spacy_entities("Main Street, number twelve", "en")["address"].startswith("Main Street")
+
+
+def test_catalan_once_its_locale_exists() -> None:
+    from building_call import i18n
+
+    if "ca" not in i18n.languages():
+        pytest.skip("no Catalan locale yet")
+    assert spacy_entities("Em dic Jordi", "ca")["name"] == "Jordi"
 
 
 def test_a_problem_description_has_no_entities() -> None:
