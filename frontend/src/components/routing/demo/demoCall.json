@@ -1,6 +1,6 @@
 {
  "meta": {
-  "recorded_at": "2026-11-24T14:53:01+00:00",
+  "recorded_at": "2026-11-24T22:31:51+00:00",
   "llm": "ollama/qwen3.5:latest",
   "result": "incident_created",
   "note": "Llamada guionizada por el grafo real con repositorio en memoria."
@@ -270,11 +270,24 @@
     ]
    },
    {
+    "id": "book_visit",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Reservar visita (n8n)",
+    "summary": "Herramienta: pide a un flujo de n8n un hueco en la agenda del profesional y lo reserva de forma provisional; al vecino se le ofrece como provisional, pendiente de que lo confirme el profesional. Con tiempo límite corto; si falla, el cierre es el de siempre. Apagada por defecto: solo existe si hay BC_N8N_TOOL_URL.",
+    "stage": 7,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "llama al webhook de n8n y guarda la reserva provisional (o el motivo del fallo)"
+    ]
+   },
+   {
     "id": "notify_channel",
     "role": "tool",
     "kind": "effect",
     "title": "Avisar y despedir",
-    "summary": "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué va a pasar y quién le llamará. Nunca promete una hora: nadie ha hablado aún con el profesional.",
+    "summary": "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué va a pasar y quién le llamará. No da una hora firme: nadie ha hablado aún con el profesional. Con la herramienta de agenda (n8n) activada puede ofrecer un hueco, siempre como provisional y pendiente de que lo confirme el profesional.",
     "stage": 7,
     "uses_llm": false,
     "deterministic_paths": [],
@@ -816,6 +829,24 @@
     "kind": "forward"
    },
    {
+    "id": "create_ticket->book_visit",
+    "source": "create_ticket",
+    "target": "book_visit",
+    "condition": "incidencia creada con profesional, sin emergencia y con herramienta de agenda",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "book_visit->notify_channel",
+    "source": "book_visit",
+    "target": "notify_channel",
+    "condition": "con hueco reservado o sin él",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
     "id": "notify_channel->__end__",
     "source": "notify_channel",
     "target": "__end__",
@@ -828,6 +859,7 @@
   "entry_targets": [
    "ask_detail",
    "assign_specialist",
+   "book_visit",
    "classify_problem",
    "collect_request",
    "confirm_home",
@@ -847,9 +879,9 @@
    "validate_data"
   ],
   "compiled": {
-   "nodes": 21,
-   "edges": 400,
-   "conditional_edges": 400
+   "nodes": 22,
+   "edges": 441,
+   "conditional_edges": 441
   },
   "drift": []
  },
@@ -864,8 +896,8 @@
    "final_node": "identify_estate",
    "interpretation": null,
    "timings": {
-    "graph_ms": 38,
-    "server_ms": 38,
+    "graph_ms": 67,
+    "server_ms": 67,
     "turn": 0
    },
    "visits": [
@@ -873,7 +905,7 @@
      "index": 0,
      "turn": 0,
      "node": "next_step",
-     "at_ms": 1795531978073,
+     "at_ms": 1795559503775,
      "ms": 0.0,
      "target": "identify_estate",
      "awaiting_user": false,
@@ -894,8 +926,8 @@
      "index": 1,
      "turn": 0,
      "node": "identify_estate",
-     "at_ms": 1795531978073,
-     "ms": 1.2,
+     "at_ms": 1795559503777,
+     "ms": 2.0,
      "target": "identify_estate",
      "awaiting_user": true,
      "finished": false,
@@ -935,8 +967,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 2,
-    "server_ms": 2,
+    "graph_ms": 3,
+    "server_ms": 3,
     "turn": 1
    },
    "visits": [
@@ -944,8 +976,8 @@
      "index": 0,
      "turn": 1,
      "node": "identify_estate",
-     "at_ms": 1795531978078,
-     "ms": 0.3,
+     "at_ms": 1795559503782,
+     "ms": 0.5,
      "target": "identify_estate",
      "awaiting_user": true,
      "finished": false,
@@ -999,8 +1031,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 4,
-    "server_ms": 4,
+    "graph_ms": 7,
+    "server_ms": 7,
     "turn": 2
    },
    "visits": [
@@ -1008,8 +1040,8 @@
      "index": 0,
      "turn": 2,
      "node": "identify_estate",
-     "at_ms": 1795531978080,
-     "ms": 1.1,
+     "at_ms": 1795559503788,
+     "ms": 1.2,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1058,7 +1090,7 @@
      "index": 1,
      "turn": 2,
      "node": "next_step",
-     "at_ms": 1795531978082,
+     "at_ms": 1795559503790,
      "ms": 0.0,
      "target": "identify_home",
      "awaiting_user": false,
@@ -1079,7 +1111,7 @@
      "index": 2,
      "turn": 2,
      "node": "identify_home",
-     "at_ms": 1795531978082,
+     "at_ms": 1795559503792,
      "ms": 0.0,
      "target": "identify_home",
      "awaiting_user": true,
@@ -1122,8 +1154,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 8,
-    "server_ms": 8,
+    "graph_ms": 16,
+    "server_ms": 16,
     "turn": 3
    },
    "visits": [
@@ -1131,8 +1163,8 @@
      "index": 0,
      "turn": 3,
      "node": "identify_home",
-     "at_ms": 1795531978082,
-     "ms": 0.2,
+     "at_ms": 1795559503796,
+     "ms": 0.4,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1171,8 +1203,8 @@
      "index": 1,
      "turn": 3,
      "node": "next_step",
-     "at_ms": 1795531978082,
-     "ms": 4.5,
+     "at_ms": 1795559503798,
+     "ms": 9.8,
      "target": "confirm_home",
      "awaiting_user": false,
      "finished": false,
@@ -1222,7 +1254,7 @@
      "index": 2,
      "turn": 3,
      "node": "confirm_home",
-     "at_ms": 1795531978092,
+     "at_ms": 1795559503809,
      "ms": 0.1,
      "target": "confirm_home",
      "awaiting_user": true,
@@ -1264,8 +1296,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 4,
-    "server_ms": 4,
+    "graph_ms": 8,
+    "server_ms": 8,
     "turn": 4
    },
    "visits": [
@@ -1273,7 +1305,7 @@
      "index": 0,
      "turn": 4,
      "node": "confirm_home",
-     "at_ms": 1795531978092,
+     "at_ms": 1795559503814,
      "ms": 0.2,
      "target": "next_step",
      "awaiting_user": false,
@@ -1311,7 +1343,7 @@
      "index": 1,
      "turn": 4,
      "node": "next_step",
-     "at_ms": 1795531978096,
+     "at_ms": 1795559503816,
      "ms": 0.0,
      "target": "collect_request",
      "awaiting_user": false,
@@ -1332,7 +1364,7 @@
      "index": 2,
      "turn": 4,
      "node": "collect_request",
-     "at_ms": 1795531978096,
+     "at_ms": 1795559503818,
      "ms": 0.0,
      "target": "collect_request",
      "awaiting_user": true,
@@ -1370,14 +1402,14 @@
     "intent": "question",
     "question": "¿esta llamada se graba?",
     "origin": "llm",
-    "llm_ms": 1044
+    "llm_ms": 2050
    },
    "timings": {
-    "interpretation_ms": 1044,
+    "interpretation_ms": 2050,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1047,
-    "server_ms": 1047,
+    "graph_ms": 2055,
+    "server_ms": 2055,
     "turn": 5
    },
    "visits": [
@@ -1385,8 +1417,8 @@
      "index": 0,
      "turn": 5,
      "node": "collect_request",
-     "at_ms": 1795531978099,
-     "ms": 1045.3,
+     "at_ms": 1795559503822,
+     "ms": 2051.2,
      "target": "collect_request",
      "awaiting_user": true,
      "finished": false,
@@ -1394,12 +1426,12 @@
      "condition": "no ha contado todavía qué le ocurre",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1044,
+     "llm_ms": 2050,
      "interpretation": {
       "intent": "question",
       "question": "¿esta llamada se graba?",
       "origin": "llm",
-      "llm_ms": 1044
+      "llm_ms": 2050
      },
      "confidence_signals": null,
      "trace": [
@@ -1431,14 +1463,14 @@
     "urgency": "high",
     "work_type": "repair",
     "origin": "llm",
-    "llm_ms": 1256
+    "llm_ms": 2648
    },
    "timings": {
-    "interpretation_ms": 1256,
+    "interpretation_ms": 2648,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1262,
-    "server_ms": 1262,
+    "graph_ms": 2659,
+    "server_ms": 2659,
     "turn": 6
    },
    "visits": [
@@ -1446,8 +1478,8 @@
      "index": 0,
      "turn": 6,
      "node": "collect_request",
-     "at_ms": 1795531979148,
-     "ms": 1257.1,
+     "at_ms": 1795559505878,
+     "ms": 2649.8,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1455,7 +1487,7 @@
      "condition": "solicitud recogida",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1256,
+     "llm_ms": 2648,
      "interpretation": {
       "intent": "continue",
       "problem": "fuga de agua en el baño y está inundando el suelo",
@@ -1463,7 +1495,7 @@
       "urgency": "high",
       "work_type": "repair",
       "origin": "llm",
-      "llm_ms": 1256
+      "llm_ms": 2648
      },
      "confidence_signals": null,
      "trace": [],
@@ -1487,7 +1519,7 @@
      "index": 1,
      "turn": 6,
      "node": "next_step",
-     "at_ms": 1795531980406,
+     "at_ms": 1795559508529,
      "ms": 0.1,
      "target": "determine_urgency",
      "awaiting_user": false,
@@ -1563,8 +1595,8 @@
      "index": 2,
      "turn": 6,
      "node": "determine_urgency",
-     "at_ms": 1795531980406,
-     "ms": 0.0,
+     "at_ms": 1795559508531,
+     "ms": 0.1,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1594,8 +1626,8 @@
      "index": 3,
      "turn": 6,
      "node": "next_step",
-     "at_ms": 1795531980407,
-     "ms": 0.0,
+     "at_ms": 1795559508532,
+     "ms": 0.1,
      "target": "ask_detail",
      "awaiting_user": false,
      "finished": false,
@@ -1615,7 +1647,7 @@
      "index": 4,
      "turn": 6,
      "node": "ask_detail",
-     "at_ms": 1795531980408,
+     "at_ms": 1795559508534,
      "ms": 0.0,
      "target": "ask_detail",
      "awaiting_user": true,
@@ -1656,14 +1688,14 @@
     "urgency": "medium",
     "work_type": "repair",
     "origin": "llm",
-    "llm_ms": 1099
+    "llm_ms": 2586
    },
    "timings": {
-    "interpretation_ms": 1099,
+    "interpretation_ms": 2586,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1103,
-    "server_ms": 1103,
+    "graph_ms": 2594,
+    "server_ms": 2594,
     "turn": 7
    },
    "visits": [
@@ -1671,8 +1703,8 @@
      "index": 0,
      "turn": 7,
      "node": "ask_detail",
-     "at_ms": 1795531980409,
-     "ms": 1099.9,
+     "at_ms": 1795559508537,
+     "ms": 2587.1,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1680,7 +1712,7 @@
      "condition": "detalle recogido, o el vecino no lo aporta",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1099,
+     "llm_ms": 2586,
      "interpretation": {
       "intent": "continue",
       "problem": "sale agua con fuerza de debajo del lavabo",
@@ -1688,7 +1720,7 @@
       "urgency": "medium",
       "work_type": "repair",
       "origin": "llm",
-      "llm_ms": 1099
+      "llm_ms": 2586
      },
      "confidence_signals": null,
      "trace": [
@@ -1714,7 +1746,7 @@
      "index": 1,
      "turn": 7,
      "node": "next_step",
-     "at_ms": 1795531981511,
+     "at_ms": 1795559511126,
      "ms": 0.0,
      "target": "confirm_summary",
      "awaiting_user": false,
@@ -1735,7 +1767,7 @@
      "index": 2,
      "turn": 7,
      "node": "confirm_summary",
-     "at_ms": 1795531981512,
+     "at_ms": 1795559511128,
      "ms": 0.0,
      "target": "confirm_summary",
      "awaiting_user": true,
@@ -1777,8 +1809,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 5,
-    "server_ms": 5,
+    "graph_ms": 9,
+    "server_ms": 9,
     "turn": 8
    },
    "visits": [
@@ -1786,8 +1818,8 @@
      "index": 0,
      "turn": 8,
      "node": "confirm_summary",
-     "at_ms": 1795531981514,
-     "ms": 0.1,
+     "at_ms": 1795559511133,
+     "ms": 0.2,
      "target": "validate_data",
      "awaiting_user": false,
      "finished": false,
@@ -1822,8 +1854,8 @@
      "index": 1,
      "turn": 8,
      "node": "validate_data",
-     "at_ms": 1795531981515,
-     "ms": 0.0,
+     "at_ms": 1795559511134,
+     "ms": 0.1,
      "target": "assign_specialist",
      "awaiting_user": false,
      "finished": false,
@@ -1850,8 +1882,8 @@
      "index": 2,
      "turn": 8,
      "node": "assign_specialist",
-     "at_ms": 1795531981516,
-     "ms": 0.0,
+     "at_ms": 1795559511135,
+     "ms": 0.1,
      "target": "create_ticket",
      "awaiting_user": false,
      "finished": false,
@@ -1887,7 +1919,7 @@
      "index": 3,
      "turn": 8,
      "node": "create_ticket",
-     "at_ms": 1795531981516,
+     "at_ms": 1795559511136,
      "ms": 0.1,
      "target": "notify_channel",
      "awaiting_user": false,
@@ -1902,7 +1934,7 @@
      "trace": [
       {
        "action": "incident_created",
-       "detail": "inc-06e62178e85e"
+       "detail": "inc-5a07104eb2a1"
       }
      ],
      "validations": [],
@@ -1910,7 +1942,7 @@
      "diff": {
       "incident_id": {
        "before": null,
-       "after": "inc-06e62178e85e"
+       "after": "inc-5a07104eb2a1"
       },
       "result": {
        "before": null,
@@ -1922,7 +1954,7 @@
      "index": 4,
      "turn": 8,
      "node": "notify_channel",
-     "at_ms": 1795531981517,
+     "at_ms": 1795559511138,
      "ms": 0.1,
      "target": "end",
      "awaiting_user": false,

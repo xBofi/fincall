@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import secrets
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from time import perf_counter
@@ -1033,7 +1033,7 @@ def create_app(
             payload = json.dumps(event, ensure_ascii=False, default=str)
             return f"event: {event['type']}\ndata: {payload}\n\n"
 
-        async def stream():  # type: ignore[no-untyped-def]
+        async def stream() -> AsyncIterator[str]:
             try:
                 yield frame({"type": "snapshot", **_view(state)})
                 if state.get("finished"):
