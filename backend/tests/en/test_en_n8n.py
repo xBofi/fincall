@@ -55,7 +55,8 @@ async def test_book_visit_in_english(deps: Dependencies) -> None:
     assert tools.requests[0]["specialist_id"] == "spc-plumber"
     closing = state["bot_messages"][-1]
     assert "Wednesday the 25th between 9 and 11 am" in closing
-    assert "held it for you" in closing and "can't give you a time" not in closing
+    assert "provisional" in closing and "pending confirmation" in closing
+    assert "can't give you a time" not in closing
     assert {e["language"] for e in sink.events} == {"en"}
 
 

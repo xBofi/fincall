@@ -147,7 +147,10 @@ Answer (from a **Respond to Webhook** node):
 characters of plain text; anything else, `booked` not exactly `true`, a non-2xx answer or a
 timeout falls back to the usual closing ("he will call you to arrange the visit").
 
-The node only runs for a repair with a maintainer assigned and never in an emergency. Telling a
-caller a time is a change to a business rule that Andreu had confirmed ("never promise a time:
-nobody has spoken to the maintainer yet"), so the tool is **off unless `BC_N8N_TOOL_URL` is
-set** and the phrasing says the slot is provisional and the maintainer confirms it.
+The node only runs for a repair with a maintainer assigned and never in an emergency.
+
+**Business rule (Andreu, 2026-11-24).** The assistant never gives a firm time: nobody has spoken
+to the maintainer yet. When the n8n tool is enabled it may offer a slot, but always as
+**provisional, pending confirmation by the maintainer**, and that is what the closing says in
+every language (`notify_channel.visit_notice`; a test fails if a language's wording drops it).
+The tool is **off by default**: it only exists when `BC_N8N_TOOL_URL` is set.

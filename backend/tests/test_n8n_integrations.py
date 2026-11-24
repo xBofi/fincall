@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 import pytest
 
+from building_call import i18n
 from building_call.graph.nodes import Dependencies
 from building_call.integrations import events as call_events
 from building_call.integrations.n8n_tool import N8nTools, ToolOutcome
@@ -356,3 +357,41 @@ def test_the_app_fans_out_to_every_configured_url() -> None:
     assert create_n8n_tools(s) is not None
     s.n8n_webhook_secret = ""  # never send unsigned
     assert create_webhook_sender(s) is None and create_n8n_tools(s) is None
+
+
+# ---------------------------------------------------------------- the slot is always provisional
+
+#: How each language says that the visit is provisional and that the maintainer still has to
+#: confirm it (business rule, Andreu 2026-11-24). A new language must add its words here: the
+#: test below fails for any supported language without an entry.
+PROVISIONAL_WORDS: dict[str, tuple[str, str]] = {
+    "es": ("provisional", "pendiente de que el profesional la confirme"),
+    "en": ("provisional", "pending confirmation"),
+}
+
+
+@pytest.mark.parametrize("code", i18n.supported())
+def test_the_offered_slot_is_provisional_in_every_language(code: str) -> None:
+    from building_call.graph.templates import render
+
+    assert code in PROVISIONAL_WORDS, f"say how {code} marks the slot as provisional"
+    with i18n.use(code):
+        text = render(
+            "notify_channel.visit_notice",
+            specialist="X",
+            slot="SLOT",
+            contact=render("notify_channel.phone_contact"),
+        ).lower()
+    for words in PROVISIONAL_WORDS[code]:
+        assert words in text, (code, words, text)
+
+
+async def test_the_phraser_never_rewrites_the_provisional_closing(deps: Dependencies) -> None:
+    """Closings are said verbatim (`_deserves_phrasing` skips finished turns), so a paraphrase
+    can never drop "provisional"."""
+    deps.tools = FakeTools(ToolOutcome("booked", slot="mañana entre las nueve y las once"))
+    state = await _converse(CallManager(deps, phraser=deps.llm), TICKET_TURNS)
+    closing = state["bot_messages"][-1].lower()
+    assert not closing.startswith("vale.")  # the fake phraser's mark
+    for words in PROVISIONAL_WORDS["es"]:
+        assert words in closing

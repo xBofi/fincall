@@ -377,8 +377,9 @@ MANIFEST: dict[str, ManifestNode] = {
         title="Reservar visita (n8n)",
         summary=(
             "Herramienta: pide a un flujo de n8n un hueco en la agenda del profesional y lo "
-            "reserva de forma provisional. Con tiempo límite corto; si falla, el cierre es el de "
-            "siempre. Solo existe si hay BC_N8N_TOOL_URL."
+            "reserva de forma provisional; al vecino se le ofrece como provisional, pendiente de "
+            "que lo confirme el profesional. Con tiempo límite corto; si falla, el cierre es el "
+            "de siempre. Apagada por defecto: solo existe si hay BC_N8N_TOOL_URL."
         ),
         kind="effect",
         uses_llm=False,
@@ -391,8 +392,9 @@ MANIFEST: dict[str, ManifestNode] = {
         title="Avisar y despedir",
         summary=(
             "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué "
-            "va a pasar y quién le llamará. Nunca promete una hora: nadie ha hablado aún con el "
-            "profesional."
+            "va a pasar y quién le llamará. No da una hora firme: nadie ha hablado aún con el "
+            "profesional. Con la herramienta de agenda (n8n) activada puede ofrecer un hueco, "
+            "siempre como provisional y pendiente de que lo confirme el profesional."
         ),
         kind="effect",
         uses_llm=False,

@@ -2130,8 +2130,11 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         channel = rule.channel if rule else "ticket"
         rule_target = rule.target if rule else "specialist"
         specialist = state.get("specialist_name")
-        # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. No prometemos
-        # hora: nadie ha hablado aún con el profesional (regla de diseño, 2026-08-28).
+        # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. Nunca se da una
+        # hora firme: nadie ha hablado aún con el profesional (regla de diseño, 2026-08-28). Con la
+        # herramienta de agenda (n8n) activada se puede ofrecer un hueco, pero siempre como
+        # provisional y pendiente de que lo confirme el profesional (decisión de Andreu,
+        # 2026-11-24): `notify_channel.visit_notice`.
         contact = (
             render("notify_channel.phone_contact")
             if state.get("caller_phone")

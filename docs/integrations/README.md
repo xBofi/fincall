@@ -17,7 +17,9 @@ fail on purpose (no external account was used), which shows that everything befo
 | `n8n-urgent-escalation-workflow.png` | Emergencies, high-urgency tickets and handoffs → SMS to the on-call coordinator. |
 | `n8n-replay-dropped-execution.png` | The same event sent twice: the second run stops at **Skip retried events** (same `Idempotency-Key`), so nothing is sent twice. Test copy of the ticket workflow with the actions disabled. |
 
-Measured in that run:
+Measured in that run (the closing has since been reworded so it always says the visit is
+provisional and pending the maintainer's confirmation, in every language: business rule of
+2026-11-24, `notify_channel.visit_notice`):
 
 - The caller heard: "Se lo comunico ahora a Fontanería Pérez. Según su agenda puede pasar el
   miércoles 25 entre las 9:00 y las 11:00; se lo dejo reservado y le llamará a este mismo número

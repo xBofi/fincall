@@ -437,10 +437,11 @@ CATALOG: dict[str, Template] = dict(
         _p(
             "notify_channel.visit_notice",
             "notify_channel",
-            "Caso normal con la herramienta de agenda (n8n): el hueco está reservado de forma "
-            "provisional en la agenda del profesional, que lo confirma al llamar.",
-            "Se lo comunico ahora a {specialist}. Según su agenda puede pasar {slot}; se lo "
-            "dejo reservado y {contact} para confirmarlo.",
+            "Caso normal con la herramienta de agenda (n8n) activada: se ofrece el hueco SIEMPRE "
+            "como provisional, pendiente de que lo confirme el profesional (decisión de Andreu, "
+            "2026-11-24). Sin herramienta o si falla, se dice specialist_notice.",
+            "Se lo comunico ahora a {specialist}. Le dejo reservada una visita provisional "
+            "{slot}, pendiente de que el profesional la confirme: {contact} para confirmarla.",
         ),
         _p(
             "notify_channel.phone_contact",
