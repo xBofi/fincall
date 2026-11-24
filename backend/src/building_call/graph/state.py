@@ -27,6 +27,8 @@ class CallState(TypedDict, total=False):
     # the caller asking for it), so automatic detection no longer changes it
     language: str
     language_locked: bool
+    # Voice persona of the client (`i18n/personas`): name, voice, tone and greeting
+    persona: str | None
     caller_phone: str | None
     turn: int
     current_node: str
@@ -110,6 +112,7 @@ def initial_state(
         started_at=started_at,
         language=language,
         language_locked=locked,
+        persona=None,
         caller_phone=None,
         turn=0,
         current_node="next_step",

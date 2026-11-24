@@ -43,6 +43,7 @@ from building_call import i18n
 from building_call.graph.ledger import cut_by_words
 from building_call.settings import settings
 from building_call.stt_streaming import validate_eu_endpoint
+from building_call.telephony.tts import voice_for
 from building_call.voice.control import CallControl
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,11 @@ class ApiClient:
         r.raise_for_status()
         return r.json()  # type: ignore[no-any-return]
 
-    async def begin(self, phone: str | None, language: str | None = None) -> dict[str, Any]:
-        return await self._post("/api/calls", {"caller_phone": phone, "language": language})
+    async def begin(
+        self, phone: str | None, language: str | None = None, persona: str | None = None
+    ) -> dict[str, Any]:
+        body = {"caller_phone": phone, "language": language, "persona": persona}
+        return await self._post("/api/calls", body)
 
     async def get(self, call_id: str) -> dict[str, Any]:
         r = await self._http.get(f"/api/calls/{call_id}")
@@ -113,10 +117,30 @@ class _NoModel(llm.LLM[None]):
 
 
 class FincallAgent(Agent):
-    def __init__(self, api: ApiClient, control: CallControl) -> None:
+    def __init__(self, api: ApiClient, control: CallControl, persona: str | None = None) -> None:
         super().__init__(instructions="", llm=_NoModel())
         self.api = api
         self.control = control
+        self.persona = persona
+
+    def _follow_language(self) -> None:
+        """The call switched language (detection, or the caller asked): ears and mouth follow,
+        without reconnecting (AssemblyAI `UpdateConfiguration`, ElevenLabs options)."""
+        language = self.control.language
+        if not language:
+            return
+        spec = i18n.get(language)
+        stt_model = getattr(self.session, "stt", None)
+        tts_model = getattr(self.session, "tts", None)
+        if stt_model is not None and settings.assemblyai_model in _MODELS_WITH_LANGUAGE:
+            stt_model.update_options(language_codes=spec.stt.language_code)
+        if tts_model is not None:
+            voice = voice_for(self.persona, language) or spec.tts.elevenlabs_voice
+            tts_model.update_options(
+                language=spec.tts.elevenlabs_language,
+                **({"voice_id": voice} if voice else {}),
+            )
+        logger.info("Llamada %s sigue en %s", self.control.call_id, language)
 
     async def stt_node(
         self, audio: AsyncIterable[rtc.AudioFrame], model_settings: ModelSettings
@@ -155,6 +179,9 @@ class FincallAgent(Agent):
         except httpx.HTTPError:
             logger.exception("La API no respondió al turno de %s", self.control.call_id)
             return
+        if self.control.language_changed:
+            self.control.language_changed = False
+            self._follow_language()
         if self.control.text:
             yield self.control.text
 
@@ -163,7 +190,11 @@ class FincallAgent(Agent):
 _MODELS_WITH_LANGUAGE = ("u3-rt-pro", "u3-rt-pro-beta-1", "universal-3-5-pro", "universal-3-6-pro")
 
 
-def stt_options(vocabulary: list[str], language: str | None = None) -> dict[str, Any]:
+def stt_options(
+    vocabulary: list[str], language: str | None = None, detect: bool = False
+) -> dict[str, Any]:
+    """`detect`: the call's language is not decided yet: steer to every enabled language and
+    have AssemblyAI report which one it hears."""
     """Argumentos de `assemblyai.STT`. Separado para probarlo sin abrir conexiones."""
     host = settings.assemblyai_streaming_host
     validate_eu_endpoint(host)  # solo el endpoint europeo, como el resto del sistema
@@ -181,12 +212,18 @@ def stt_options(vocabulary: list[str], language: str | None = None) -> dict[str,
     }
     # Solo los Universal-3 Pro aceptan fijar el idioma; el multilingüe lo detecta
     if model in _MODELS_WITH_LANGUAGE:
-        options["language_codes"] = i18n.get(language).stt.language_code
+        options["language_codes"] = (
+            [i18n.get(c).stt.language_code for c in i18n.enabled()]
+            if detect
+            else i18n.get(language).stt.language_code
+        )
+    if detect:
+        options["language_detection"] = True
     return options
 
 
-def _stt(vocabulary: list[str], language: str) -> assemblyai.STT:
-    return assemblyai.STT(**stt_options(vocabulary, language))
+def _stt(vocabulary: list[str], language: str, detect: bool = False) -> assemblyai.STT:
+    return assemblyai.STT(**stt_options(vocabulary, language, detect))
 
 
 def vad_options() -> dict[str, Any]:
@@ -220,11 +257,11 @@ def turn_options() -> dict[str, Any]:
     }
 
 
-def _tts(language: str) -> elevenlabs.TTS:
+def _tts(language: str, persona: str | None = None) -> elevenlabs.TTS:
     spec = i18n.get(language).tts
     return elevenlabs.TTS(
         api_key=settings.elevenlabs_api_key,
-        voice_id=spec.elevenlabs_voice or settings.elevenlabs_voice,
+        voice_id=voice_for(persona, language) or spec.elevenlabs_voice or settings.elevenlabs_voice,
         model=settings.elevenlabs_model,
         language=spec.elevenlabs_language,
         encoding="pcm_24000",  # con v4 las marcas por palabra solo son exactas en PCM
@@ -246,14 +283,16 @@ async def session(ctx: JobContext) -> None:
     if call_id := metadata.get("call_id"):
         view = await api.get(call_id)
     else:
-        view = await api.begin(metadata.get("phone"), metadata.get("language"))
+        view = await api.begin(
+            metadata.get("phone"), metadata.get("language"), metadata.get("persona")
+        )
     # The call's language: ears, mouth and turn fillers all follow it
     language = view.get("language") or i18n.default_code()
     control = CallControl(view["call_id"], language)
 
     session: AgentSession[None] = AgentSession(
-        stt=_stt(await api.vocabulary(language), language),
-        tts=_tts(language),
+        stt=_stt(await api.vocabulary(language), language, not view.get("language_locked")),
+        tts=_tts(language, view.get("persona")),
         vad=silero.VAD.load(**vad_options()),
         use_tts_aligned_transcript=True,
         turn_handling=turn_options(),  # type: ignore[arg-type]
@@ -298,7 +337,9 @@ async def session(ctx: JobContext) -> None:
             turn, text = control.report()
             control.track_report(launch(report(ev.item, turn, text)))
 
-    await session.start(agent=FincallAgent(api, control), room=ctx.room, record=False)
+    await session.start(
+        agent=FincallAgent(api, control, view.get("persona")), room=ctx.room, record=False
+    )
     # El saludo (o lo último pendiente) ya lo ha preparado la API
     if text := control.new_turn(view):
         session.say(text)

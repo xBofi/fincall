@@ -49,6 +49,16 @@ def supported() -> tuple[str, ...]:
     return tuple(languages())
 
 
+def enabled() -> tuple[str, ...]:
+    """The languages this deployment answers in (`BC_LANGUAGES`; empty = all of them). The
+    default language is always one of them."""
+    from building_call.settings import settings
+
+    chosen = [c for c in (normalize_code(x) for x in settings.languages) if c]
+    codes = tuple(dict.fromkeys([default_code(), *chosen])) if chosen else supported()
+    return codes
+
+
 def normalize_code(code: str | None) -> str | None:
     """'en-US' -> 'en', 'ES' -> 'es'; None if it is not a supported language."""
     if not code:

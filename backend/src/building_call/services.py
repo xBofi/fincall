@@ -14,7 +14,8 @@ from building_call.domain.entities import Call, CallResult
 from building_call.graph.ledger import evaluate, split_pieces, unheard_notices
 from building_call.graph.nodes import Dependencies
 from building_call.graph.registry import get_graph
-from building_call.graph.state import CallState, initial_state
+from building_call.graph.state import CallState, Trace, initial_state
+from building_call.i18n import detection, personas
 from building_call.llm.phrasing import phrase
 from building_call.metrics import MetricsRegistry, TurnTimings
 from building_call.repos.call_state import CallStateStore, MemoryStateStore
@@ -188,15 +189,22 @@ class CallManager:
         )
 
     async def _run(
-        self, state: CallState, utterance: str | None, stt_ms: int | None = None
+        self,
+        state: CallState,
+        utterance: str | None,
+        stt_ms: int | None = None,
+        *,
+        reprompt: bool = False,
     ) -> CallState:
+        """One turn of the graph. `reprompt`: the caller's words are already in the history
+        (they asked for another language) and the current node asks its question again."""
         # El grafo a usar puede cambiar al resolver la configuración de la finca
         graph_name = (
             (state.get("config") or {}).get("graph")
             or state.get("graph")
             or self.default_graph
         )
-        turn = state.get("turn", 0) + (1 if utterance is not None else 0)
+        turn = state.get("turn", 0) + (1 if utterance is not None or reprompt else 0)
         initial_node = state.get("current_node", "next_step")
         prepared: CallState = {
             **state,
@@ -211,7 +219,8 @@ class CallManager:
         t0 = perf_counter()
         # Everything the graph says or reads in this turn is in the call's language
         language = state.get("language") or i18n.default_code()
-        with i18n.use(language):
+        persona = state.get("persona")
+        with i18n.use(language), personas.use(persona):
             fresh: CallState = await self._graph(graph_name).ainvoke(prepared)
         timings = dict(fresh.get("turn_timings", {}))
         if (
@@ -220,7 +229,7 @@ class CallManager:
             and _deserves_phrasing(fresh, utterance)
         ):
             template = " ".join(fresh["bot_messages"])
-            with i18n.use(language):
+            with i18n.use(language), personas.use(persona):
                 text, metric = await phrase(
                     self.phraser, template, utterance, _phrasing_data(fresh)
                 )
@@ -309,12 +318,19 @@ class CallManager:
             )
 
     async def begin(
-        self, caller_phone: str | None = None, language: str | None = None
+        self,
+        caller_phone: str | None = None,
+        language: str | None = None,
+        persona: str | None = None,
     ) -> CallState:
         """Opens a call. `language`: chosen for this call (number, stream parameter, console);
-        None = `BC_LANGUAGE`. An unknown language raises `i18n.UnknownLanguage`."""
+        None = `BC_LANGUAGE`, and the caller's first words may switch it (detection).
+        `persona`: the client's voice persona; None = `BC_PERSONA`. Unknown values raise
+        `i18n.UnknownLanguage` / `personas.UnknownPersona`."""
         call_id = f"llam-{uuid4().hex[:12]}"
         code = i18n.get(language).code if language else i18n.default_code()
+        if persona is not None:
+            personas.get(persona)
         state = initial_state(
             call_id,
             datetime.now(UTC).isoformat(),
@@ -323,15 +339,79 @@ class CallManager:
             locked=language is not None,
         )
         state["caller_phone"] = caller_phone
+        state["persona"] = persona or personas.default_id()
         return await self._run(state, None)
 
     async def message(
-        self, call_id: str, text: str, stt_ms: int | None = None
+        self,
+        call_id: str,
+        text: str,
+        stt_ms: int | None = None,
+        stt_language: str | None = None,
+        stt_confidence: float | None = None,
     ) -> CallState:
+        """A caller turn. `stt_language` / `stt_confidence`: what the STT detected, if it
+        reports it (AssemblyAI with `language_detection`)."""
         state = await self.get(call_id)
         if state.get("finished"):
             return state
+        state, requested = self._language_for_turn(state, text, stt_language, stt_confidence)
+        if requested:
+            # "English, please": the question is asked again, now in English
+            state = {
+                **state,
+                "history": [*state.get("history", []), {"role": "caller", "text": text}],
+            }
+            return await self._run(state, None, stt_ms, reprompt=True)
         return await self._run(state, text, stt_ms)
+
+    def _language_for_turn(
+        self,
+        state: CallState,
+        text: str,
+        stt_language: str | None,
+        stt_confidence: float | None,
+    ) -> tuple[CallState, bool]:
+        """Switches the call's language if the caller asks for another one, or, in the first
+        turns of a call whose language nobody chose, if the detection is confident enough.
+        Returns (state, asked_for_it)."""
+        from building_call.settings import settings
+
+        current = state.get("language") or i18n.default_code()
+        enabled = i18n.enabled()
+        asked = detection.requested_language(text, current, enabled)
+        if asked is not None:
+            return self._switch(state, asked, f"requested: {text[:40]}", locked=True), True
+        caller_turns = sum(1 for h in state.get("history", []) if h["role"] == "caller")
+        if (
+            state.get("language_locked")
+            or not settings.language_detection
+            or caller_turns >= settings.language_detection_turns
+        ):
+            return state, False
+        found = detection.decide(text, stt_language, stt_confidence, enabled)
+        if (
+            found.language
+            and found.language != current
+            and found.confidence >= settings.language_detection_threshold
+        ):
+            detail = f"detected ({found.source} {found.confidence:.2f})"
+            return self._switch(state, found.language, detail, locked=True), False
+        return state, False
+
+    @staticmethod
+    def _switch(state: CallState, language: str, why: str, *, locked: bool) -> CallState:
+        old = state.get("language")
+        logger.info("Llamada %s: idioma %s -> %s (%s)", state["call_id"], old, language, why)
+        return {
+            **state,
+            "language": language,
+            "language_locked": locked,
+            "trace": [
+                *state.get("trace", []),
+                Trace(node="language", action="switch", detail=f"{old} -> {language}: {why}"),
+            ],
+        }
 
     async def close_on_failure(self, call_id: str, reason: str) -> CallState:
         """El asistente no puede seguir (LLM, STT o TTS caídos): se cierra la llamada y queda

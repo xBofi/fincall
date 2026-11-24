@@ -122,9 +122,9 @@ class TwilioChannel:
             pass
 
 
-#: (channel, caller phone, call already opened by the console or None, language or None)
+#: (channel, caller phone, call already opened by the console, language, persona)
 BridgeFactory = Callable[
-    [TwilioChannel, str | None, str | None, str | None], Awaitable[CallBridge]
+    [TwilioChannel, str | None, str | None, str | None, str | None], Awaitable[CallBridge]
 ]
 
 
@@ -162,12 +162,21 @@ def create_twilio_router(
             "call_sid": call_sid,
             "token": token_stream(settings.twilio_auth_token, call_sid),
         }
+        # A number that serves one language or one client (BC_TWILIO_NUMBER_LANGUAGES/PERSONAS)
+        called = form_data.get("To", "")
+        if language := settings.twilio_number_languages.get(called):
+            parameters["language"] = language
+        if persona := settings.twilio_number_personas.get(called):
+            parameters["persona"] = persona
         if caller.startswith(f"client:{CLIENT_PREFIX}"):
             # A console user calling from the browser (only they get Access Tokens): no phone
             # number, and the call the console already opened carries on over Twilio
             parameters["phone"] = ""
             if form_data.get("call_id"):
                 parameters["call_id"] = form_data["call_id"]
+            # The console may also choose the call's language (only used without a call_id)
+            if language := i18n.normalize_code(form_data.get("language")):
+                parameters["language"] = language
         return Response(
             twiml_connect_stream(ws_url_from_public(settings.public_url), parameters),
             media_type="application/xml",
@@ -219,6 +228,7 @@ def create_twilio_router(
                         parameters.get("phone") or None,
                         parameters.get("call_id") or None,
                         parameters.get("language") or None,
+                        parameters.get("persona") or None,
                     )
                     await bridge.begin()
                 elif event == "media" and bridge is not None:

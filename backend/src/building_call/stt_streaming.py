@@ -57,8 +57,9 @@ class AssemblyAIStreamingSession:
         eot_silence_ms: int = 220,
         max_silence_ms: int = 800,
         keyterms: list[str] | None = None,
-        language: str | None = None,
+        language: str | list[str] | None = None,
         speech_model: str = "",
+        language_detection: bool = False,
     ) -> None:
         """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
         terminado supera `eot_confidence` y hay `eot_silence_ms` de silencio; si no está
@@ -80,10 +81,15 @@ class AssemblyAIStreamingSession:
         }
         if speech_model:
             params["speech_model"] = speech_model
-        if language:
-            # Steers the multilingual model to the call's language (ISO 639-1; JSON list, as the
-            # LiveKit plugin sends it). Universal-Streaming covers es, en, ca, ar, hi and ur
-            params["language_codes"] = json.dumps([language])
+        codes = [language] if isinstance(language, str) else list(language or [])
+        if codes:
+            # Steers the multilingual model to the call's language, or to the deployment's
+            # languages while it is still being detected (ISO 639-1; a JSON list, as the LiveKit
+            # plugin sends it). Universal-Streaming covers es, en, ca, ar, hi and ur
+            params["language_codes"] = json.dumps(codes)
+        if language_detection:
+            # Only reporting: final turns carry `language_code` and `language_confidence`
+            params["language_detection"] = "true"
         self.language = language
         if keyterms:
             # Vocabulario de la finca: sin él AssemblyAI se come las letras sueltas
@@ -131,6 +137,9 @@ class AssemblyAIStreamingSession:
                                 detail={
                                     "turn_end_confidence": m.get("end_of_turn_confidence"),
                                     "words": len(m.get("words") or []),
+                                    # With language_detection: what AssemblyAI heard
+                                    "language_code": m.get("language_code"),
+                                    "language_confidence": m.get("language_confidence"),
                                 },
                             )
                         )
@@ -161,6 +170,16 @@ class AssemblyAIStreamingSession:
             chunk = bytes(self._buffer[: self._min_bytes])
             del self._buffer[: self._min_bytes]
             await self._ws.send(chunk)
+
+    async def set_language(self, language: str) -> None:
+        """The call's language was decided (or switched): steer the rest of the session to it,
+        without reconnecting (`UpdateConfiguration`, as the LiveKit plugin does)."""
+        if self._ws is None or self.language == language:
+            return
+        self.language = language
+        await self._ws.send(
+            json.dumps({"type": "UpdateConfiguration", "language_codes": [language]})
+        )
 
     async def force_end_of_turn(self) -> None:
         """Vacía el búfer con relleno de silencio y pide a AssemblyAI cerrar el turno actual."""
