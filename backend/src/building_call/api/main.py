@@ -52,7 +52,7 @@ from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
 from building_call.integrations.n8n_tool import N8nTools
-from building_call.integrations.webhooks import RetryPolicy, WebhookSender
+from building_call.integrations.webhooks import FanOut, RetryPolicy, WebhookSender
 from building_call.kpis_api import create_kpis_router
 from building_call.livekit_api import (
     create_livekit_router,
@@ -346,18 +346,26 @@ def signing_secret() -> str:
     return secrets.token_urlsafe(48)
 
 
-def create_webhook_sender(s: Any) -> WebhookSender | None:
-    if not s.n8n_webhook_url:
+def create_webhook_sender(s: Any) -> FanOut | None:
+    """One sender per URL in BC_N8N_WEBHOOK_URL (comma-separated)."""
+    urls = [u.strip() for u in s.n8n_webhook_url.split(",") if u.strip()]
+    if not urls:
         return None
     if not s.n8n_webhook_secret:
         logger.error("BC_N8N_WEBHOOK_URL sin BC_N8N_WEBHOOK_SECRET: los eventos no se envían")
         return None
-    return WebhookSender(
-        url=s.n8n_webhook_url,
-        secret=s.n8n_webhook_secret,
-        timeout_s=s.n8n_webhook_timeout_s,
-        policy=RetryPolicy(attempts=max(1, s.n8n_webhook_attempts)),
-        only=frozenset(e.strip() for e in s.n8n_webhook_events.split(",") if e.strip()),
+    only = frozenset(e.strip() for e in s.n8n_webhook_events.split(",") if e.strip())
+    return FanOut(
+        [
+            WebhookSender(
+                url=url,
+                secret=s.n8n_webhook_secret,
+                timeout_s=s.n8n_webhook_timeout_s,
+                policy=RetryPolicy(attempts=max(1, s.n8n_webhook_attempts)),
+                only=only,
+            )
+            for url in urls
+        ]
     )
 
 

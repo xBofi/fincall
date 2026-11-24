@@ -331,3 +331,28 @@ async def test_tool_client_times_out_fast() -> None:
 
     out = await _tools(slow, timeout_s=0.05).book_visit(REQUEST)
     assert out.status == "error" and out.reason == "timeout"
+
+
+def test_the_app_fans_out_to_every_configured_url() -> None:
+    from types import SimpleNamespace
+
+    from building_call.api.main import create_n8n_tools, create_webhook_sender
+
+    s = SimpleNamespace(
+        n8n_webhook_url="https://a.example/h1, https://b.example/h2",
+        n8n_webhook_secret=SECRET,
+        n8n_webhook_timeout_s=5.0,
+        n8n_webhook_attempts=3,
+        n8n_webhook_events="ticket.created",
+        n8n_tool_url="https://a.example/tool",
+        n8n_tool_timeout_s=1.5,
+    )
+    fan = create_webhook_sender(s)
+    assert fan is not None and [x.url for x in fan.senders] == [
+        "https://a.example/h1",
+        "https://b.example/h2",
+    ]
+    assert fan.senders[0].only == {"ticket.created"} and fan.senders[0].policy.attempts == 3
+    assert create_n8n_tools(s) is not None
+    s.n8n_webhook_secret = ""  # never send unsigned
+    assert create_webhook_sender(s) is None and create_n8n_tools(s) is None

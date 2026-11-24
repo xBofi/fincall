@@ -198,3 +198,17 @@ class WebhookSender:
         """Wait (bounded) for deliveries in flight, e.g. on shutdown."""
         if self._tasks:
             await asyncio.wait(set(self._tasks), timeout=timeout_s)
+
+
+@dataclass
+class FanOut:
+    """Several receivers (e.g. one n8n workflow per use case): each gets every event it wants,
+    with its own retries. One slow or broken receiver does not delay the others."""
+
+    senders: list[WebhookSender]
+
+    def emit(self, event: dict[str, Any]) -> list[asyncio.Task[DeliveryResult]]:
+        return [t for s in self.senders if (t := s.emit(event)) is not None]
+
+    async def drain(self, timeout_s: float = 5.0) -> None:
+        await asyncio.gather(*(s.drain(timeout_s) for s in self.senders))
