@@ -1,3 +1,5 @@
+import type { GraphStructure, Visit } from './components/routing/types'
+
 export interface Trace {
   node: string
   action: string
@@ -95,6 +97,8 @@ export interface CallView {
   interpretation: Record<string, unknown> | null
   pending: Record<string, string>
   timings: ServerTimings
+  /** Nodos visitados en el último turno, con tiempo, salto y motivo (vista de enrutado). */
+  visits?: Visit[]
   config: Record<string, unknown> | null
   /** Ledger de entrega: qué frases del último mensaje oyó el vecino. */
   last_delivery?: Record<string, unknown> | null
@@ -333,6 +337,7 @@ export interface CallRecordDetail {
     final_node: string
     timings: ServerTimings
     interpretation?: Record<string, unknown> | null
+    visits?: Visit[]
   }[]
   decisions: { turn: number; node: string; action: string; detail: string }[]
   cases?: BankCase[]
@@ -448,6 +453,13 @@ export interface Prompts {
   editables: boolean
   reason: string
   prompts: SystemPrompt[]
+}
+
+export const routing = {
+  /** Estructura del grafo compilado (graph/export.py). */
+  structure: (name = 'standard') => ask<GraphStructure>(`/api/graph/structure?name=${encodeURIComponent(name)}`),
+  /** Traza en vivo por SSE. */
+  eventsUrl: (callId: string) => `/api/calls/${encodeURIComponent(callId)}/events`,
 }
 
 export const flujo = {

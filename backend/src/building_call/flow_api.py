@@ -20,6 +20,7 @@ from building_call.access import Access
 from building_call.domain.config import resolve
 from building_call.domain.operations import Role, User
 from building_call.graph import templates as tpl
+from building_call.graph.export import export_graph
 from building_call.graph.manifest import MANIFEST
 from building_call.graph.nodes import MANIFEST_VIOLATIONS
 from building_call.llm.interpretation import (
@@ -142,10 +143,35 @@ def create_flow_router(
             "violations": list(MANIFEST_VIOLATIONS),
         }
 
+    @r.get("/graph/structure")
+    async def graph_structure(
+        name: str = "standard", _: User = Depends(reviewer)
+    ) -> dict[str, Any]:
+        """Estructura del grafo compilado para la vista de enrutado (ver `graph/export.py`)."""
+        from building_call.graph.registry import REGISTRY
+
+        if name not in REGISTRY:
+            raise HTTPException(404, "Grafo no registrado")
+        structure = export_graph(name)
+        traversed = await _real_edges()
+        for edge in structure["edges"]:
+            target = "end" if edge["target"] == structure["end"] else edge["target"]
+            edge["times"] = traversed.get((edge["source"], target), 0)
+        structure["violations"] = list(MANIFEST_VIOLATIONS)
+        return structure
+
     async def _real_edges() -> dict[tuple[str, str], int]:
         """Transiciones observadas, de las decisiones ya guardadas por llamada."""
         counts: dict[tuple[str, str], int] = {}
         for call in await repo.list_calls(limit=200):
+            # Las llamadas con visitas por nodo (graph/tracing.py) dicen el salto exacto
+            visits = [v for t in await repo.list_turns(call.id) for v in t.get("visits") or []]
+            if visits:
+                for v in visits:
+                    origin, target = v.get("node"), v.get("target")
+                    if origin and target and (origin != target or v.get("consumed_utterance")):
+                        counts[(origin, target)] = counts.get((origin, target), 0) + 1
+                continue
             decisions = await repo.list_decisions(call.id)
             nodes = [d.get("node") for d in sorted(decisions, key=lambda d: d.get("turn", 0))]
             for origin, target in zip(nodes, nodes[1:], strict=False):

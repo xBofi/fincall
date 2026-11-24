@@ -52,6 +52,8 @@ class CallState(TypedDict, total=False):
     finished: bool
     # Tiempos del turno en curso (los rellenan los nodos; el gestor los registra)
     turn_timings: dict[str, Any]
+    # Nodos visitados en el turno en curso, con tiempo, salto y motivo (graph/tracing.py)
+    turn_visits: list[dict[str, Any]]
     # Última interpretación LLM/determinista del turno (para la consola)
     interpretation: dict[str, Any] | None
     # Datos dichos por el vecino aún no consumidos por su nodo
@@ -131,6 +133,7 @@ def initial_state(
         awaiting_user=False,
         finished=False,
         turn_timings={},
+        turn_visits=[],
         interpretation=None,
         pending={},
         equipment_list=[],

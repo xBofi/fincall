@@ -1,0 +1,1965 @@
+{
+ "meta": {
+  "recorded_at": "2026-11-24T14:53:01+00:00",
+  "llm": "ollama/qwen3.5:latest",
+  "result": "incident_created",
+  "note": "Llamada guionizada por el grafo real con repositorio en memoria."
+ },
+ "structure": {
+  "graph": "standard",
+  "entry": "__start__",
+  "end": "__end__",
+  "hub": "next_step",
+  "routers": {
+   "entry": "_utterance",
+   "edges": "_next"
+  },
+  "nodes": [
+   {
+    "id": "__start__",
+    "role": "entry",
+    "title": "Turno del vecino",
+    "summary": "Cada turno es una invocación del grafo. El punto de entrada condicional (`_utterance`) retoma la llamada en el nodo donde se quedó.",
+    "stage": -1,
+    "uses_llm": false
+   },
+   {
+    "id": "next_step",
+    "role": "router",
+    "kind": "decision",
+    "title": "Siguiente paso",
+    "summary": "El único nodo que decide el orden de las preguntas. Consume lo que el vecino ya haya dicho (aunque no fuera lo que se le preguntaba) y salta a lo primero que falte: finca, vivienda, solicitud, categoría, urgencia, detalle o confirmación. Los nodos no se encadenan entre sí: todos vuelven aquí.",
+    "stage": 0,
+    "uses_llm": false,
+    "deterministic_paths": [
+     "cotejo de dirección por similitud (umbral 0,6)",
+     "búsqueda de vivienda por portal/piso/puerta"
+    ],
+    "effects": []
+   },
+   {
+    "id": "identify_estate",
+    "role": "llm",
+    "kind": "question",
+    "title": "Identificar finca",
+    "summary": "Pregunta la calle y el número, o pide confirmación de la finca candidata que `next_step` encontró por similitud. Consume intentos: al agotarlos, deriva.",
+    "stage": 1,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "sí / no",
+     "saludo inicial",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "estate_not_identified",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Finca no identificada",
+    "summary": "Salida digna cuando la finca no consta: recoge lo que el vecino quería comunicar y deja la llamada registrada para que calidad la revise. No crea incidencia.",
+    "stage": 1,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada con resultado `estate_not_identified`"
+    ]
+   },
+   {
+    "id": "identify_home",
+    "role": "llm",
+    "kind": "question",
+    "title": "Identificar vivienda",
+    "summary": "Pregunta portal, piso y puerta y los coteja contra las viviendas de la finca. Si el piso y la puerta existen en varios portales, pregunta solo el portal.",
+    "stage": 2,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "\"3º B\" y variantes por expresión regular",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "home_not_identified",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Vivienda no identificada",
+    "summary": "Recoge la solicitud aunque no se sepa la vivienda y avisa al administrador por correo con el teléfono del llamante. No crea incidencia ni asigna profesional.",
+    "stage": 2,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada con resultado `home_not_identified`",
+     "avisa al administrador por correo"
+    ]
+   },
+   {
+    "id": "confirm_home",
+    "role": "llm",
+    "kind": "question",
+    "title": "Confirmar vivienda",
+    "summary": "Lee juntas la finca y la vivienda (\"Entonces es Calle Mayor 12, tercero B. ¿Es correcto?\") antes de preguntar qué ocurre. Una corrección se vuelve a buscar y a leer; pasar directamente al problema cuenta como un sí. En una emergencia se salta.",
+    "stage": 2,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "sí / no",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "collect_request",
+    "role": "llm",
+    "kind": "question",
+    "title": "Recoger solicitud",
+    "summary": "Pregunta qué ocurre. La interpretación del turno clasifica en la misma llamada al modelo (categoría y urgencia), para no gastar un segundo turno en clasificar.",
+    "stage": 3,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "FAQ (¿esto se graba?, ¿cuánto tardan?)",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "classify_problem",
+    "role": "llm",
+    "kind": "decision",
+    "title": "Clasificar problema",
+    "summary": "Respaldo: solo se ejecuta si la interpretación del turno no trajo ya la categoría. Valida contra el catálogo de la finca; lo que no encaje cae en `unclassifiable`.",
+    "stage": 3,
+    "uses_llm": true,
+    "deterministic_paths": [],
+    "effects": []
+   },
+   {
+    "id": "ask_detail",
+    "role": "llm",
+    "kind": "question",
+    "title": "Pedir detalle",
+    "summary": "Una sola pregunta de detalle antes del resumen, para que el profesional sepa a qué va. Se puede desactivar por finca (`ask_detail`) y solo se hace si el caso lo merece.",
+    "stage": 4,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "determine_urgency",
+    "role": "router",
+    "kind": "decision",
+    "title": "Determinar urgencia",
+    "summary": "Convierte la urgencia declarada en la efectiva según la configuración. Mientras las emergencias estén desactivadas (`emergencies_enabled`), `emergency` se trata como `high`; activadas, `next_step` la lleva a `handle_emergency`.",
+    "stage": 3,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": []
+   },
+   {
+    "id": "handle_emergency",
+    "role": "llm",
+    "kind": "question",
+    "title": "Atender emergencia",
+    "summary": "Solo con `emergencies_enabled`. Da primero una indicación de seguridad (112; con gas, no encender luces ni aparatos y salir) y confirma lo mínimo: la finca y que hay una emergencia. No pide detalle ni lee el resumen largo. Si el vecino dice que no es una emergencia, sigue como urgencia alta; ante la duda, se registra igualmente.",
+    "stage": 5,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "indicación de seguridad por palabras clave (gas, fuego/humo, resto)",
+     "sí / no",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "confirm_summary",
+    "role": "llm",
+    "kind": "question",
+    "title": "Confirmar resumen",
+    "summary": "Lee al vecino quién es, qué ocurre y con qué urgencia, y espera un sí o un no. Un no con corrección vuelve a recoger la solicitud.",
+    "stage": 5,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "sí / no",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
+   },
+   {
+    "id": "validate_data",
+    "role": "router",
+    "kind": "decision",
+    "title": "Validar datos",
+    "summary": "Última comprobación antes de tocar la base de datos: que haya finca, vivienda, categoría dentro del catálogo y urgencia válida.",
+    "stage": 6,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": []
+   },
+   {
+    "id": "unclassifiable",
+    "role": "tool",
+    "kind": "effect",
+    "title": "No clasificable",
+    "summary": "La solicitud no encaja en ninguna categoría del catálogo: queda para el administrador en vez de asignarse a un profesional equivocado.",
+    "stage": 8,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada con resultado `unclassifiable`"
+    ]
+   },
+   {
+    "id": "handoff_to_human",
+    "role": "human",
+    "kind": "terminal",
+    "title": "Derivar a humano",
+    "summary": "El vecino ha pedido expresamente hablar con una persona. Exige palabras explícitas, no solo la opinión del modelo: derivar es irreversible.",
+    "stage": 8,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada con resultado `derivada`"
+    ]
+   },
+   {
+    "id": "farewell",
+    "role": "end",
+    "kind": "terminal",
+    "title": "Despedida",
+    "summary": "El vecino se despide antes de terminar el guion. Se cierra sin incidencia.",
+    "stage": 8,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada"
+    ]
+   },
+   {
+    "id": "assign_specialist",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Asignar especialista",
+    "summary": "Busca el profesional de la categoría en la configuración efectiva de la finca y comprueba que pertenece a su administrador. Sin profesional, queda pendiente.",
+    "stage": 7,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "selecciona profesional, o marca la incidencia como pendiente de administrador"
+    ]
+   },
+   {
+    "id": "create_ticket",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Crear incidencia",
+    "summary": "Persiste la llamada y la incidencia. Es el punto sin retorno del flujo.",
+    "stage": 7,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "guarda la llamada",
+     "crea la incidencia"
+    ]
+   },
+   {
+    "id": "notify_channel",
+    "role": "tool",
+    "kind": "effect",
+    "title": "Avisar y despedir",
+    "summary": "Aplica la regla de aviso de la urgencia (canal y destino) y le cuenta al vecino qué va a pasar y quién le llamará. Nunca promete una hora: nadie ha hablado aún con el profesional.",
+    "stage": 7,
+    "uses_llm": false,
+    "deterministic_paths": [],
+    "effects": [
+     "avisa por el canal de la regla (ticket, correo o llamada)",
+     "emergencia: deja simulada la llamada al teléfono oficial y el correo al coordinador"
+    ]
+   },
+   {
+    "id": "__end__",
+    "role": "end",
+    "title": "Fin del turno o de la llamada",
+    "summary": "El grafo se detiene cuando un nodo espera la respuesta del vecino o cuando la llamada termina.",
+    "stage": 100,
+    "uses_llm": false
+   }
+  ],
+  "edges": [
+   {
+    "id": "next_step->identify_estate",
+    "source": "next_step",
+    "target": "identify_estate",
+    "condition": "no hay finca, o hay una candidata que confirmar",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->estate_not_identified",
+    "source": "next_step",
+    "target": "estate_not_identified",
+    "condition": "agotados los intentos de identificar la finca",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->identify_home",
+    "source": "next_step",
+    "target": "identify_home",
+    "condition": "hay finca pero no vivienda, o falta un dato de ella",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->home_not_identified",
+    "source": "next_step",
+    "target": "home_not_identified",
+    "condition": "agotados los intentos de identificar la vivienda",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->confirm_home",
+    "source": "next_step",
+    "target": "confirm_home",
+    "condition": "hay finca y vivienda pero aún no se han leído juntas",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->collect_request",
+    "source": "next_step",
+    "target": "collect_request",
+    "condition": "falta saber qué le ocurre",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->classify_problem",
+    "source": "next_step",
+    "target": "classify_problem",
+    "condition": "hay solicitud pero no categoría",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->determine_urgency",
+    "source": "next_step",
+    "target": "determine_urgency",
+    "condition": "hay categoría pero no urgencia",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->handle_emergency",
+    "source": "next_step",
+    "target": "handle_emergency",
+    "condition": "urgencia efectiva `emergency` (tratamiento activado) sin confirmar todavía",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->ask_detail",
+    "source": "next_step",
+    "target": "ask_detail",
+    "condition": "la configuración pide un detalle y la incidencia lo merece",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->confirm_summary",
+    "source": "next_step",
+    "target": "confirm_summary",
+    "condition": "están los datos y falta que el vecino confirme",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "next_step->validate_data",
+    "source": "next_step",
+    "target": "validate_data",
+    "condition": "el vecino ya ha confirmado el resumen",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "identify_estate->identify_estate",
+    "source": "identify_estate",
+    "target": "identify_estate",
+    "condition": "repregunta: no confirmada, no entendida o reintento",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "identify_estate->next_step",
+    "source": "identify_estate",
+    "target": "next_step",
+    "condition": "finca confirmada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "identify_estate->estate_not_identified",
+    "source": "identify_estate",
+    "target": "estate_not_identified",
+    "condition": "agotados los intentos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "identify_estate->handoff_to_human",
+    "source": "identify_estate",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "identify_estate->farewell",
+    "source": "identify_estate",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "estate_not_identified->estate_not_identified",
+    "source": "estate_not_identified",
+    "target": "estate_not_identified",
+    "condition": "primera pasada: pide que cuente qué quería",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "estate_not_identified->__end__",
+    "source": "estate_not_identified",
+    "target": "__end__",
+    "condition": "recogido el mensaje, se cierra la llamada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "identify_home->identify_home",
+    "source": "identify_home",
+    "target": "identify_home",
+    "condition": "repregunta: falta un dato o no coincide",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "identify_home->next_step",
+    "source": "identify_home",
+    "target": "next_step",
+    "condition": "vivienda identificada sin ambigüedad",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "identify_home->home_not_identified",
+    "source": "identify_home",
+    "target": "home_not_identified",
+    "condition": "agotados los intentos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "identify_home->handoff_to_human",
+    "source": "identify_home",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "identify_home->farewell",
+    "source": "identify_home",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "home_not_identified->home_not_identified",
+    "source": "home_not_identified",
+    "target": "home_not_identified",
+    "condition": "primera pasada: pide la solicitud igualmente",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "home_not_identified->__end__",
+    "source": "home_not_identified",
+    "target": "__end__",
+    "condition": "recogida la solicitud, se cierra la llamada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "confirm_home->confirm_home",
+    "source": "confirm_home",
+    "target": "confirm_home",
+    "condition": "repregunta: la respuesta no fue un sí, un no ni una corrección",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "confirm_home->next_step",
+    "source": "confirm_home",
+    "target": "next_step",
+    "condition": "confirmada, o corregida (se busca y se vuelve a leer)",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "confirm_home->identify_home",
+    "source": "confirm_home",
+    "target": "identify_home",
+    "condition": "el vecino dice que no es la suya sin dar la buena",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "confirm_home->handoff_to_human",
+    "source": "confirm_home",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "confirm_home->farewell",
+    "source": "confirm_home",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "collect_request->collect_request",
+    "source": "collect_request",
+    "target": "collect_request",
+    "condition": "no ha contado todavía qué le ocurre",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "collect_request->next_step",
+    "source": "collect_request",
+    "target": "next_step",
+    "condition": "solicitud recogida",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "collect_request->handoff_to_human",
+    "source": "collect_request",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "collect_request->farewell",
+    "source": "collect_request",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "classify_problem->determine_urgency",
+    "source": "classify_problem",
+    "target": "determine_urgency",
+    "condition": "clasificado, con categoría y urgencia",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "ask_detail->ask_detail",
+    "source": "ask_detail",
+    "target": "ask_detail",
+    "condition": "no ha respondido al detalle",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "ask_detail->next_step",
+    "source": "ask_detail",
+    "target": "next_step",
+    "condition": "detalle recogido, o el vecino no lo aporta",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "ask_detail->handoff_to_human",
+    "source": "ask_detail",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "ask_detail->farewell",
+    "source": "ask_detail",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "determine_urgency->next_step",
+    "source": "determine_urgency",
+    "target": "next_step",
+    "condition": "urgencia efectiva fijada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "handle_emergency->handle_emergency",
+    "source": "handle_emergency",
+    "target": "handle_emergency",
+    "condition": "el vecino pide repetir o hace una pregunta",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "handle_emergency->next_step",
+    "source": "handle_emergency",
+    "target": "next_step",
+    "condition": "confirmada (o respuesta dudosa: se registra igual), o no es una emergencia",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "handle_emergency->handoff_to_human",
+    "source": "handle_emergency",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "handle_emergency->farewell",
+    "source": "handle_emergency",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "confirm_summary->confirm_summary",
+    "source": "confirm_summary",
+    "target": "confirm_summary",
+    "condition": "no se ha entendido la respuesta",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "confirm_summary->next_step",
+    "source": "confirm_summary",
+    "target": "next_step",
+    "condition": "confirmado, o hay una corrección que reprocesar",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "confirm_summary->validate_data",
+    "source": "confirm_summary",
+    "target": "validate_data",
+    "condition": "confirmado y sin nada que corregir",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "confirm_summary->collect_request",
+    "source": "confirm_summary",
+    "target": "collect_request",
+    "condition": "el vecino dice que el resumen no es correcto",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "confirm_summary->handoff_to_human",
+    "source": "confirm_summary",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "confirm_summary->farewell",
+    "source": "confirm_summary",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "validate_data->unclassifiable",
+    "source": "validate_data",
+    "target": "unclassifiable",
+    "condition": "la categoría no encaja en el catálogo de la finca",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "validate_data->assign_specialist",
+    "source": "validate_data",
+    "target": "assign_specialist",
+    "condition": "datos completos y coherentes",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "unclassifiable->__end__",
+    "source": "unclassifiable",
+    "target": "__end__",
+    "condition": "se despide tras dejar constancia",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "handoff_to_human->__end__",
+    "source": "handoff_to_human",
+    "target": "__end__",
+    "condition": "derivada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "farewell->__end__",
+    "source": "farewell",
+    "target": "__end__",
+    "condition": "colgada por el vecino",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "assign_specialist->create_ticket",
+    "source": "assign_specialist",
+    "target": "create_ticket",
+    "condition": "con profesional asignado o sin él",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "create_ticket->notify_channel",
+    "source": "create_ticket",
+    "target": "notify_channel",
+    "condition": "incidencia creada",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "notify_channel->__end__",
+    "source": "notify_channel",
+    "target": "__end__",
+    "condition": "incidencia creada y vecino informado",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   }
+  ],
+  "entry_targets": [
+   "ask_detail",
+   "assign_specialist",
+   "classify_problem",
+   "collect_request",
+   "confirm_home",
+   "confirm_summary",
+   "create_ticket",
+   "determine_urgency",
+   "estate_not_identified",
+   "farewell",
+   "handle_emergency",
+   "handoff_to_human",
+   "home_not_identified",
+   "identify_estate",
+   "identify_home",
+   "next_step",
+   "notify_channel",
+   "unclassifiable",
+   "validate_data"
+  ],
+  "compiled": {
+   "nodes": 21,
+   "edges": 400,
+   "conditional_edges": 400
+  },
+  "drift": []
+ },
+ "turns": [
+  {
+   "turn": 0,
+   "caller": null,
+   "assistant": [
+    "Hola, le atiende un asistente de inteligencia artificial de su comunidad. Esta llamada puede ser grabada para mejorar la calidad del servicio. ¿En qué finca se encuentra? Dígame la calle y el número."
+   ],
+   "initial_node": "next_step",
+   "final_node": "identify_estate",
+   "interpretation": null,
+   "timings": {
+    "graph_ms": 38,
+    "server_ms": 38,
+    "turn": 0
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 0,
+     "node": "next_step",
+     "at_ms": 1795531978073,
+     "ms": 0.0,
+     "target": "identify_estate",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "no hay finca, o hay una candidata que confirmar",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 1,
+     "turn": 0,
+     "node": "identify_estate",
+     "at_ms": 1795531978073,
+     "ms": 1.2,
+     "target": "identify_estate",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "identify_estate.greeting v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Hola, le atiende un asistente de inteligencia artificial de su comunidad. Esta llamada puede ser grabada para mejorar la calidad del servicio. ¿En qué finca se encuentra? Dígame la calle y el número."
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 1,
+   "caller": "Hola, buenas, llamo de la calle Mayor doce",
+   "assistant": [
+    "He identificado Calle Mayor 12. ¿Es correcto?"
+   ],
+   "initial_node": "identify_estate",
+   "final_node": "identify_estate",
+   "interpretation": {
+    "address": "Hola, buenas, llamo de la calle Mayor doce",
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 2,
+    "server_ms": 2,
+    "turn": 1
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 1,
+     "node": "identify_estate",
+     "at_ms": 1795531978078,
+     "ms": 0.3,
+     "target": "identify_estate",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "repregunta: no confirmada, no entendida o reintento",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "address": "Hola, buenas, llamo de la calle Mayor doce",
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "candidate",
+       "detail": "Calle Mayor 12 (1.00)"
+      },
+      {
+       "action": "template",
+       "detail": "identify_estate.candidate v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "He identificado Calle Mayor 12. ¿Es correcto?"
+     ],
+     "diff": {
+      "candidate_estate_id": {
+       "before": null,
+       "after": "finca-mayor-12"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "turn": 2,
+   "caller": "Sí, esa es",
+   "assistant": [
+    "Gracias. ¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta."
+   ],
+   "initial_node": "identify_estate",
+   "final_node": "identify_home",
+   "interpretation": {
+    "intent": "continue",
+    "confirms": true,
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 4,
+    "server_ms": 4,
+    "turn": 2
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 2,
+     "node": "identify_estate",
+     "at_ms": 1795531978080,
+     "ms": 1.1,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "finca confirmada",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "intent": "continue",
+      "confirms": true,
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "estate_confirmed",
+       "detail": "Calle Mayor 12"
+      }
+     ],
+     "validations": [
+      "estate_confirmed_verbally"
+     ],
+     "said": [],
+     "diff": {
+      "estate_id": {
+       "before": null,
+       "after": "finca-mayor-12"
+      },
+      "estate_address": {
+       "before": null,
+       "after": "Calle Mayor 12"
+      },
+      "candidate_estate_id": {
+       "before": "finca-mayor-12",
+       "after": null
+      },
+      "config_id": {
+       "before": null,
+       "after": "cfg-mayor-12-v1"
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 2,
+     "node": "next_step",
+     "at_ms": 1795531978082,
+     "ms": 0.0,
+     "target": "identify_home",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "hay finca pero no vivienda, o falta un dato de ella",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 2,
+     "turn": 2,
+     "node": "identify_home",
+     "at_ms": 1795531978082,
+     "ms": 0.0,
+     "target": "identify_home",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "identify_home.ask v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Gracias. ¿Cuál es su vivienda? Indíqueme portal si lo hay, piso y puerta."
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 3,
+   "caller": "Tercero B",
+   "assistant": [
+    "Entonces es Calle Mayor 12, 3º B. ¿Es correcto?"
+   ],
+   "initial_node": "identify_home",
+   "final_node": "confirm_home",
+   "interpretation": {
+    "entrance": null,
+    "floor": "3",
+    "door": "B",
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 8,
+    "server_ms": 8,
+    "turn": 3
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 3,
+     "node": "identify_home",
+     "at_ms": 1795531978082,
+     "ms": 0.2,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "vivienda identificada sin ambigüedad",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "entrance": null,
+      "floor": "3",
+      "door": "B",
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "regex_extraction",
+       "detail": "entrance=None floor=3 door=B"
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "pending": {
+       "before": {},
+       "after": {
+        "floor": "3",
+        "door": "B"
+       }
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 3,
+     "node": "next_step",
+     "at_ms": 1795531978082,
+     "ms": 4.5,
+     "target": "confirm_home",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "hay finca y vivienda pero aún no se han leído juntas",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "home",
+       "detail": "entrance=None floor=3 door=B candidates=1"
+      }
+     ],
+     "validations": [
+      "home_exists_in_estate"
+     ],
+     "said": [],
+     "diff": {
+      "pending": {
+       "before": {
+        "floor": "3",
+        "door": "B"
+       },
+       "after": {}
+      },
+      "home_id": {
+       "before": null,
+       "after": "finca-mayor-12-u-3B"
+      },
+      "home_label": {
+       "before": null,
+       "after": "3º B"
+      },
+      "home_parts": {
+       "before": null,
+       "after": {
+        "floor": "3",
+        "door": "B"
+       }
+      }
+     }
+    },
+    {
+     "index": 2,
+     "turn": 3,
+     "node": "confirm_home",
+     "at_ms": 1795531978092,
+     "ms": 0.1,
+     "target": "confirm_home",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "confirm_home.ask v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Entonces es Calle Mayor 12, 3º B. ¿Es correcto?"
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 4,
+   "caller": "Sí",
+   "assistant": [
+    "Perfecto. Cuénteme, ¿qué ocurre?"
+   ],
+   "initial_node": "confirm_home",
+   "final_node": "collect_request",
+   "interpretation": {
+    "intent": "continue",
+    "confirms": true,
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 4,
+    "server_ms": 4,
+    "turn": 4
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 4,
+     "node": "confirm_home",
+     "at_ms": 1795531978092,
+     "ms": 0.2,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "confirmada, o corregida (se busca y se vuelve a leer)",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "intent": "continue",
+      "confirms": true,
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "home_confirmed",
+       "detail": "3º B"
+      }
+     ],
+     "validations": [
+      "home_confirmed_verbally"
+     ],
+     "said": [],
+     "diff": {
+      "home_confirmed": {
+       "before": null,
+       "after": true
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 4,
+     "node": "next_step",
+     "at_ms": 1795531978096,
+     "ms": 0.0,
+     "target": "collect_request",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "falta saber qué le ocurre",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 2,
+     "turn": 4,
+     "node": "collect_request",
+     "at_ms": 1795531978096,
+     "ms": 0.0,
+     "target": "collect_request",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "collect_request.ask v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Perfecto. Cuénteme, ¿qué ocurre?"
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 5,
+   "caller": "Oiga, ¿esta llamada se graba?",
+   "assistant": [
+    "Sí: la llamada se registra para gestionar su incidencia y para control de calidad. Perfecto. Cuénteme, ¿qué ocurre?"
+   ],
+   "initial_node": "collect_request",
+   "final_node": "collect_request",
+   "interpretation": {
+    "intent": "question",
+    "question": "¿esta llamada se graba?",
+    "origin": "llm",
+    "llm_ms": 1044
+   },
+   "timings": {
+    "interpretation_ms": 1044,
+    "llm_calls": 1,
+    "interpretation_origin": "llm",
+    "graph_ms": 1047,
+    "server_ms": 1047,
+    "turn": 5
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 5,
+     "node": "collect_request",
+     "at_ms": 1795531978099,
+     "ms": 1045.3,
+     "target": "collect_request",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "no ha contado todavía qué le ocurre",
+     "declared": true,
+     "llm_calls": 1,
+     "llm_ms": 1044,
+     "interpretation": {
+      "intent": "question",
+      "question": "¿esta llamada se graba?",
+      "origin": "llm",
+      "llm_ms": 1044
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "intent",
+       "detail": "question"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Sí: la llamada se registra para gestionar su incidencia y para control de calidad. Perfecto. Cuénteme, ¿qué ocurre?"
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 6,
+   "caller": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
+   "assistant": [
+    "Para orientar al fontanero: ¿gotea o sale agua con fuerza, y sabe de dónde viene?"
+   ],
+   "initial_node": "collect_request",
+   "final_node": "ask_detail",
+   "interpretation": {
+    "intent": "continue",
+    "problem": "fuga de agua en el baño y está inundando el suelo",
+    "category": "plumbing",
+    "urgency": "high",
+    "work_type": "repair",
+    "origin": "llm",
+    "llm_ms": 1256
+   },
+   "timings": {
+    "interpretation_ms": 1256,
+    "llm_calls": 1,
+    "interpretation_origin": "llm",
+    "graph_ms": 1262,
+    "server_ms": 1262,
+    "turn": 6
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 6,
+     "node": "collect_request",
+     "at_ms": 1795531979148,
+     "ms": 1257.1,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "solicitud recogida",
+     "declared": true,
+     "llm_calls": 1,
+     "llm_ms": 1256,
+     "interpretation": {
+      "intent": "continue",
+      "problem": "fuga de agua en el baño y está inundando el suelo",
+      "category": "plumbing",
+      "urgency": "high",
+      "work_type": "repair",
+      "origin": "llm",
+      "llm_ms": 1256
+     },
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "pending": {
+       "before": {},
+       "after": {
+        "problem": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
+        "short_problem": "fuga de agua en el baño y está inundando el suelo",
+        "category": "plumbing",
+        "urgency": "high",
+        "work_type": "repair",
+        "equipment_evaluated": "1"
+       }
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 6,
+     "node": "next_step",
+     "at_ms": 1795531980406,
+     "ms": 0.1,
+     "target": "determine_urgency",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "hay categoría pero no urgencia",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": {
+      "model": "ollama/qwen3.5:latest",
+      "prompt_version": "interpretacion-v8",
+      "category_in_catalog": true,
+      "merged_with_interpretation": true
+     },
+     "trace": [
+      {
+       "action": "request_collected",
+       "detail": "Vale. Pues hay una fuga de agua en el baño y está inundando "
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "pending": {
+       "before": {
+        "problem": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
+        "short_problem": "fuga de agua en el baño y está inundando el suelo",
+        "category": "plumbing",
+        "urgency": "high",
+        "work_type": "repair",
+        "equipment_evaluated": "1"
+       },
+       "after": {}
+      },
+      "request": {
+       "before": null,
+       "after": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo"
+      },
+      "category": {
+       "before": null,
+       "after": "plumbing"
+      },
+      "declared_urgency": {
+       "before": null,
+       "after": "high"
+      },
+      "work_type": {
+       "before": null,
+       "after": "repair"
+      },
+      "equipment_evaluated": {
+       "before": false,
+       "after": true
+      },
+      "summary": {
+       "before": null,
+       "after": "fuga de agua en el baño y está inundando el suelo"
+      },
+      "confidence_signals": {
+       "before": null,
+       "after": {
+        "model": "ollama/qwen3.5:latest",
+        "prompt_version": "interpretacion-v8",
+        "category_in_catalog": true,
+        "merged_with_interpretation": true
+       }
+      }
+     }
+    },
+    {
+     "index": 2,
+     "turn": 6,
+     "node": "determine_urgency",
+     "at_ms": 1795531980406,
+     "ms": 0.0,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "urgencia efectiva fijada",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "effective_urgency",
+       "detail": "high"
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "urgency": {
+       "before": null,
+       "after": "high"
+      }
+     }
+    },
+    {
+     "index": 3,
+     "turn": 6,
+     "node": "next_step",
+     "at_ms": 1795531980407,
+     "ms": 0.0,
+     "target": "ask_detail",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "la configuración pide un detalle y la incidencia lo merece",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 4,
+     "turn": 6,
+     "node": "ask_detail",
+     "at_ms": 1795531980408,
+     "ms": 0.0,
+     "target": "ask_detail",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [
+      "Para orientar al fontanero: ¿gotea o sale agua con fuerza, y sabe de dónde viene?"
+     ],
+     "diff": {
+      "detail_requested": {
+       "before": false,
+       "after": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "turn": 7,
+   "caller": "Sale con bastante fuerza, de debajo del lavabo",
+   "assistant": [
+    "Le resumo: fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
+   ],
+   "initial_node": "ask_detail",
+   "final_node": "confirm_summary",
+   "interpretation": {
+    "intent": "continue",
+    "problem": "sale agua con fuerza de debajo del lavabo",
+    "category": "plumbing",
+    "urgency": "medium",
+    "work_type": "repair",
+    "origin": "llm",
+    "llm_ms": 1099
+   },
+   "timings": {
+    "interpretation_ms": 1099,
+    "llm_calls": 1,
+    "interpretation_origin": "llm",
+    "graph_ms": 1103,
+    "server_ms": 1103,
+    "turn": 7
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 7,
+     "node": "ask_detail",
+     "at_ms": 1795531980409,
+     "ms": 1099.9,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "detalle recogido, o el vecino no lo aporta",
+     "declared": true,
+     "llm_calls": 1,
+     "llm_ms": 1099,
+     "interpretation": {
+      "intent": "continue",
+      "problem": "sale agua con fuerza de debajo del lavabo",
+      "category": "plumbing",
+      "urgency": "medium",
+      "work_type": "repair",
+      "origin": "llm",
+      "llm_ms": 1099
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "detail",
+       "detail": "Sale con bastante fuerza, de debajo del lavabo"
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "request": {
+       "before": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
+       "after": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo Detalle: Sale con bastante fuerza, de debajo del lavabo"
+      },
+      "summary": {
+       "before": "fuga de agua en el baño y está inundando el suelo",
+       "after": "fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo"
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 7,
+     "node": "next_step",
+     "at_ms": 1795531981511,
+     "ms": 0.0,
+     "target": "confirm_summary",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "están los datos y falta que el vecino confirme",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 2,
+     "turn": 7,
+     "node": "confirm_summary",
+     "at_ms": 1795531981512,
+     "ms": 0.0,
+     "target": "confirm_summary",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "confirm_summary.summary v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Le resumo: fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 8,
+   "caller": "Sí, correcto",
+   "assistant": [
+    "He registrado su incidencia. Se lo comunico ahora a Fontanería Pérez, que se pondrá en contacto con usted para concertar la visita. Todavía no puedo darle hora porque depende de su disponibilidad; el siguiente paso es su llamada. Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, hasta luego."
+   ],
+   "initial_node": "confirm_summary",
+   "final_node": "end",
+   "interpretation": {
+    "intent": "continue",
+    "confirms": true,
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 5,
+    "server_ms": 5,
+    "turn": 8
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 8,
+     "node": "confirm_summary",
+     "at_ms": 1795531981514,
+     "ms": 0.1,
+     "target": "validate_data",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "confirmado y sin nada que corregir",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "intent": "continue",
+      "confirms": true,
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "confirmed",
+       "detail": ""
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "confirmed": {
+       "before": null,
+       "after": true
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 8,
+     "node": "validate_data",
+     "at_ms": 1795531981515,
+     "ms": 0.0,
+     "target": "assign_specialist",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "datos completos y coherentes",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "validation_passed",
+       "detail": ""
+      }
+     ],
+     "validations": [
+      "data_validated"
+     ],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 2,
+     "turn": 8,
+     "node": "assign_specialist",
+     "at_ms": 1795531981516,
+     "ms": 0.0,
+     "target": "create_ticket",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "con profesional asignado o sin él",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "assigned",
+       "detail": "Fontanería Pérez"
+      }
+     ],
+     "validations": [
+      "specialist_belongs_to_administrator"
+     ],
+     "said": [],
+     "diff": {
+      "specialist_id": {
+       "before": null,
+       "after": "esp-fontanero"
+      },
+      "specialist_name": {
+       "before": null,
+       "after": "Fontanería Pérez"
+      }
+     }
+    },
+    {
+     "index": 3,
+     "turn": 8,
+     "node": "create_ticket",
+     "at_ms": 1795531981516,
+     "ms": 0.1,
+     "target": "notify_channel",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "incidencia creada",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "incident_created",
+       "detail": "inc-06e62178e85e"
+      }
+     ],
+     "validations": [],
+     "said": [],
+     "diff": {
+      "incident_id": {
+       "before": null,
+       "after": "inc-06e62178e85e"
+      },
+      "result": {
+       "before": null,
+       "after": "incident_created"
+      }
+     }
+    },
+    {
+     "index": 4,
+     "turn": 8,
+     "node": "notify_channel",
+     "at_ms": 1795531981517,
+     "ms": 0.1,
+     "target": "end",
+     "awaiting_user": false,
+     "finished": true,
+     "consumed_utterance": false,
+     "condition": "incidencia creada y vecino informado",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "simulated_notice",
+       "detail": "email -> coordinador"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "He registrado su incidencia. Se lo comunico ahora a Fontanería Pérez, que se pondrá en contacto con usted para concertar la visita. Todavía no puedo darle hora porque depende de su disponibilidad; el siguiente paso es su llamada. Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, hasta luego."
+     ],
+     "diff": {
+      "finished": {
+       "before": false,
+       "after": true
+      },
+      "notice_channel": {
+       "before": null,
+       "after": "email"
+      },
+      "notice_target": {
+       "before": null,
+       "after": "coordinador"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

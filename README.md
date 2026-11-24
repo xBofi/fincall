@@ -42,6 +42,40 @@ Ejecuta `scripts/sync-vault.ps1 -DryRun` para validar sin mutar GitHub. Los conf
 
 Usa `gh auth login` con un token fine-grained limitado al repositorio `<private-vault-repo>`, con `Contents: Read and write`, `Pull requests: Read and write` y `Metadata: Read-only`. La clave se guarda en el keyring de GitHub CLI, no en este repositorio.
 
+## Cómo enruta LangGraph una llamada (vista de enrutado)
+
+![Traza en directo de una llamada real](docs/images/routing/live-trace.gif)
+
+La pantalla **Flujo** (y la columna derecha de **Simular llamada**) dibuja el grafo de LangGraph tal
+como está compilado y enseña, nodo a nodo, por qué la llamada fue a cada sitio.
+
+- **Estructura**: `GET /api/graph/structure` exporta los nodos de `compiled.get_graph()` y las rutas
+  del manifiesto con su condición, verificadas contra las aristas condicionales compiladas
+  (`drift` vacío o la vista lo avisa). Disposición automática con ELK; ninguna coordenada a mano.
+- **En directo**: `GET /api/calls/{id}/events` (SSE) emite `node_enter`, `node_exit` y `turn_end`.
+  Cada visita (`backend/src/building_call/graph/tracing.py`) lleva el tiempo del nodo, el salto,
+  la condición declarada que se cumplió, la intención y si se interpretó con o sin modelo, las
+  llamadas y el tiempo del LLM, validaciones y un diff de estado sin datos personales. Tokens y
+  coste se muestran como «no medido»: el proveedor no los devuelve en este flujo.
+- **Repetir llamada**: cualquier llamada guardada, paso a paso (← → Inicio Fin Espacio), con el
+  turno de la conversación de cada visita y el diff de estado o el estado acumulado.
+- **Demo**: `http://localhost:5173/demo` reproduce una llamada grabada a través del grafo real,
+  sin sesión, backend ni telefonía (`?theme=dark`, `?lang=en|ca|ar|hi|ur`). Se vuelve a grabar con
+  `cd backend; uv run python evals/record_demo_call.py --model qwen3.5:latest`; un test falla si
+  el grafo cambia y la grabación no.
+
+| Claro | Oscuro |
+| --- | --- |
+| ![Demo, tema claro](docs/images/routing/demo-light.png) | ![Demo, tema oscuro](docs/images/routing/demo-dark.png) |
+| ![Repetición con diff de estado](docs/images/routing/replay-state-light.png) | ![Árabe, RTL](docs/images/routing/demo-rtl.png) |
+| ![Urdu, RTL](docs/images/routing/demo-rtl-ur-light.png) | ![Simular llamada con el grafo en vivo](docs/images/routing/simulate-live-light.png) |
+
+La vista está en los seis idiomas de la consola (es, en, ca, ar, hi, ur; RTL en árabe y urdu): textos
+con claves `routing.*`/`flow.*` en `frontend/src/i18n/messages/`, y títulos de nodo y condiciones de
+ruta traducidos por id (`routing.graph.*`). El resumen de cada nodo se queda en el idioma del código.
+
+Tests: `cd backend; uv run --extra voice pytest tests/test_routing_view.py` y `cd frontend; corepack pnpm run test`.
+
 ## Arrancar la aplicación en local
 
 ```powershell

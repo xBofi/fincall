@@ -61,6 +61,7 @@ import {
 const UserManagement = lazy(() => import('./components/UserManagement').then((m) => ({ default: m.UserManagement })))
 const AccessRequests = lazy(() => import('./components/AccessRequests').then((m) => ({ default: m.AccessRequests })))
 const FlowPanel = lazy(() => import('./components/FlowPanel').then((m) => ({ default: m.FlowPanel })))
+const LiveRouting = lazy(() => import('./components/routing/LiveRouting').then((m) => ({ default: m.LiveRouting })))
 const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.Inbox })))
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
 
@@ -100,6 +101,8 @@ export default function App() {
   const [callRecords, setCallRecords] = useState<CallRecord[]>([])
   const [selected, setSelected] = useState<CallRecordDetail | null>(null)
   const [screen, setScreen] = useState<Screen>('simulate')
+  /** Tercera columna de «Simular llamada»: el grafo en vivo o las fincas para comprobar. */
+  const [simSide, setSimSide] = useState<'graph' | 'data'>('graph')
   const [tel, setTel] = useState<TelephonyStatus | null>(null)
   const [requests, setRequests] = useState(0)
   // Incidencias que esperan una decisión del administrador (contador de la pestaña Bandeja)
@@ -766,23 +769,36 @@ export default function App() {
               <CallCard view={view} />
             </section>
 
-            <section className="sim-col sim-data" aria-label={t('nav.data')}>
+            <section className="sim-col sim-data" aria-label={simSide === 'graph' ? t('routing.sim.title') : t('nav.data')}>
               <div className="ops-panel-heading">
                 <div>
-                  <p className="ops-eyebrow">{t('sim.check')}</p>
-                  <h2>{t('nav.data')}</h2>
+                  <p className="ops-eyebrow">{simSide === 'graph' ? t('routing.sim.eyebrow') : t('sim.check')}</p>
+                  <h2>{simSide === 'graph' ? t('routing.sim.title') : t('nav.data')}</h2>
                 </div>
+                <Segmented
+                  size="small"
+                  value={simSide}
+                  onChange={(v) => setSimSide(v as 'graph' | 'data')}
+                  options={[{ label: t('routing.sim.graph'), value: 'graph' }, { label: t('routing.sim.data'), value: 'data' }]}
+                  aria-label={t('routing.sim.column')}
+                />
               </div>
-              <Database
-                mode="panel"
-                catalog={catalog}
-                highlight={{
-                  estateId: view?.data.estate_id,
-                  homeId: view?.data.home_id,
-                  professionalId: view?.data.specialist_id,
-                  category: view?.data.category,
-                }}
-              />
+              {simSide === 'graph' ? (
+                <Suspense fallback={<Spin className="ops-loading" />}>
+                  <LiveRouting view={view} />
+                </Suspense>
+              ) : (
+                <Database
+                  mode="panel"
+                  catalog={catalog}
+                  highlight={{
+                    estateId: view?.data.estate_id,
+                    homeId: view?.data.home_id,
+                    professionalId: view?.data.specialist_id,
+                    category: view?.data.category,
+                  }}
+                />
+              )}
             </section>
           </section>
         )}
@@ -828,7 +844,7 @@ export default function App() {
         )}
 
         {screen === 'flow' && (
-          <section className="ops-single"><FlowPanel isOwner={isOwner} /></section>
+          <section className="ops-single"><FlowPanel isOwner={isOwner} liveView={view} /></section>
         )}
 
         {screen === 'latency' && (

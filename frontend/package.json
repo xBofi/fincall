@@ -10,12 +10,15 @@
     "build": "node scripts/enforce-pnpm.mjs && tsc -b && vite build",
     "lint": "node scripts/enforce-pnpm.mjs && oxlint",
     "preview": "node scripts/enforce-pnpm.mjs && vite preview",
+    "test": "node scripts/enforce-pnpm.mjs && node --test \"src/**/*.test.ts\"",
     "test:package-manager": "node --test scripts/enforce-pnpm.test.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.2",
     "@twilio/voice-sdk": "2.18.5",
+    "@xyflow/react": "12.8.6",
     "antd": "^6.6.1",
+    "elkjs": "0.10.0",
     "livekit-client": "2.22.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
