@@ -51,6 +51,7 @@ from building_call.graph.state import CallState
 from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
+from building_call.kpis_api import create_kpis_router
 from building_call.livekit_api import (
     create_livekit_router,
     is_agent,
@@ -545,6 +546,7 @@ def create_app(
     app.include_router(
         create_operations_router(deps.repo, access, manager.metrics, audio_store)  # type: ignore[arg-type]
     )
+    app.include_router(create_kpis_router(deps.repo, access, manager.metrics))  # type: ignore[arg-type]
     # Flujo del asistente: grafo, plantillas editables, prompts (solo lectura) y catálogos
     app.include_router(create_flow_router(deps.repo, deps.repo, access))  # type: ignore[arg-type]
     # Bandeja del administrador: incidencias pendientes de su decisión y sus acciones

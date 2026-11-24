@@ -64,6 +64,7 @@ const FlowPanel = lazy(() => import('./components/FlowPanel').then((m) => ({ def
 const LiveRouting = lazy(() => import('./components/routing/LiveRouting').then((m) => ({ default: m.LiveRouting })))
 const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.Inbox })))
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
+const KpiPanel = lazy(() => import('./components/KpiPanel').then((m) => ({ default: m.KpiPanel })))
 
 type SttMode = 'browser' | 'server' | 'streaming' | 'livekit' | 'twilio' | 'line'
 type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | 'users' | 'requests'
@@ -858,6 +859,9 @@ export default function App() {
               <StatePanel view={view} />
             </div>
           </section>
+        )}
+        {screen === 'latency' && (
+          <section className="ops-single"><KpiPanel /></section>
         )}
         </Suspense>
       </main>
