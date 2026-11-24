@@ -190,6 +190,18 @@ export const es = {
   'rule.other': 'a {name}',
   'home.entrance': 'Portal {entrance}',
   'home.label': '{floor}º {door}',
+  'latency.last': 'Última respuesta',
+  'latency.rating': 'Calificación p50',
+  'latency.legend': 'Respuesta = fin de la voz del vecino → inicio del audio del asistente. Umbrales: ≤700 excelente · ≤1200 objetivo · ≤1500 tolerable · ≤2000 mal · >2000 muy mal.',
+  'latency.col.mode': 'Modo',
+  'latency.col.server': 'Servidor',
+  'latency.col.network': 'Red',
+  'latency.col.response': 'Respuesta',
+  'latency.text': 'texto',
+  'latency.cut': 'cortado',
+  'db.search.estates': 'Buscar calle, vivienda (3º B)…',
+  'db.search.people': 'Buscar nombre, oficio, finca…',
+  'db.noSpecialist': 'Sin profesional: para el administrador',
 }
 
 export type MessageKey = keyof typeof es
