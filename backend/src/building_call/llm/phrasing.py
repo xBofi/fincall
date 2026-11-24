@@ -14,6 +14,7 @@ from time import perf_counter
 from typing import Any
 
 from building_call import i18n
+from building_call.i18n import personas
 from building_call.llm import prompts_en, wire
 from building_call.llm.base import LanguageModel
 
@@ -101,8 +102,11 @@ async def phrase(
     """Devuelve (texto_final, métrica). Si algo falla, texto_final es la plantilla."""
     start = perf_counter()
     known = ", ".join(f"{k}: {v}" for k, v in data.items() if v)
+    persona = personas.active(i18n.active_code())
     if _spanish():
         system = PHRASING_SYSTEM
+        if persona:
+            system += f"\n\nTe llamas {persona.agent_name}. Tono: {persona.tone or 'el de siempre'}."
         user = (
             f'Último mensaje del vecino: """{caller_utterance or "(inicio de la llamada)"}"""\n'
             f"Datos ya conocidos: {known or 'ninguno'}\n"
@@ -111,6 +115,8 @@ async def phrase(
         key = "respuesta"
     else:
         system = PHRASING_SYSTEM_EN + prompts_en.language_note(i18n.current().name)
+        if persona:
+            system += f"\n\nYour name is {persona.agent_name}. Tone: {persona.tone or 'as above'}."
         user = (
             f'Caller\'s last message: """{caller_utterance or "(start of the call)"}"""\n'
             f"Facts already known: {known or 'none'}\n"

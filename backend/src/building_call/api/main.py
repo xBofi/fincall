@@ -47,6 +47,7 @@ from building_call.graph.nodes import (
 )
 from building_call.graph.registry import REGISTRY
 from building_call.graph.state import CallState
+from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
 from building_call.livekit_api import (
     create_livekit_router,
@@ -94,7 +95,7 @@ def _has_voice(pcm: bytes, threshold: int = 300) -> bool:
 
 # Fábrica de sesiones de streaming: (sample_rate, keyterms, language) -> sesión con
 # abrir/enviar_audio/eventos/cerrar
-StreamingFactory = Callable[[int, list[str], str], Any]
+StreamingFactory = Callable[[int, list[str], str | list[str]], Any]
 
 
 async def stt_vocabulary(repo: Any, language: str | None = None) -> list[str]:
@@ -117,8 +118,10 @@ async def stt_vocabulary(repo: Any, language: str | None = None) -> list[str]:
 
 class NewCall(BaseModel):
     caller_phone: str | None = None
-    # ISO 639-1 (`GET /api/languages`); None = BC_LANGUAGE
+    # ISO 639-1 (`GET /api/languages`); None = BC_LANGUAGE (and detection may switch it)
     language: str | None = Field(default=None, max_length=16)
+    # Client voice persona (`GET /api/personas`); None = BC_PERSONA
+    persona: str | None = Field(default=None, max_length=64)
 
 
 class Message(BaseModel):
@@ -166,6 +169,8 @@ def _view(state: CallState) -> dict[str, Any]:
     return {
         "call_id": state["call_id"],
         "language": state.get("language"),
+        "language_locked": state.get("language_locked", False),
+        "persona": state.get("persona"),
         "turn": state.get("turn", 0),
         "current_node": state.get("current_node"),
         "awaiting_user": state.get("awaiting_user", False),
@@ -243,7 +248,7 @@ def _default_streaming_factory() -> StreamingFactory | None:
     host = settings.assemblyai_streaming_host
 
     def make(
-        sample_rate: int, keyterms: list[str], language: str | None = None
+        sample_rate: int, keyterms: list[str], language: str | list[str] | None = None
     ) -> AssemblyAIStreamingSession:
         return AssemblyAIStreamingSession(
             settings.assemblyai_api_key,
@@ -253,7 +258,13 @@ def _default_streaming_factory() -> StreamingFactory | None:
             eot_silence_ms=settings.assemblyai_eot_silence_ms,
             max_silence_ms=settings.assemblyai_max_silence_ms,
             keyterms=keyterms,
-            language=i18n.get(language).stt.language_code if language else None,
+            # One language, or the enabled ones while the call's is still being detected
+            language=[i18n.get(c).stt.language_code for c in language]
+            if isinstance(language, list)
+            else i18n.get(language).stt.language_code
+            if language
+            else None,
+            language_detection=isinstance(language, list),
             speech_model=settings.assemblyai_model,
         )
 
@@ -385,6 +396,7 @@ def create_app(
         phone: str | None,
         existing_call_id: str | None = None,
         language: str | None = None,
+        persona: str | None = None,
     ) -> CallBridge:
         assert streaming_factory is not None
         if existing_call_id:
@@ -403,6 +415,7 @@ def create_app(
             bargein_words=settings.telephony_bargein_words,
             existing_call_id=existing_call_id,
             language=code,
+            persona=persona if persona in personas.personas() else None,
         )
 
     app.include_router(create_twilio_router(settings, bridge_factory, telephony_ready))
@@ -445,10 +458,28 @@ def create_app(
                     "browser_lang": lang.tts.browser_lang,
                     "stt": lang.stt.provider,
                     "server_tts": bool(lang.tts.elevenlabs_language),
+                    "enabled": lang.code in i18n.enabled(),
                 }
                 for lang in i18n.languages().values()
             ],
+            "detection": settings.language_detection,
         }
+
+    @app.get("/api/personas")
+    async def list_personas() -> list[dict[str, Any]]:
+        """Client voice personas, for the console: who answers in each language."""
+        return [
+            {
+                "id": p.id,
+                "client": p.client,
+                "default": p.id == personas.default_id(),
+                "languages": {
+                    code: {"agent_name": lang.agent_name, "has_voice": bool(lang.voice)}
+                    for code, lang in p.languages.items()
+                },
+            }
+            for p in personas.personas().values()
+        ]
 
     @app.get("/api/telephony/state")
     async def telephony_state(_: Any = Depends(access.requires())) -> dict[str, Any]:  # noqa: B008
@@ -564,9 +595,11 @@ def create_app(
     @app.post("/api/calls", status_code=201, dependencies=protected_call)
     async def begin(body: NewCall) -> dict[str, Any]:
         try:
-            return _view(await manager.begin(body.caller_phone, body.language))
+            return _view(await manager.begin(body.caller_phone, body.language, body.persona))
         except i18n.UnknownLanguage as e:
             raise HTTPException(422, f"Idioma no soportado: {body.language}") from e
+        except personas.UnknownPersona as e:
+            raise HTTPException(422, f"Persona desconocida: {body.persona}") from e
 
     @app.post("/api/calls/{call_id}/messages", dependencies=protected_call)
     async def message(call_id: str, body: Message) -> dict[str, Any]:
@@ -660,8 +693,12 @@ def create_app(
             await ws.close(code=1008)
             return
         language = str(initial_state.get("language") or i18n.default_code())
+        # Until the caller's first words decide it, listen to every enabled language
+        listen: str | list[str] = (
+            language if initial_state.get("language_locked") else list(i18n.enabled())
+        )
         session = streaming_factory(
-            sample_rate, await stt_vocabulary(deps.repo, language), language
+            sample_rate, await stt_vocabulary(deps.repo, language), listen
         )
         try:
             await session.open()
@@ -701,7 +738,7 @@ def create_app(
                 recorder.write_assistant(pcm, int(tts.rate), since=brand)
 
         async def pump_events() -> None:
-            nonlocal bot_text
+            nonlocal bot_text, language
             async for ev in session.events():
                 if ev.kind == "partial":
                     await ws.send_json({"type": "partial", "text": ev.text})
@@ -715,10 +752,20 @@ def create_app(
                     eou_ms = int((t_final - last_voice_at) * 1000) if last_voice_at else None
                     await ws.send_json({"type": "final", "text": ev.text, "eou_ms": eou_ms})
                     try:
-                        state = await manager.message(call_id, ev.text)
+                        state = await manager.message(
+                            call_id,
+                            ev.text,
+                            stt_language=ev.detail.get("language_code"),
+                            stt_confidence=ev.detail.get("language_confidence"),
+                        )
                     except CallNotFound:
                         await ws.send_json({"type": "error", "message": "Llamada no encontrada"})
                         return
+                    if state.get("language") != language:
+                        # The call switched language: the STT and the bot's voice follow
+                        language = str(state.get("language"))
+                        if hasattr(session, "set_language"):
+                            await session.set_language(language)
                     view = _view(state)
                     view["timings"] = {
                         **view["timings"],

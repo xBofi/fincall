@@ -88,6 +88,7 @@ class CallControl:
     def __init__(self, call_id: str, language: str | None = None) -> None:
         self.call_id = call_id
         self.language = language
+        self.language_changed = False
         self.turn = 0
         self.finished = False
         self.text = ""
@@ -103,6 +104,10 @@ class CallControl:
         """Guarda el turno que va a sonar y devuelve su texto."""
         self.turn = int(view.get("turn", 0))
         self.finished = bool(view.get("finished"))
+        # The call may switch language (detection, or the caller asking): the agent follows
+        if view.get("language") and view["language"] != self.language:
+            self.language = str(view["language"])
+            self.language_changed = True
         self.text = " ".join(view.get("bot_messages") or []).strip()
         self.pending_report = bool(self.text)
         return self.text

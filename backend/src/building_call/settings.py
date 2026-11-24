@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     # Default language of a call (ISO 639-1, one of `building_call/i18n/locales/*.toml`). A call
     # can pick another one (Twilio number, stream parameter, console) or switch after detection.
     language: str = "es"
+    # Languages this deployment answers in (codes of the registry); empty = all of them
+    languages: list[str] = []
+    # Detect the caller's language in the first turns of a call whose language was not chosen
+    # explicitly, and switch when the evidence is at least this confident (0-1)
+    language_detection: bool = True
+    language_detection_threshold: float = 0.6
+    language_detection_turns: int = 2
+    # Voice persona per client (`building_call/i18n/personas/<id>.toml`); empty = none
+    persona: str = ""
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/building_call"
 
     # LLM: "auto" (carrera si hay credenciales de Cloudflare, si no ollama) | "ollama" | "workers_ai" |
@@ -98,6 +107,10 @@ class Settings(BaseSettings):
     twilio_api_key_sid: str = ""
     twilio_api_key_secret: str = ""
     twilio_twiml_app_sid: str = ""
+    # Called number (E.164) -> language / persona, for numbers that serve one language or client:
+    # BC_TWILIO_NUMBER_LANGUAGES='{"+15550100000": "en"}'
+    twilio_number_languages: dict[str, str] = {}
+    twilio_number_personas: dict[str, str] = {}
     telephony_bargein_words: int = 2
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
     tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
@@ -108,6 +121,9 @@ class Settings(BaseSettings):
     elevenlabs_model: str = "eleven_v4_turbo"
     elevenlabs_url: str = "https://api.elevenlabs.io"
     piper_bin: str = "piper"
+    # One Piper voice per language: <dir>/<piper_voice>.onnx (+ .onnx.json), names in the
+    # locale files (es_ES-davefx-medium, en_US-lessac-medium, ca_ES-upc_ona-medium, ...)
+    piper_dir: str = ""
     piper_model: str = ""  # ruta al .onnx (junto a su .onnx.json), p. ej. es_ES-davefx-medium
     cloudflare_tts_model: str = "@cf/myshell-ai/melotts"
 

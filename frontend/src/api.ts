@@ -53,8 +53,36 @@ export interface ServerTimings {
   stt_eou_to_response_ms?: number
 }
 
+export interface LanguageInfo {
+  code: string
+  locale: string
+  name: string
+  native_name: string
+  rtl: boolean
+  browser_lang: string
+  stt: string
+  server_tts: boolean
+  enabled: boolean
+}
+
+export interface LanguagesInfo {
+  default: string
+  detection: boolean
+  languages: LanguageInfo[]
+}
+
+export interface PersonaInfo {
+  id: string
+  client: string
+  default: boolean
+  languages: Record<string, { agent_name: string; has_voice: boolean }>
+}
+
 export interface CallView {
   call_id: string
+  language?: string
+  language_locked?: boolean
+  persona?: string | null
   turn: number
   current_node: string
   awaiting_user: boolean
@@ -332,8 +360,14 @@ export const audit = {
 
 export const api = {
   health: () => ask<Health>('/api/health'),
-  begin: (phone?: string) =>
-    ask<CallView>('/api/calls', json({ caller_phone: phone ?? null })),
+  /** `language` null = BC_LANGUAGE with detection; `persona` null = BC_PERSONA. */
+  begin: (options: { phone?: string; language?: string | null; persona?: string | null } = {}) =>
+    ask<CallView>(
+      '/api/calls',
+      json({ caller_phone: options.phone ?? null, language: options.language ?? null, persona: options.persona ?? null }),
+    ),
+  languages: () => ask<LanguagesInfo>('/api/languages'),
+  personas: () => ask<PersonaInfo[]>('/api/personas'),
   message: (id: string, text: string) =>
     ask<CallView>(`/api/calls/${id}/messages`, json({ text })),
   audio: (id: string, blob: Blob, mime: string) => {

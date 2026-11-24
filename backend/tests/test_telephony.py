@@ -318,11 +318,11 @@ class FailingCallManager(CallManager):
         super().__init__(deps)
         self.failures = failures
 
-    async def message(self, call_id: str, text: str, stt_ms: int | None = None):  # type: ignore[no-untyped-def]
+    async def message(self, call_id: str, text: str, stt_ms: int | None = None, **kw):  # type: ignore[no-untyped-def]
         if self.failures:
             self.failures -= 1
             raise RuntimeError("LLM caído")
-        return await super().message(call_id, text, stt_ms)
+        return await super().message(call_id, text, stt_ms, **kw)
 
 
 async def test_bridge_asks_to_repeat_if_a_turn_fails(deps: Dependencies) -> None:

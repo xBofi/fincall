@@ -15,6 +15,7 @@ import {
 import { ApiError, catalogs, type CatalogSpecialist, type EstateDetail, type CatalogHome } from '../api'
 import { assignment, categoriesOf, rulesOf, type Catalog } from '../catalog'
 import { channel, capitalize, category, ruleTarget, urgency } from '../texts'
+import { t } from '../i18n'
 import { CatalogEditing, type Editing } from './CatalogEditing'
 import { detail } from './userRoles'
 
@@ -321,7 +322,7 @@ function EstateCard({
                           allowClear
                           className="db-assign"
                           value={byCategory[c] ?? null}
-                          placeholder="Sin profesional: para el administrador"
+                          placeholder={t('db.noSpecialist')}
                           options={professionalOptions}
                           aria-label={`Profesional de ${category(c)}`}
                           onChange={(v: string | null | undefined) => editor.assign(estate, c, v ?? null)}
@@ -588,7 +589,7 @@ export function Database({ catalog, highlight, mode, editable = false }: Props) 
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder={tab === 'estates' ? 'Buscar calle, vivienda (3º B)…' : 'Buscar nombre, oficio, finca…'}
+          placeholder={tab === 'estates' ? t('db.search.estates') : t('db.search.people')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="db-search"

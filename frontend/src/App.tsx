@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Badge, Button, Dropdown, Popover, Segmented, Slider, Spin, Switch, Tooltip, message } from 'antd'
+import { Alert, Badge, Button, Dropdown, Popover, Segmented, Select, Slider, Spin, Switch, Tooltip, message } from 'antd'
 import {
   CheckOutlined,
   CloseOutlined,
@@ -24,7 +24,11 @@ import {
   type OperationsSummary,
   type Health,
   type CallView,
+  type LanguagesInfo,
+  type PersonaInfo,
 } from './api'
+import { UI_LANGUAGES, useI18n, type UiLanguage } from './i18n'
+import type { MessageKey } from './i18n/messages/es'
 import Logo from './components/Logo'
 import { PendingAccess } from './components/PendingAccess'
 import { Conversation, type VoiceState } from './components/Conversation'
@@ -50,6 +54,7 @@ import {
   sttBrowserAvailable,
   ttsAvailable,
   enableServerVoice,
+  setSpeechLanguage,
 } from './voice'
 
 // Pantallas que no se usan al simular: se descargan al abrirlas (el arranque pesa menos)
@@ -66,24 +71,18 @@ type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | '
 /** El barge-in (cortar al bot cuando el vecino habla) está siempre activo en la consola. */
 const BARGE_IN = true
 
-const CAN = [
-  'Identifica la finca por la dirección, aunque el vecino la diga con otras palabras.',
-  'Localiza la vivienda por portal, piso y puerta.',
-  'Entiende el problema, lo clasifica por tipo de avería y decide la urgencia.',
-  'Lee un resumen al vecino y le pide confirmación antes de crear nada.',
-  'Crea la incidencia y avisa al profesional que la finca tiene asignado para esa avería.',
-  'Responde dudas frecuentes (¿se graba la llamada?, ¿cuánto tardarán?).',
-]
-const CANNOT = [
-  'No atiende fincas que no estén dadas de alta: guarda el mensaje para revisarlo.',
-  'Sin la vivienda identificada no crea incidencia: avisa al administrador.',
-  'Si ningún profesional cubre esa avería, la incidencia queda pendiente para el administrador.',
-  'Si el vecino pide hablar con una persona, no transfiere la llamada: avisa al administrador.',
-  'No promete hora de visita: todavía nadie ha hablado con el profesional.',
-]
+const CAN: MessageKey[] = ['sim.can.1', 'sim.can.2', 'sim.can.3', 'sim.can.4', 'sim.can.5', 'sim.can.6']
+const CANNOT: MessageKey[] = ['sim.cannot.1', 'sim.cannot.2', 'sim.cannot.3', 'sim.cannot.4', 'sim.cannot.5']
 
 export default function App() {
+  // Consuming the context re-renders the whole console (and the `t()` helpers) on a change
+  const { t, lang, setLang } = useI18n()
   const [health, setHealth] = useState<Health | null>(null)
+  // The call's language ('' = BC_LANGUAGE + detection) and the client's persona ('' = default)
+  const [callLanguage, setCallLanguage] = useState('')
+  const [persona, setPersona] = useState('')
+  const [languages, setLanguages] = useState<LanguagesInfo | null>(null)
+  const [personaList, setPersonaList] = useState<PersonaInfo[]>([])
   const [view, setView] = useState<CallView | null>(null)
   const [busy, setBusy] = useState(false)
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
@@ -403,7 +402,7 @@ export default function App() {
 
   /** Por LiveKit el agente del servidor escucha y habla; la consola solo enseña la llamada. */
   const startLiveKit = async () => {
-    const v = await api.begin()
+    const v = await api.begin({ language: callLanguage || null, persona: persona || null })
     viewRef.current = v
     setView(v)
     const generation = generationRef.current
@@ -438,7 +437,7 @@ export default function App() {
 
   /** Por Twilio: el navegador llama a Twilio y la llamada llega al agente como una de teléfono. */
   const startTwilio = async () => {
-    const v = await api.begin()
+    const v = await api.begin({ language: callLanguage || null, persona: persona || null })
     viewRef.current = v
     setView(v)
     const generation = generationRef.current
@@ -484,7 +483,7 @@ export default function App() {
         await startTwilio()
         return
       }
-      const v = await api.begin()
+      const v = await api.begin({ language: callLanguage || null, persona: persona || null })
       if (optionsRef.current.sttMode === 'streaming' && optionsRef.current.handsFree) {
         // Abrimos el STT mientras suena el saludo para que la conexión no cueste latencia
         void openCallStreaming(v.call_id).catch((e) => message.error(errorMessage(e)))
@@ -517,12 +516,22 @@ export default function App() {
   const sttStreamingOk = !!health?.stt_streaming
   const sttNavegadorOk = sttBrowserAvailable()
   const sessionReady = !!access?.authenticated && access.user?.access_state === 'granted'
+  useEffect(() => {
+    if (!sessionReady) return
+    api.languages().then(setLanguages).catch(() => undefined)
+    api.personas().then(setPersonaList).catch(() => undefined)
+  }, [sessionReady])
+  // The browser's recognition and voice follow the call, which may switch language mid-call
+  const speechTag = languages?.languages.find((l) => l.code === (view?.language ?? callLanguage))?.browser_lang
+  useEffect(() => {
+    if (speechTag) setSpeechLanguage(speechTag)
+  }, [speechTag])
   const catalog = useCatalog(sessionReady)
 
   if (access === null) {
     return (
       <main className="ops-login" aria-busy="true">
-        <Spin size="large" tip="Conectando con la consola…"><div style={{ minHeight: 120 }} /></Spin>
+        <Spin size="large" tip={t('app.connecting')}><div style={{ minHeight: 120 }} /></Spin>
       </main>
     )
   }
@@ -535,57 +544,91 @@ export default function App() {
   const isOwner = me.role === 'owner'
   const managesIncidents = isOwner || me.role === 'administrator'
   const screenOptions: { label: React.ReactNode; value: Screen }[] = [
-    { label: 'Simular llamada', value: 'simulate' },
-    { label: 'Historial', value: 'history' },
+    { label: t('nav.simulate'), value: 'simulate' },
+    { label: t('nav.history'), value: 'history' },
     ...(managesIncidents
       ? [
           {
             label: (
               <Badge count={inboxPending} size="small" offset={[8, -2]}>
-                Bandeja
+                {t('nav.inbox')}
               </Badge>
             ),
             value: 'inbox' as Screen,
           },
         ]
       : []),
-    { label: 'Fincas y profesionales', value: 'data' },
-    { label: 'Flujo', value: 'flow' },
-    { label: 'Rendimiento', value: 'latency' },
+    { label: t('nav.data'), value: 'data' },
+    { label: t('nav.flow'), value: 'flow' },
+    { label: t('nav.latency'), value: 'latency' },
     ...(isOwner
       ? [
           {
             label: (
               <Badge count={requests} size="small" offset={[8, -2]}>
-                Solicitudes
+                {t('nav.requests')}
               </Badge>
             ),
             value: 'requests' as Screen,
           },
-          { label: 'Usuarios', value: 'users' as Screen },
+          { label: t('nav.users'), value: 'users' as Screen },
         ]
       : []),
   ]
 
   const inProgress = !!view && !view.finished
+  const callOptions = (
+    <div className="sim-call-options">
+      <label>
+        <span>{t('call.language')}</span>
+        <Select
+          size="small"
+          value={callLanguage}
+          onChange={setCallLanguage}
+          popupMatchSelectWidth={false}
+          options={[
+            { value: '', label: t('call.language.auto') },
+            ...(languages?.languages ?? [])
+              .filter((l) => l.enabled)
+              .map((l) => ({ value: l.code, label: l.native_name })),
+          ]}
+        />
+      </label>
+      {personaList.length > 0 && (
+        <label>
+          <span>{t('call.persona')}</span>
+          <Select
+            size="small"
+            value={persona}
+            onChange={setPersona}
+            popupMatchSelectWidth={false}
+            options={[
+              { value: '', label: t('call.persona.none') },
+              ...personaList.map((p) => ({ value: p.id, label: p.client })),
+            ]}
+          />
+        </label>
+      )}
+    </div>
+  )
   const voiceSettings = (
     <div className="sim-settings">
       <label>
         <span>
-          <b>Voz del asistente</b>
-          <small>Lee las respuestas en voz alta</small>
+          <b>{t('voice.assistant')}</b>
+          <small>{t('voice.assistant.hint')}</small>
         </span>
         <Switch checked={voiceEnabled} onChange={setVoiceActive} disabled={!ttsAvailable()} size="small" />
       </label>
       <label>
         <span>
-          <b>Manos libres</b>
-          <small>Vuelve a escuchar solo después de cada respuesta</small>
+          <b>{t('voice.handsFree')}</b>
+          <small>{t('voice.handsFree.hint')}</small>
         </span>
         <Switch checked={handsFree} onChange={setHandsFree} size="small" />
       </label>
       <div>
-        <b>Reconocimiento de voz</b>
+        <b>{t('voice.recognition')}</b>
         <Segmented
           block
           size="small"
@@ -594,16 +637,16 @@ export default function App() {
           options={[
             { label: 'Twilio', value: 'twilio', disabled: !health?.twilio_browser },
             { label: 'LiveKit', value: 'livekit', disabled: !health?.livekit },
-            { label: 'Servidor', value: 'streaming', disabled: !sttStreamingOk },
-            { label: 'Navegador', value: 'browser', disabled: !sttNavegadorOk },
-            { label: 'Grabación', value: 'server', disabled: !sttServidorOk || !captureAvailable() },
+            { label: t('voice.mode.server'), value: 'streaming', disabled: !sttStreamingOk },
+            { label: t('voice.mode.browser'), value: 'browser', disabled: !sttNavegadorOk },
+            { label: t('voice.mode.recording'), value: 'server', disabled: !sttServidorOk || !captureAvailable() },
           ]}
         />
-        <small>«LiveKit» es el camino de las llamadas reales: voz, interrupciones y ledger en el servidor.</small>
+        <small>{t('voice.modes.hint')}</small>
       </div>
       {sttMode === 'server' && (
         <div>
-          <b>Silencio que cierra el turno: {silenceMs} ms</b>
+          <b>{t('voice.silence', { ms: silenceMs })}</b>
           <Slider min={300} max={1200} step={50} value={silenceMs} onChange={setSilenceMs} />
         </div>
       )}
@@ -617,19 +660,19 @@ export default function App() {
           <div className="ops-brand">
             <Logo withName />
             <div className="ops-brand-product">
-              <h1>Asistente de incidencias</h1>
+              <h1>{t('app.title')}</h1>
               <div className="ops-system">
-                <Tooltip title={health?.model_available ? 'El asistente puede atender llamadas' : 'El modelo de lenguaje no responde'}>
+                <Tooltip title={health?.model_available ? t('app.available.tip') : t('app.unavailable.tip')}>
                   <span className="ops-state">
                     <span className={`ops-signal ${health?.model_available ? 'is-online' : ''}`} />
-                    {health?.model_available ? 'Asistente disponible' : 'Asistente no disponible'}
+                    {health?.model_available ? t('app.available') : t('app.unavailable')}
                   </span>
                 </Tooltip>
                 {tel && (
-                  <Tooltip title={tel.items ? `Teléfono ${tel.number ?? ''}` : 'Pendiente de contratar el número. Mientras tanto, las llamadas se simulan desde esta consola.'}>
+                  <Tooltip title={tel.items ? t('app.line.tip.on', { number: tel.number ?? '' }) : t('app.line.tip.off')}>
                     <span className="ops-state">
                       <span className={`ops-signal ${tel.items ? 'is-online' : ''}`} />
-                      {tel.items ? `Línea ${tel.number ?? 'active'}` : 'Línea telefónica pendiente'}
+                      {tel.items ? t('app.line.on', { number: tel.number ?? '' }) : t('app.line.off')}
                     </span>
                   </Tooltip>
                 )}
@@ -637,12 +680,21 @@ export default function App() {
             </div>
           </div>
           <Segmented<Screen> className="ops-nav" value={screen} onChange={setScreen} options={screenOptions} />
+          <Select<UiLanguage>
+            className="ops-language"
+            size="small"
+            value={lang}
+            onChange={setLang}
+            aria-label={t('app.uiLanguage')}
+            popupMatchSelectWidth={false}
+            options={UI_LANGUAGES.map((l) => ({ value: l.code, label: l.native }))}
+          />
           <Dropdown
             menu={{
               items: [
-                { key: 'role', label: `Rol: ${ROLES[me.role] ?? me.role}`, disabled: true },
+                { key: 'role', label: t('app.role', { role: ROLES[me.role] ?? me.role }), disabled: true },
                 { type: 'divider' },
-                { key: 'logout', icon: <LogoutOutlined />, label: 'Salir', onClick: () => void logout() },
+                { key: 'logout', icon: <LogoutOutlined />, label: t('app.logout'), onClick: () => void logout() },
               ],
             }}
           >
@@ -656,21 +708,21 @@ export default function App() {
 
         {screen === 'simulate' && (
           <section className="sim">
-            <section className="sim-col sim-call" aria-label="Llamada">
+            <section className="sim-col sim-call" aria-label={t('sim.eyebrow')}>
               <div className="ops-panel-heading">
                 <div>
-                  <p className="ops-eyebrow">Llamada simulada</p>
-                  <h2>{inProgress ? 'En curso' : view?.finished ? 'Llamada terminada' : 'Línea libre'}</h2>
+                  <p className="ops-eyebrow">{t('sim.eyebrow')}</p>
+                  <h2>{inProgress ? t('sim.inProgress') : view?.finished ? t('sim.finished') : t('sim.idle')}</h2>
                 </div>
                 <div className="sim-actions">
-                  <Popover content={voiceSettings} title="Ajustes de voz" trigger="click" placement="bottomRight">
-                    <Button icon={<SettingOutlined />} title="Ajustes de voz" />
+                  <Popover content={voiceSettings} title={t('voice.settings')} trigger="click" placement="bottomRight">
+                    <Button icon={<SettingOutlined />} title={t('voice.settings')} />
                   </Popover>
                   {inProgress ? (
-                    <Button danger onClick={hang_up}>Colgar</Button>
+                    <Button danger onClick={hang_up}>{t('sim.hangUp')}</Button>
                   ) : view && (
                     <Button type="primary" icon={<ReloadOutlined />} onClick={() => void begin()} loading={busy}>
-                      Nueva llamada
+                      {t('sim.newCall')}
                     </Button>
                   )}
                 </div>
@@ -680,44 +732,42 @@ export default function App() {
                   <Conversation history={view.history} partial={partial} voiceState={voiceState} busy={busy} finished={view.finished} handsFree={handsFree} onSend={sendText} onListen={() => void listen()} />
                 ) : (
                   <div className="sim-welcome">
-                    <p className="sim-intro">
-                      Haz de vecino: pulsa <b>Iniciar llamada</b> y habla con el micrófono, o escribe lo que diría.
-                      Las direcciones y viviendas que existen están en <b>Fincas y profesionales</b>.
-                    </p>
+                    <p className="sim-intro">{t('sim.intro')}</p>
+                    {callOptions}
                     <Button type="primary" size="large" icon={<PhoneOutlined />} onClick={() => void begin()} loading={busy}>
-                      Iniciar llamada
+                      {t('sim.start')}
                     </Button>
                     <div className="sim-capabilities">
                       <div>
-                        <h3>Qué hace el asistente</h3>
-                        <ul>{CAN.map((t) => <li key={t}><CheckOutlined className="is-good" />{t}</li>)}</ul>
+                        <h3>{t('sim.can')}</h3>
+                        <ul>{CAN.map((k) => <li key={k}><CheckOutlined className="is-good" />{t(k)}</li>)}</ul>
                       </div>
                       <div>
-                        <h3>Qué no hace</h3>
-                        <ul>{CANNOT.map((t) => <li key={t}><CloseOutlined className="is-review" />{t}</li>)}</ul>
+                        <h3>{t('sim.cannot')}</h3>
+                        <ul>{CANNOT.map((k) => <li key={k}><CloseOutlined className="is-review" />{t(k)}</li>)}</ul>
                       </div>
                     </div>
-                    <small className="sim-footer">En esta demostración los avisos a profesionales y administradores se simulan: no se envía ningún correo ni llamada.</small>
+                    <small className="sim-footer">{t('sim.footer')}</small>
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="sim-col sim-card" aria-label="Lo que ha entendido el asistente">
+            <section className="sim-col sim-card" aria-label={t('sim.understood')}>
               <div className="ops-panel-heading">
                 <div>
-                  <p className="ops-eyebrow">En tiempo real</p>
-                  <h2>Lo que ha entendido el asistente</h2>
+                  <p className="ops-eyebrow">{t('sim.live')}</p>
+                  <h2>{t('sim.understood')}</h2>
                 </div>
               </div>
               <CallCard view={view} />
             </section>
 
-            <section className="sim-col sim-data" aria-label="Fincas y profesionales">
+            <section className="sim-col sim-data" aria-label={t('nav.data')}>
               <div className="ops-panel-heading">
                 <div>
-                  <p className="ops-eyebrow">Para comprobar</p>
-                  <h2>Fincas y profesionales</h2>
+                  <p className="ops-eyebrow">{t('sim.check')}</p>
+                  <h2>{t('nav.data')}</h2>
                 </div>
               </div>
               <Database
@@ -753,8 +803,8 @@ export default function App() {
           <section className="ops-single">
             <div className="ops-panel-heading">
               <div>
-                <p className="ops-eyebrow">Lo que el asistente consulta en cada llamada</p>
-                <h2>Fincas y profesionales</h2>
+                <p className="ops-eyebrow">{t('data.eyebrow')}</p>
+                <h2>{t('nav.data')}</h2>
               </div>
             </div>
             <Database mode="page" catalog={catalog} editable={me.role !== 'quality'} />
@@ -781,11 +831,11 @@ export default function App() {
         {screen === 'latency' && (
           <section className="ops-single ops-latency">
             <div>
-              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Voz · esta sesión</p><h2>Tiempo de respuesta por turno</h2></div><span className="ops-mono">{turns.length} turnos</span></div>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">{t('latency.eyebrow')}</p><h2>{t('latency.title')}</h2></div><span className="ops-mono">{t('latency.turns', { n: turns.length })}</span></div>
               <LatencyPanel turns={turns} />
             </div>
             <div>
-              <div className="ops-panel-heading"><div><p className="ops-eyebrow">Llamada en directo</p><h2>Estado interno del asistente</h2></div></div>
+              <div className="ops-panel-heading"><div><p className="ops-eyebrow">{t('live.eyebrow')}</p><h2>{t('live.state')}</h2></div></div>
               <StatePanel view={view} />
             </div>
           </section>

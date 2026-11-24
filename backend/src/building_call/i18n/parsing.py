@@ -26,6 +26,8 @@ from babel.lists import format_list
 from building_call.i18n.models import Language
 from building_call.i18n.text import basic_normalize, contains_phrase
 
+#: "No," / "لا،" / "नहीं।": a pause right after the first word
+_PAUSE_AFTER_FIRST_WORD = re.compile(r"^\W*\w+[\u0900-\u097F\u064B-\u065F]*\s*[,.;:!?،؛।]")
 #: One letter of any script (normalized text is lowercase)
 _LETTER = r"[^\W\d_]"
 _SENTENCE_END = re.compile(r"[.!?؟।]\s+")
@@ -65,11 +67,12 @@ class Parser:
         self.gas = tuple(n(w) for w in lx.gas)
         self.fire = tuple(n(w) for w in lx.fire)
         self.refusal_words = frozenset(n(w) for w in lx.refusal_words)
+        self.refusal_followers = frozenset(n(w) for w in lx.refusal_followers)
         home = language.home
         self.floors = {n(k): v for k, v in home.floors.items()}
         self.doors = {n(k): v for k, v in home.doors.items()}
         stop = _alternation(n(w) for w in lx.address_stopwords)
-        self._address_stop = re.compile(rf"\b(?:{stop})\b") if stop else None
+        self._address_stop = re.compile(rf"(?<!\S)(?:{stop})(?!\S)") if stop else None
         self._entrance = _alternation(n(w) for w in home.entrance_markers)
         self._floor_markers = _alternation(n(w) for w in home.floor_markers)
         self._door_markers = _alternation(n(w) for w in home.door_markers)
@@ -188,9 +191,21 @@ class Parser:
 
     def explicit_no(self, text: str) -> bool:
         """A "no" said in so many words ("no, it's 3A", "wrong"). A "no" read only from "isn't"
-        is usually the problem itself ("the intercom isn't working")."""
+        is usually the problem itself ("the intercom isn't working").
+
+        Where the problem itself often starts with the word for "no" ("No funciona el
+        portero", "لا يعمل المصعد"), `no_start_needs_pause` asks for more than the first word:
+        a pause after it ("No, es el 3º B"), nothing else, or one of `refusal_followers`."""
         words = self.normalize(text).split()
-        return bool(words) and (words[0] in self.no_start or bool(self.refusal_words & set(words)))
+        if not words:
+            return False
+        if self.refusal_words & set(words):
+            return True
+        if words[0] not in self.no_start:
+            return False
+        if not self.language.lexicon.no_start_needs_pause or len(words) == 1:
+            return True
+        return bool(_PAUSE_AFTER_FIRST_WORD.match(text)) or words[1] in self.refusal_followers
 
     def moves_on_to_problem(self, problem: str | None, address: str | None, text: str) -> bool:
         """Answering a read-back with the problem ("the elevator is stuck") accepts it.
@@ -208,7 +223,7 @@ class Parser:
             return None
         v = self.numbers_to_digits(self.normalize(str(value)))
         if self._entrance:
-            v = re.sub(rf"\b(?:{self._entrance})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{self._entrance})(?!\S)", "", v).strip()
         # An entrance is a number (1-2 digits) or a single letter; "the", "el"... are noise
         if not v or not re.fullmatch(rf"\d{{1,2}}|{_LETTER}", v):
             return None
@@ -223,7 +238,7 @@ class Parser:
              *(self.normalize(w) for w in self.language.home.floor_noise)]
         )  # fmt: skip
         if strip:
-            v = re.sub(rf"\b(?:{strip})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{strip})(?!\S)", "", v).strip()
         v = self.floors.get(v, v)
         v = self.numbers_to_digits(v)
         m = re.match(r"(\d+)", v)
@@ -238,7 +253,7 @@ class Parser:
              *(self.normalize(w) for w in self.language.home.door_noise)]
         )  # fmt: skip
         if strip:
-            v = re.sub(rf"\b(?:{strip})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{strip})(?!\S)", "", v).strip()
         v = self.doors.get(v, v)
         return v.upper() or None
 
@@ -249,13 +264,13 @@ class Parser:
         entrance = None
         remainder = t
         if self._entrance:
-            m_entrance = re.search(rf"\b(?:{self._entrance})\s+(\w+)", t)
+            m_entrance = re.search(rf"(?<!\S)(?:{self._entrance})\s+(\S+)", t)
             entrance = self.normalize_entrance(m_entrance.group(1)) if m_entrance else None
-            remainder = re.sub(rf"\b(?:{self._entrance})\s+\w+", " ", t)
+            remainder = re.sub(rf"(?<!\S)(?:{self._entrance})\s+\S+", " ", t)
         door_words = rf"(?:{self._door_markers})" if self._door_markers else None
         # "3a", "3 a": floor and apartment letter together
-        prefix = rf"(?:\b{door_words}\s+)?" if door_words else ""
-        m_compact = re.search(rf"{prefix}\b(\d{{1,2}})\s?({_LETTER})\b", remainder)
+        prefix = rf"(?:(?<!\S){door_words}\s+)?" if door_words else ""
+        m_compact = re.search(rf"{prefix}(?<!\S)(\d{{1,2}})\s?({_LETTER})(?!\S)", remainder)
         # "on 3 a leak..." is not apartment 3A: a spaced one-letter word only counts at the end
         spaced_word = (
             m_compact is not None
@@ -271,22 +286,26 @@ class Parser:
             )
         floor_alt = rf"\d{{1,2}}|{self._floor_words}" if self._floor_words else r"\d{1,2}"
         marker_after = rf"(?:\s+(?:{self._floor_markers}))?" if self._floor_markers else ""
-        m_floor: Any = re.search(rf"\b({floor_alt})\b{marker_after}", remainder)
+        m_floor: Any = re.search(rf"(?<!\S)({floor_alt})(?!\S){marker_after}", remainder)
         if self._floor_markers:
-            m_floor_word = re.search(rf"\b(?:{self._floor_markers})\s+(\d{{1,2}})\b", remainder)
+            m_floor_word = re.search(rf"(?<!\S)(?:{self._floor_markers})\s+(\d{{1,2}})(?!\S)", remainder)
             if m_floor_word:
                 m_floor = m_floor_word
         floor = self.normalize_floor(m_floor.group(1)) if m_floor else None
         door = None
         m_explicit = (
-            re.search(rf"\b{door_words}\s+({_LETTER}|\d{{1,2}})\b", remainder)
+            re.search(rf"(?<!\S){door_words}\s+({_LETTER}|\d{{1,2}})(?!\S)", remainder)
             if door_words
             else None
         )
         if m_explicit and (m_floor is None or m_explicit.start(1) != m_floor.start(1)):
             door = self.normalize_door(m_explicit.group(1))
+        elif m_explicit and m_explicit.group(1).isdigit():
+            # "apartment 5", "फ्लैट 5", "شقة 5": the number after the apartment word is the
+            # apartment, not the floor; the floor is asked for next
+            floor, door = None, self.normalize_door(m_explicit.group(1))
         else:
-            m_door = re.search(rf"\b({_LETTER})\b\s*$", remainder.strip())
+            m_door = re.search(rf"(?<!\S)({_LETTER})(?!\S)\s*$", remainder.strip())
             if m_door and m_floor is not None and m_door.start() > m_floor.start():
                 door = self.normalize_door(m_door.group(1))
         return entrance, floor, door
@@ -305,7 +324,9 @@ class Parser:
         """'Apt 3A', 'portal 2 3º B': what the console shows and the call keeps."""
         home = self.language.home
         template = home.label_with_entrance if entrance else home.label
-        return template.format(entrance=entrance or "", floor=floor, door=door)
+        return template.format(
+            entrance=entrance or "", floor=floor, door=door, ordinal=self.ordinal(floor)
+        )
 
     def spoken_home(self, entrance: str | None, floor: str, door: str) -> str:
         """How the apartment is read back: 'entrance 1, apartment 3A'."""
@@ -357,6 +378,39 @@ class Parser:
             else d["door"].format(door=doors[0])
         )
         return d["sentence"].format(parts=", ".join(parts))
+
+    # ------------------------------------------------------------------ equipment
+
+    def equipment_in(self, text: str, equipment: list[tuple[str, str]]) -> str | None:
+        """The one piece of the building's equipment the sentence names ("the elevator is
+        stuck" -> the elevator's id), or None. Used when the model leaves `equipment` out.
+
+        A description word (not the brand: brands are rarely said) or a synonym must appear,
+        and not right after a place word ("a puddle in front of the elevator" is not about
+        the elevator). Two candidates, or none: None, the model's silence stands."""
+        lx = self.language.lexicon
+        words = self.normalize(text).split()
+        synonyms = {self.normalize(k): self.normalize(v) for k, v in lx.equipment_synonyms.items()}
+        words = [synonyms.get(w, w) for w in words]
+        places = [self.normalize(p).split() for p in lx.place_words]
+        found: set[str] = set()
+        for eq_id, description in equipment:
+            generic = {self.normalize(g) for g in lx.equipment_generic_words}
+            names = {
+                w
+                for w in self.normalize(description.split("(")[0]).split()
+                if len(w) >= 4 and w not in generic
+            }
+            for i, w in enumerate(words):
+                if w not in names:
+                    continue
+                before = words[max(0, i - 4) : i]
+                if any(
+                    before[j : j + len(p)] == p for p in places for j in range(len(before))
+                ):
+                    continue
+                found.add(eq_id)
+        return found.pop() if len(found) == 1 else None
 
     # ------------------------------------------------------------------ set phrases
 
@@ -430,6 +484,11 @@ class Parser:
             else:
                 found = any(contains_phrase(t, k) for k in keys)
             if found:
+                from building_call.i18n import personas
+
+                persona = personas.active(self.language.code)
+                if persona and entry.id and entry.id in persona.faq:
+                    return persona.faq[entry.id]
                 return entry.answer
         return self.language.phrases.faq_default
 
@@ -468,19 +527,9 @@ class Parser:
         return self._join(items, self.language.formats.list_and, "standard")
 
 
-#: "No." / "No, es el 3º B" / "No es esa": a refusal. "No funciona el portero" / "No hay luz"
-#: start with "no" too, but they are the problem: in Spanish the first word is not enough
-_SPANISH_REFUSAL = re.compile(r"^\s*¿?no\b\s*(?:[,.;:!?]|$|es\b|era\b|no\b|esa\b|ese\b)", re.I)
-
-
 class SpanishParser(Parser):
     """The Spanish rules tuned on real calls (2026-08/10): "3º B", "tercero B", "puerta
     izquierda", the last letter or number of the sentence as the door."""
-
-    def explicit_no(self, text: str) -> bool:
-        if _SPANISH_REFUSAL.match(text):
-            return True
-        return bool(self.refusal_words & set(self.normalize(text).split()))
 
     def extract_home(self, text: str) -> tuple[str | None, str | None, str | None]:
         """Respaldo determinista para formatos habituales: 'portal 2', '3º B', 'tercero B'."""

@@ -1,7 +1,6 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider } from 'antd'
-import esES from 'antd/locale/es_ES'
+import { I18nProvider } from './i18n'
 import App from './App'
 import './index.css'
 
@@ -24,9 +23,9 @@ function Root() {
     return () => queries.forEach((c) => c.removeEventListener('change', update))
   }, [])
   return (
-    <ConfigProvider locale={esES} theme={{ token }}>
+    <I18nProvider theme={{ token }}>
       <App />
-    </ConfigProvider>
+    </I18nProvider>
   )
 }
 

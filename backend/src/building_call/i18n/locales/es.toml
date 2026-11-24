@@ -31,6 +31,9 @@ yes = ["si", "correcto", "exacto", "vale", "claro", "afirmativo", "eso es", "asi
 no = ["no", "incorrecto", "negativo", "para nada", "que no", "no es", "tampoco"]
 no_start = ["no"]
 refusal_words = ["incorrecto", "equivocado", "mal"]
+# "No funciona el portero" / "No hay luz" empiezan por "no" y son el problema
+no_start_needs_pause = true
+refusal_followers = ["es", "era", "no", "esa", "ese"]
 # AssemblyAI transcribe un "sí" corto como "S." y un "no" como "N." (medido 2026-08-28)
 short_yes = ["s", "si si", "s s"]
 short_no = ["n", "no no"]
@@ -52,10 +55,17 @@ number_joiner_required = true
 gas = ["gas", "butano", "propano"]
 fire = ["fuego", "humo", "humareda", "incendio", "incendiando", "incendiado", "llamas", "ardiendo", "quemando", "quemado"]
 turn_fillers = ["ah", "eh", "oh", "ay", "uy", "pues", "mire", "mira", "oiga", "oye", "perdon", "perdone", "perdona", "disculpe", "hola", "buenas", "bueno", "vale", "a ver", "entonces", "este", "esto", "y", "o sea"]
+place_words = ["delante del", "delante de", "al lado del", "junto al", "cerca del", "frente al", "enfrente del"]
+equipment_generic_words = ["puerta", "automatica", "automatico", "sistema"]
 loose_answers = ["vale", "bueno"]
 stt_terms = ["portal", "piso", "puerta", "ático", "bajo", "sí", "no"]
 names = ["espanol", "castellano", "spanish", "espanyol", "اسباني", "ہسپانوی", "स्पेनिश"]
 detection = ["el", "la", "los", "las", "de", "del", "que", "y", "en", "un", "una", "es", "no", "se", "por", "con", "para", "mi", "hay", "esta", "pero", "muy", "si", "hola", "gracias", "calle", "piso", "puerta", "ascensor", "luz", "agua"]
+
+[lexicon.equipment_synonyms]
+portero = "portero"
+telefonillo = "portero"
+elevador = "ascensor"
 
 [lexicon.numbers]
 cero = 0
@@ -211,6 +221,7 @@ answer = "No necesito su nombre: con la dirección y la vivienda es suficiente. 
 stems = true
 
 [[faq]]
+id = "who"
 keys = ["quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"]
 answer = "Soy el asistente automático del administrador de su comunidad. "
 stems = true

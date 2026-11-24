@@ -24,7 +24,7 @@ from typing import Any, Protocol
 from building_call import i18n
 from building_call.recording import ConversationRecorder
 from building_call.telephony.audio import PhoneInput, PhoneOutput, energy
-from building_call.telephony.tts import fragments
+from building_call.telephony.tts import fragments, voice_for
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ class CallBridge:
     def __init__(
         self,
         manager: Any,
-        streaming_factory: Callable[[int, list[str], str], Any],
+        streaming_factory: Callable[[int, list[str], str | list[str]], Any],
         tts: Any,
         channel: PhoneChannel,
         *,
@@ -66,6 +66,7 @@ class CallBridge:
         turn_limit_s: float = TURN_LIMIT_S,
         existing_call_id: str | None = None,
         language: str | None = None,
+        persona: str | None = None,
     ) -> None:
         """`existing_call_id`: the console opens the call (and shows it live) before the
         browser dials Twilio. `language`: chosen for this call (the number, a stream
@@ -85,6 +86,7 @@ class CallBridge:
         self.call_id: str | None = None
         self.existing_call_id = existing_call_id
         self.requested_language = language
+        self.persona = persona
         self.language = i18n.get(language).code if language else i18n.default_code()
         self.playing_turn: int | None = None
         self.finished = False
@@ -101,10 +103,18 @@ class CallBridge:
         if self.existing_call_id:
             state = await self.manager.get(self.existing_call_id)
         else:
-            state = await self.manager.begin(self.phone, self.requested_language)
+            state = await self.manager.begin(
+                self.phone, self.requested_language, self.persona
+            )
         self.call_id = state["call_id"]
         self.language = str(state.get("language") or self.language)
-        self._session = self.streaming_factory(16000, self.vocabulary, self.language)
+        self.persona = state.get("persona")
+        # A call whose language nobody chose listens to every enabled language until the
+        # caller's first words decide it (`CallManager` switches, `_follow_language` steers)
+        language: str | list[str] = (
+            self.language if state.get("language_locked") else list(i18n.enabled())
+        )
+        self._session = self.streaming_factory(16000, self.vocabulary, language)
         await self._session.open()
         self._events_task = asyncio.create_task(self._pump_events(), name="telefonia-eventos")
         await self._say(state)
@@ -178,7 +188,8 @@ class CallBridge:
         pcm = bytearray()
         try:
             # Se envía cada trozo según llega del TTS: el vecino oye el inicio sin esperar la frase
-            async for part in fragments(self.tts, text, self.language):
+            voice = voice_for(self.persona, self.language)
+            async for part in fragments(self.tts, text, self.language, voice):
                 pcm += part
                 for chunk in output.convert(part):
                     if first_at is None:
@@ -211,11 +222,31 @@ class CallBridge:
                     },
                 )
 
-    async def _turn(self, text: str) -> None:
+    async def _follow_language(self, state: dict[str, Any]) -> None:
+        """The call switched language: the STT and the voice follow it from the next turn."""
+        language = state.get("language")
+        if not language or language == self.language:
+            return
+        self.language = str(language)
+        set_language = getattr(self._session, "set_language", None)
+        if set_language is not None:
+            try:
+                await set_language(self.language)
+            except Exception:  # noqa: BLE001 - the session keeps every language steered
+                logger.warning("No se pudo fijar el idioma %s en el STT", self.language)
+
+    async def _turn(self, text: str, detail: dict[str, Any] | None = None) -> None:
         assert self.call_id is not None
+        detail = detail or {}
         try:
             state = await asyncio.wait_for(
-                self.manager.message(self.call_id, text), self.turn_limit_s
+                self.manager.message(
+                    self.call_id,
+                    text,
+                    stt_language=detail.get("language_code"),
+                    stt_confidence=detail.get("language_confidence"),
+                ),
+                self.turn_limit_s,
             )
         except Exception:  # noqa: BLE001 - cualquier fallo del turno se le explica al vecino
             self._consecutive_failures += 1
@@ -233,6 +264,7 @@ class CallBridge:
                 await self._farewell_on_failure("el asistente falló varias veces seguidas")
             return
         self._consecutive_failures = 0
+        await self._follow_language(state)
         await self._say(state)
 
     async def _farewell_on_failure(self, reason: str) -> None:
@@ -269,4 +301,4 @@ class CallBridge:
                     await self._interrupt()
                 if self.finished:
                     continue
-                await self._turn(ev.text)
+                await self._turn(ev.text, ev.detail)

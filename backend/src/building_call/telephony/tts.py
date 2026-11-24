@@ -14,6 +14,7 @@ Ambas cachean las frases repetidas (saludo, despedida, preguntas fijas del guion
 from __future__ import annotations
 
 import asyncio
+import audioop
 import base64
 import json
 import logging
@@ -40,13 +41,24 @@ class VoiceSynthesizer(Protocol):
     async def synthesize(self, text: str, language: str | None = None) -> bytes: ...
 
 
+def voice_for(persona: str | None, language: str) -> str | None:
+    """The client's voice for this language (its persona), if it chose one."""
+    from building_call.i18n import personas
+
+    chosen = personas.for_call(persona, language)
+    return chosen.voice if chosen and chosen.voice else None
+
+
 async def fragments(
-    tts: VoiceSynthesizer, text: str, language: str | None = None
+    tts: VoiceSynthesizer, text: str, language: str | None = None, voice: str | None = None
 ) -> AsyncIterator[bytes]:
     """Audio por trozos si el sintetizador sabe darlo así; si no, la frase entera de una vez.
-    `language`: el de la llamada; None = el activo."""
+    `language`: el de la llamada; None = el activo. `voice`: la de la persona del cliente."""
     if isinstance(tts, ElevenLabsSynthesizer):
-        async for chunk in tts.fragments(text, language):
+        async for chunk in tts.fragments(text, language, voice):
+            yield chunk
+    elif isinstance(tts, FallbackSynthesizer):
+        async for chunk in tts.fragments(text, language, voice):
             yield chunk
     else:
         yield await tts.synthesize(text, language)
@@ -229,9 +241,7 @@ class WorkersAISynthesizer:
         return bool(self.account_id and self.api_token) and shutil.which(self.ffmpeg) is not None
 
     async def _request_mp3(self, text: str, lang: str) -> bytes:
-        url = (
-            f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
-        )
+        url = f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
         client = self._client or httpx.AsyncClient(timeout=self.timeout_s)
         try:
             r = await client.post(
@@ -310,12 +320,19 @@ class ElevenLabsSynthesizer:
         """The language's own voice if the locale file names one, else the configured voice."""
         return i18n.get(language).tts.elevenlabs_voice or self.voice
 
-    async def fragments(self, text: str, language: str | None = None) -> AsyncIterator[bytes]:
+    def speaks(self, language: str) -> bool:
+        return bool(i18n.get(language).tts.elevenlabs_language)
+
+    async def fragments(
+        self, text: str, language: str | None = None, voice: str | None = None
+    ) -> AsyncIterator[bytes]:
         spec = i18n.get(language or i18n.active_code())
+        if not spec.tts.elevenlabs_language:
+            raise UnsupportedLanguage(f"ElevenLabs no está configurado para {spec.name}")
         text = text_for_voice(text, spec.code)
         if not text:
             return
-        voice = self.voice_for(spec.code)
+        voice = voice or self.voice_for(spec.code)
         key = f"{spec.code}:{voice}:{text}"
         if (pcm := self._cache.get(key)) is not None:
             yield pcm
@@ -340,33 +357,114 @@ class ElevenLabsSynthesizer:
                     yield chunk
         self._cache.put(key, bytes(full))
 
+    async def synthesize(
+        self, text: str, language: str | None = None, voice: str | None = None
+    ) -> bytes:
+        return b"".join([chunk async for chunk in self.fragments(text, language, voice)])
+
+
+class FallbackSynthesizer:
+    """Per-language provider chain: for each call, the first synthesizer that speaks its
+    language and answers. ElevenLabs (v3/v4) speaks all six languages; Piper has local voices
+    for es, en, ca, ar and hi (none for Urdu); MeloTTS only en and es. Every member's audio is
+    resampled to `rate`, so the phone bridge and the console see one sample rate."""
+
+    def __init__(self, members: list[tuple[VoiceSynthesizer, frozenset[str]]], rate: int = 16000):
+        self.members = members
+        self.rate = rate
+        self.name = "+".join(m.name for m, _ in members) or "none"
+
+    def available(self) -> bool:
+        return any(m.available() for m, _ in self.members)
+
+    def speaks(self, language: str) -> bool:
+        return any(m.available() and language in langs for m, langs in self.members)
+
+    def chain(self, language: str) -> list[VoiceSynthesizer]:
+        return [m for m, langs in self.members if language in langs and m.available()]
+
+    async def warm_up(self) -> None:
+        for member, _ in self.members:
+            if hasattr(member, "warm_up"):
+                await member.warm_up()
+
+    async def fragments(
+        self, text: str, language: str | None = None, voice: str | None = None
+    ) -> AsyncIterator[bytes]:
+        code = i18n.get(language or i18n.active_code()).code
+        chain = self.chain(code)
+        if not chain:
+            raise UnsupportedLanguage(f"Ningún TTS configurado habla {code}")
+        for i, member in enumerate(chain):
+            converter: Any = None
+            sent = False
+            try:
+                async for chunk in fragments(member, text, code, voice):
+                    if member.rate != self.rate:
+                        chunk, converter = audioop.ratecv(
+                            chunk, 2, 1, member.rate, self.rate, converter
+                        )
+                    sent = True
+                    yield chunk
+                return
+            except Exception:
+                # Once audio went out, switching voice mid-sentence is worse than failing
+                if sent or i == len(chain) - 1:
+                    raise
+                logger.warning("TTS %s falló en %s; se prueba el siguiente", member.name, code)
+
     async def synthesize(self, text: str, language: str | None = None) -> bytes:
         return b"".join([chunk async for chunk in self.fragments(text, language)])
 
 
-def create_tts(settings: Any) -> VoiceSynthesizer:
-    """`BC_TTS`: auto (Piper si está, si no Workers AI) | elevenlabs | piper | workers_ai | ninguno."""
-    mode = settings.tts
-    if mode == "elevenlabs":
-        return ElevenLabsSynthesizer(
-            settings.elevenlabs_api_key,
-            settings.elevenlabs_voice,
-            settings.elevenlabs_model,
-            settings.elevenlabs_url,
+def _piper_voices(settings: Any) -> list[tuple[VoiceSynthesizer, frozenset[str]]]:
+    """One Piper model per language: `<BC_PIPER_DIR>/<piper_voice>.onnx` from the locale file;
+    `BC_PIPER_MODEL` keeps serving the default language."""
+    voices: list[tuple[VoiceSynthesizer, frozenset[str]]] = []
+    default = i18n.default_code()
+    if settings.piper_model:
+        voices.append(
+            (PiperSynthesizer(settings.piper_bin, settings.piper_model), frozenset({default}))
         )
-    piper = PiperSynthesizer(settings.piper_bin, settings.piper_model)
+    if settings.piper_dir:
+        for code in i18n.enabled():
+            stem = i18n.get(code).tts.piper_voice
+            path = Path(settings.piper_dir) / f"{stem}.onnx"
+            if stem and path.exists() and not (code == default and settings.piper_model):
+                voices.append((PiperSynthesizer(settings.piper_bin, str(path)), frozenset({code})))
+    return voices
+
+
+def create_tts(settings: Any) -> VoiceSynthesizer:
+    """`BC_TTS`: auto | elevenlabs | piper | workers_ai | none. The chosen provider goes first;
+    for a language it can't speak, the next available one that can (see `FallbackSynthesizer`).
+    If the chosen one covers every enabled language on its own, it is returned as is."""
+    mode = settings.tts
+    if mode in ("none", "ninguno"):
+        return UnavailableSynthesizer()
+    enabled = frozenset(i18n.enabled())
+    eleven = ElevenLabsSynthesizer(
+        settings.elevenlabs_api_key,
+        settings.elevenlabs_voice,
+        settings.elevenlabs_model,
+        settings.elevenlabs_url,
+    )
     workers = WorkersAISynthesizer(
         settings.cloudflare_account_id,
         settings.cloudflare_api_token,
         settings.cloudflare_tts_model,
     )
-    if mode == "piper":
-        return piper
-    if mode == "workers_ai":
-        return workers
-    if mode == "auto":
-        if piper.available():
-            return piper
-        if workers.available():
-            return workers
-    return UnavailableSynthesizer()
+    providers: dict[str, list[tuple[VoiceSynthesizer, frozenset[str]]]] = {
+        "elevenlabs": [(eleven, frozenset(c for c in enabled if eleven.speaks(c)))],
+        "piper": _piper_voices(settings),
+        "workers_ai": [(workers, frozenset(c for c in enabled if i18n.get(c).tts.melotts_lang))],
+    }
+    order = ["piper", "workers_ai", "elevenlabs"] if mode == "auto" else [mode]
+    order += [p for p in ("elevenlabs", "piper", "workers_ai") if p not in order]
+    first = providers.get(order[0], [])
+    if len(first) == 1 and first[0][1] >= enabled and mode != "auto":
+        return first[0][0]
+    members = [m for name in order for m in providers[name] if m[0].available() or name == mode]
+    if not members:
+        return UnavailableSynthesizer()
+    return FallbackSynthesizer(members)

@@ -1,5 +1,6 @@
 import { Statistic, Table, Tag, Typography } from 'antd'
 import { rate } from '../texts'
+import { t } from '../i18n'
 
 export interface MeasuredTurn {
   turn: number
@@ -33,7 +34,7 @@ export function LatencyPanel({ turns }: { turns: MeasuredTurn[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <Statistic title="Última respuesta" value={ms(last)} suffix="ms" />
+        <Statistic title={t('latency.last')} value={ms(last)} suffix="ms" />
         <Statistic
           title="p50"
           value={ms(p50)}
@@ -43,7 +44,7 @@ export function LatencyPanel({ turns }: { turns: MeasuredTurn[] }) {
         <Statistic title="p95" value={ms(p95)} suffix="ms" />
         <div>
           <Typography.Text type="secondary" style={{ fontSize: 14 }}>
-            Calificación p50
+            {t('latency.rating')}
           </Typography.Text>
           <div style={{ marginTop: 6 }}>
             <Tag color={cal.color} style={{ fontSize: 14, padding: '2px 10px' }}>
@@ -53,8 +54,7 @@ export function LatencyPanel({ turns }: { turns: MeasuredTurn[] }) {
         </div>
       </div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Respuesta = fin de la voz del vecino → inicio del audio del asistente. Umbrales: ≤700 excelente ·
-        ≤1200 objetivo · ≤1500 tolerable · ≤2000 mal · &gt;2000 muy mal.
+        {t('latency.legend')}
       </Typography.Text>
       <Table
         size="small"
@@ -65,37 +65,37 @@ export function LatencyPanel({ turns }: { turns: MeasuredTurn[] }) {
         columns={[
           { title: '#', dataIndex: 'turn', width: 40 },
           {
-            title: 'Modo',
+            title: t('latency.col.mode'),
             width: 90,
-            render: (_, t) => (t.mode === 'text' ? <Tag>texto</Tag> : <Tag color="blue">{t.stt}</Tag>),
+            render: (_, row) => (row.mode === 'text' ? <Tag>{t('latency.text')}</Tag> : <Tag color="blue">{row.stt}</Tag>),
           },
           { title: 'VAD', dataIndex: 'vad_silence_ms', width: 60, render: ms },
           { title: 'STT', dataIndex: 'stt_ms', width: 60, render: ms },
           {
-            title: 'Servidor',
+            title: t('latency.col.server'),
             width: 110,
-            render: (_, t) => (
+            render: (_, row) => (
               <span>
-                {ms(t.server_ms)}
-                {t.llm_calls ? (
-                  <Typography.Text type="secondary"> (LLM {ms(t.interpretation_ms)})</Typography.Text>
+                {ms(row.server_ms)}
+                {row.llm_calls ? (
+                  <Typography.Text type="secondary"> (LLM {ms(row.interpretation_ms)})</Typography.Text>
                 ) : (
                   <Typography.Text type="secondary"> (0 LLM)</Typography.Text>
                 )}
               </span>
             ),
           },
-          { title: 'Red', dataIndex: 'network_ms', width: 55, render: ms },
+          { title: t('latency.col.network'), dataIndex: 'network_ms', width: 55, render: ms },
           { title: 'TTS', dataIndex: 'tts_start_ms', width: 55, render: ms },
           {
-            title: 'Respuesta',
+            title: t('latency.col.response'),
             width: 130,
-            render: (_, t) => {
-              const c = rate(t.response_ms)
+            render: (_, row) => {
+              const c = rate(row.response_ms)
               return (
                 <span>
-                  <b>{ms(t.response_ms)}</b> {t.response_ms !== undefined && <Tag color={c.color}>{c.name}</Tag>}
-                  {t.interrupted && <Tag>cortado</Tag>}
+                  <b>{ms(row.response_ms)}</b> {row.response_ms !== undefined && <Tag color={c.color}>{c.name}</Tag>}
+                  {row.interrupted && <Tag>{t('latency.cut')}</Tag>}
                 </span>
               )
             },

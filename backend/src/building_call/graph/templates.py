@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from building_call.i18n import registry
+from building_call.i18n import personas, registry
 
 #: Longitud máxima de un mensaje: esto se dice por teléfono, y la redacción compara longitudes
 #: (`len(texto) > 2.5 * len(plantilla) + 80` descarta la paráfrasis).
@@ -478,7 +478,12 @@ def render(id_: str, **values: object) -> RenderedText:
     """Renderiza una plantilla en el idioma activo de la llamada. Solo diccionarios y
     `str.format`: no toca la base de datos."""
     code = registry.active_code()
-    text, version = _OVERRIDES.get((code, id_)) or (base_text(id_, code), 0)
+    override = _OVERRIDES.get((code, id_))
+    if override is None:
+        persona = personas.active(code)
+        if persona is not None and id_ in persona.templates:
+            override = (persona.templates[id_], 0)
+    text, version = override or (base_text(id_, code), 0)
     return RenderedText(text.format(**values), id_, version)
 
 
