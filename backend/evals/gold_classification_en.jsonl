@@ -1,0 +1,46 @@
+{"request": "There's a water leak in the bathroom and it's flooding the floor", "category": "plumbing", "urgencies": ["high", "emergency"]}
+{"request": "The elevator got stuck between two floors and there's a woman inside", "category": "elevator", "urgencies": ["high", "emergency"]}
+{"request": "The lobby light isn't working and the stairs are dark", "category": "electrical", "urgencies": ["medium", "high"]}
+{"request": "The light bulb on the second-floor landing has been burned out for a week", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "The faucet in the shared courtyard is dripping a little", "category": "plumbing", "urgencies": ["low"]}
+{"request": "The lobby door doesn't close properly and stays open at night", "category": "locksmith", "urgencies": ["medium", "high"]}
+{"request": "I left my key inside and I can't get into the storage room", "category": "locksmith", "urgencies": ["medium", "low"]}
+{"request": "The trash in the lobby hasn't been picked up in days and it smells awful", "category": "cleaning", "urgencies": ["medium", "low"]}
+{"request": "There's a big crack in the facade and chunks of masonry are falling onto the sidewalk", "category": "masonry", "urgencies": ["high", "emergency"]}
+{"request": "A tile came loose in the entryway", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "I'd like to request a copy of the minutes of the last HOA meeting", "category": "administrative", "urgencies": ["low"]}
+{"request": "I smell gas on the third-floor landing", "category": "unclassifiable", "urgencies": ["emergency", "high"]}
+{"request": "I saw a UFO on the roof", "category": "unclassifiable", "urgencies": ["low"]}
+{"request": "The elevator makes a strange noise but it works", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "The building's breaker keeps tripping and we lose power in the garage", "category": "electrical", "urgencies": ["medium", "high"]}
+{"request": "The intercom in my apartment doesn't ring when someone buzzes", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "The light switch next to the elevator doesn't work", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "Next to the elevator door there's a damp stain on the wall", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "It's stuck", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "The elevator takes forever to come", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "The elevator buttons don't light up but the elevator works", "category": "elevator", "urgencies": ["low", "medium"]}
+{"request": "The landing light bulb has burned out, the one across from the elevator", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "The intercom doesn't work, you can't hear anything when someone buzzes", "category": ["electrical", "unclassifiable"], "urgencies": ["low", "medium"]}
+{"request": "It stopped again", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "There's graffiti on the facade of the building", "category": "painting", "urgencies": ["low"]}
+{"request": "The hedges in the shared garden are growing over the sidewalk", "category": "gardening", "urgencies": ["low", "medium"]}
+{"request": "The pipe running next to the electric meter room is dripping", "category": "plumbing", "urgencies": ["low", "medium", "high"]}
+{"request": "There's a lot of trash piled up next to the elevator", "category": "cleaning", "urgencies": ["low", "medium"]}
+{"request": "The elevator in entrance two won't move and its doors are open", "category": "elevator", "urgencies": ["medium", "high"]}
+{"request": "A tile has come loose in the lobby and someone could trip", "category": "masonry", "urgencies": ["medium", "high"]}
+{"request": "I want to know when the next residents' meeting is", "category": "administrative", "urgencies": ["low"]}
+{"request": "The lock on the shared storage room is broken", "category": "locksmith", "urgencies": ["low", "medium"]}
+{"request": "It's not working anymore, same thing again", "category": "unclassifiable", "urgencies": ["low", "medium", "high"]}
+{"request": "My doorbell doesn't ring", "category": "electrical", "urgencies": ["low", "medium"]}
+{"request": "Water is coming out from under the door of the trash room", "category": "plumbing", "urgencies": ["medium", "high"]}
+{"request": "There are a lot of cockroaches in the lobby at night", "category": "unclassifiable", "urgencies": ["medium", "low", "high"]}
+{"request": "The lobby door won't close and it stays open", "category": "locksmith", "urgencies": ["medium", "high"]}
+{"request": "There's a damp stain on the ceiling of the third-floor landing", "category": "masonry", "urgencies": ["low", "medium"]}
+{"request": "The elevator jerks when it goes up", "category": "elevator", "urgencies": ["medium", "high"]}
+{"request": "The garage remote doesn't open the door", "category": "locksmith", "urgencies": ["low", "medium"]}
+{"request": "I need a certificate showing my dues are paid up", "category": "administrative", "urgencies": ["low"]}
+{"request": "A big branch fell from the tree in the courtyard", "category": "gardening", "urgencies": ["medium", "high"]}
+{"request": "Smoke is coming out of the electric meter room", "category": ["electrical", "unclassifiable"], "urgencies": ["emergency"]}
+{"request": "There's a fire in the shared garage", "category": "unclassifiable", "urgencies": ["emergency"]}
+{"request": "There's a strong smell of gas in the lobby, I think there's a leak", "category": ["unclassifiable", "plumbing"], "urgencies": ["emergency"]}
+{"request": "A child is trapped in the elevator", "category": "elevator", "urgencies": ["emergency", "high"]}

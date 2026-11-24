@@ -95,6 +95,40 @@ El asistente puede atender un número real (Twilio Media Streams; proveedor Prov
 credenciales y una URL https pública, `uv run python -m building_call.telephony.configure` deja el
 número apuntando a la API. Guía completa en `docs/TELEFONIA.md`.
 
+### Languages (Spanish and US English)
+
+The agent speaks Spanish (es-ES) and US English (en-US) on one shared LangGraph graph. A language
+is configuration, not code: `backend/src/building_call/i18n/locales/<code>.toml` holds its
+providers and voices, the word lists of the deterministic paths (yes/no, set phrases, apartments,
+spelled-out numbers), the translations of every template and the admin-facing phrases. Spanish is
+the source language of the templates (`graph/templates.py`); the tests check that every other
+language translates all of them with the same variables.
+
+- `BC_LANGUAGE` sets the default language of a call; `POST /api/calls {"language": "en"}`, a
+  `language` Media Streams parameter or the LiveKit job metadata choose another one per call.
+- `CallManager` activates the call's language around each turn (`i18n.use`), so nodes,
+  templates and parsers read it without threading it through every helper.
+- Prompts: Spanish keeps its tuned prompt set; English uses the prompts ported from the US
+  version (`llm/prompts_en.py`), measured with `evals/compare_models.py --language en`.
+- Tests: `tests/` runs the flows in Spanish and `tests/en/` the same flows in English with the
+  US demo buildings (`MemoryRepository("en")`).
+
+### Calling the agent from the browser through Twilio
+
+The console can call the agent over the phone network without a phone number: the Twilio Voice
+JavaScript SDK (WebRTC) dials a TwiML App whose voice URL is the same webhook as the number, so
+the call goes through `<Connect><Stream>`, μ-law 8 kHz, the server TTS, barge-in and the delivery
+ledger exactly like a real call. The console opens the call first and shows it live.
+
+1. In Twilio: an API key (Standard) for the Access Tokens. Keep the SID and secret in
+   SecretBroker (`BC_TWILIO_API_KEY_SID`, `BC_TWILIO_API_KEY_SECRET`).
+2. A public https URL for the API (`BC_PUBLIC_URL`, e.g. the ngrok domain) and
+   `BC_TELEPHONY=twilio` with the account SID and auth token.
+3. `uv run python -m building_call.telephony.configure --twiml-app` creates (or updates) the
+   "FinCall console" TwiML App and prints `BC_TWILIO_TWIML_APP_SID`. It buys nothing.
+4. In the console, choose **Twilio** as the voice mode and start the call. On a trial account
+   Twilio plays a short notice first; the console presses the key for you.
+
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
 bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);
