@@ -179,6 +179,7 @@ keys = ["my name", "need a name", "want a name"]
 answer = "I don't need your name: the address and the apartment are enough. "
 
 [[faq]]
+id = "who"
 keys = ["who is this", "who are you", "machine", "robot", "are you a person", "are you human", "are you real", "is this a bot"]
 answer = "I'm FinCall, the automated assistant for your building's property manager. "
 

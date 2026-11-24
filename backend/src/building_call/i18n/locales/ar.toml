@@ -1,0 +1,234 @@
+# العربية (الفصحى المعاصرة، تنسيقات الإمارات). Modern Standard Arabic, UAE formats: the
+# agency's Middle East clients are in the UAE. Right-to-left in the console.
+code = "ar"
+locale = "ar-AE"
+name = "Arabic"
+native_name = "العربية"
+rtl = true
+parser = "generic"
+prompts = "en"
+
+[stt]
+provider = "assemblyai"
+language_code = "ar"
+fallback = "browser"
+
+[tts]
+elevenlabs_language = "ar"
+piper_voice = "ar_JO-kareem-medium"
+twilio_say_language = "ar-AE"
+twilio_say_voice = "Polly.Hala-Neural"
+browser_lang = "ar-AE"
+
+[formats]
+currency = "AED"
+emergency_number = "999"
+list_or = "أو"
+list_and = "و"
+
+[lexicon]
+yes = ["نعم", "أجل", "بلى", "صحيح", "تمام", "طيب", "حسنا", "أكيد", "بالضبط", "مضبوط", "ايوه", "اي", "هذا صحيح", "نعم صحيح"]
+no = ["لا", "كلا", "غير صحيح", "خطأ", "ليس صحيحا", "ليست"]
+no_start = ["لا", "كلا"]
+refusal_words = ["خطأ", "غلط"]
+# "لا يعمل المصعد" (the elevator doesn't work) starts with "لا" and is the problem
+no_start_needs_pause = true
+refusal_followers = ["ليس", "ليست", "هذا", "هذه", "لا"]
+short_yes = ["نعم نعم"]
+short_no = ["لا لا"]
+not_heard = ["هل أنت هناك", "هل تسمعني", "أعد من فضلك", "أعد", "كرر", "كرر من فضلك", "لم أسمع", "لم أسمعك", "ماذا قلت", "عفوا"]
+hello = ["مرحبا", "ألو", "الو", "مرحبا مرحبا"]
+filler = ["لحظة", "لحظة من فضلك", "انتظر", "انتظر لحظة", "ثانية", "دعني أرى", "لا تغلق"]
+greetings = ["مرحبا", "السلام عليكم", "صباح الخير", "مساء الخير", "أهلا", "ألو"]
+verbal_tics = ["آه أه اه ام يعني طيب حسنا من فضلك لو سمحت عفوا مرحبا ألو الو نعم لا أنا هل يا سيدي سيدتي"]
+person = ["شخص", "إنسان", "موظف", "موظفة", "أحد", "أتحدث مع", "التحدث مع", "خدمة العملاء", "آلة", "روبوت", "المدير", "مسؤول"]
+farewell = ["مع السلامة", "إلى اللقاء", "وداعا", "سأتصل لاحقا", "انسى الأمر", "لا شيء آخر", "شكرا مع السلامة"]
+meta_bot = ["تصنيف", "صنفت", "الأولوية", "الملخص", "قلت", "المساعد", "آلة", "روبوت"]
+address_stopwords = ["شارع", "الشارع", "طريق", "شقة", "مبنى", "بناية", "برج", "رقم", "في", "من", "على", "أسكن", "أنا", "اتصل"]
+address_filler = ["أسكن", "اسكن", "أنا", "انا", "في", "من", "على", "رقم", "شارع", "مبنى", "بناية", "مرحبا", "نعم", "يعني"]
+gas = ["غاز", "الغاز", "رائحة غاز"]
+fire = ["حريق", "نار", "النار", "دخان", "الدخان", "يحترق", "تحترق", "لهب"]
+turn_fillers = ["آه", "أه", "اه", "ام", "يعني", "طيب", "حسنا", "عفوا", "مرحبا", "ألو", "الو", "و"]
+loose_answers = ["طيب", "حسنا", "تمام"]
+stt_terms = ["مدخل", "الطابق", "شقة", "نعم", "لا"]
+names = ["عربي", "العربية", "بالعربي", "arabic", "arabe", "arab", "عربی"]
+
+[lexicon.numbers]
+"صفر" = 0
+"واحد" = 1
+"واحدة" = 1
+"اثنان" = 2
+"اثنين" = 2
+"ثلاثة" = 3
+"اربعة" = 4
+"أربعة" = 4
+"خمسة" = 5
+"ستة" = 6
+"سبعة" = 7
+"ثمانية" = 8
+"تسعة" = 9
+"عشرة" = 10
+
+[home]
+entrance_markers = ["مدخل", "المدخل", "بلوك"]
+floor_markers = ["الطابق", "طابق", "الدور", "دور"]
+door_markers = ["شقة", "الشقة"]
+door_noise = ["رقم"]
+floor_words_not_in_text = []
+label = "شقة {floor}{door}"
+label_with_entrance = "المدخل {entrance}، شقة {floor}{door}"
+spoken = "الشقة {floor}{door}"
+spoken_with_entrance = "المدخل {entrance}، الشقة {floor}{door}"
+stt_entrance = "مدخل {entrance}"
+stt_home = "شقة {floor}{door}"
+
+[home.floors]
+"الأرضي" = "0"
+"الارضي" = "0"
+"الأول" = "1"
+"الاول" = "1"
+"الثاني" = "2"
+"الثالث" = "3"
+"الرابع" = "4"
+"الخامس" = "5"
+"السادس" = "6"
+"السابع" = "7"
+"الثامن" = "8"
+"التاسع" = "9"
+"العاشر" = "10"
+
+[home.missing]
+door = "رقم الشقة"
+floor = "الطابق"
+both = "الطابق ورقم الشقة"
+
+[home.part_names]
+entrance = "المدخل"
+floor = "الطابق"
+door = "الشقة"
+
+[home.describe]
+entrances = "المداخل {list}"
+floors = "الطوابق من {first} إلى {last}"
+floor = "الطابق {floor}"
+doors = "الشقق {list}"
+door = "الشقة {door}"
+sentence = "في هذا المبنى {parts}. "
+
+[phrases]
+default_question = "كيف يمكنني مساعدتك؟"
+your_building = "مبناك"
+detail_prefix = "تفاصيل:"
+objection = "المتصل غير موافق: «{objection}»."
+equipment = "المعدة: {description}"
+maintainer = "تتم صيانتها بواسطة {name} ({target})"
+contract = "العقد {contract}"
+warranty = "الضمان حتى {date}"
+proposed = "الفني الذي كان سيتم إبلاغه: {name}."
+emergency_note = "طوارئ: الاتصال بالهاتف الرسمي للمبنى وإبلاغ المنسق. التنبيهات محاكاة: المساعد لا يتصل ولا يرسل أي شيء بعد."
+equipment_detail = "ما الذي يحدث بالضبط في {kind}؟"
+faq_default = "يمكنني فقط المساعدة في أعطال الصيانة وطلبات المبنى. "
+turn_failed = "عذرا، لم أفهم جيدا. هل يمكنك الإعادة؟"
+technical_failure = "عذرا، أواجه مشكلة تقنية. سأبلغ إدارة العقار ليتواصلوا معك. شكرا لاتصالك."
+service_unavailable = "عذرا، الخدمة غير متاحة حاليا. يرجى المحاولة لاحقا."
+lowercase_summary = false
+
+[[faq]]
+keys = ["تسجيل", "مسجلة", "تسجل", "يسجل"]
+answer = "نعم، يتم تسجيل المكالمة لمتابعة بلاغك ولضبط الجودة. "
+
+[[faq]]
+keys = ["متى", "كم من الوقت", "كم يستغرق", "كم سيستغرق"]
+answer = "يعتمد ذلك على الفني؛ وستبقيك إدارة العقار على اطلاع. "
+
+[[faq]]
+keys = ["اسمي", "لماذا تحتاج اسمي"]
+answer = "لا أحتاج إلى اسمك: العنوان ورقم الشقة يكفيان. "
+
+[[faq]]
+id = "who"
+keys = ["من أنت", "من معي", "آلة", "روبوت", "هل أنت إنسان", "هل أنت شخص"]
+answer = "أنا المساعد الآلي لإدارة عقار مبناك. "
+
+[[faq]]
+keys = ["تكلفة", "التكلفة", "أدفع", "سعر", "رسوم"]
+answer = "هذه المكالمة لا تكلفك أي رسوم إضافية. "
+
+[categories]
+plumbing = "السباكة"
+electrical = "الكهرباء"
+elevator = "المصعد"
+cleaning = "النظافة"
+locksmith = "الأقفال"
+masonry = "أعمال البناء"
+painting = "الدهان"
+gardening = "الحدائق"
+general_maintenance = "الصيانة العامة"
+administrative = "الأعمال الإدارية"
+
+[detail_questions]
+electrical = "ليعرف الكهربائي ما ينتظره: ما الذي لا يعمل بالضبط، وأين هو؟"
+plumbing = "ليعرف السباك ما ينتظره: هل هو تنقيط أم تدفق قوي، وهل تعرف مصدره؟"
+elevator = "هل المصعد متوقف تماما أم يعمل أحيانا؟ هل يوجد أحد بداخله؟"
+locksmith = "هل الباب لا يُغلق، أم لا يُفتح، أم المشكلة في القفل؟ منذ متى؟"
+cleaning = "أين بالضبط، ومنذ متى؟"
+masonry = "أين الضرر بالضبط، وما حجمه تقريبا؟"
+painting = "ما المنطقة التي تحتاج إلى دهان، وما المشكلة فيها: رطوبة، تقشر، كتابات؟"
+_ = "هل يمكنك إعطائي تفاصيل أكثر: أين بالضبط، ومنذ متى؟"
+unclassifiable = "ما الذي لا يعمل بالضبط، وأين هو؟"
+
+[work_type_reasons]
+replacement = "يحتاج إلى استبدال أو أعمال إنشائية: يحتاج إلى عرض سعر وموافقة."
+insurance_claim = "تخريب أو ضرر من طرف ثالث: يُنظر في مطالبة على تأمين المبنى."
+neighbour_dispute = "هذا خلاف بين الجيران، وليس عطلا."
+private_unit = "يبدو أنه داخل شقة خاصة، وليس في منطقة مشتركة."
+
+[templates]
+"global.repeat" = "بالتأكيد، سأعيد. {message}"
+"global.not_heard" = "عذرا، سأعيد مرة أخرى. {message}"
+"global.filler" = "بالتأكيد، خذ وقتك. تفضل عندما تكون جاهزا."
+"global.out_of_scope" = "عذرا، يمكنني فقط المساعدة في أعطال الصيانة وطلبات المبنى. {question}"
+"identify_estate.greeting" = "مرحبا، معك المساعد الذكي لمبناك. قد يتم تسجيل هذه المكالمة لتحسين الخدمة. عن أي مبنى تتصل؟ من فضلك أخبرني باسم الشارع والرقم."
+"identify_estate.greeting_reply" = "أهلا بك. عن أي مبنى تتصل؟ من فضلك أخبرني باسم الشارع والرقم."
+"identify_estate.candidate" = "وجدت {address}. هل هذا صحيح؟"
+"identify_estate.confirm_yes_no" = "عذرا، هل هذا هو المبنى الصحيح؟ من فضلك قل نعم أو لا."
+"identify_estate.retry" = "{reason} هل يمكنك أن تخبرني باسم الشارع والرقم مرة أخرى؟"
+"identify_estate.reason_not_found" = "لم أجد هذا العنوان بين المباني التي نديرها."
+"identify_estate.reason_not_understood" = "لم أفهم عنوان المبنى."
+"identify_estate.reason_not_that_one" = "حسنا، ليس هذا المبنى."
+"estate_not_identified.collect" = "عذرا، لا أستطيع العثور على مبناك؛ ربما لا تديره هذه الإدارة. إذا أردت، أخبرني باختصار بما تريد الإبلاغ عنه وسأسجله."
+"estate_not_identified.farewell" = "شكرا لك. سجلت مكالمتك ليراجعها فريقنا. مع السلامة."
+"identify_home.ask" = "شكرا. ما هي شقتك؟ أخبرني بالمدخل إن وجد، والطابق، ورقم الشقة."
+"identify_home.partial" = "تم: {has}. و{falta}؟"
+"identify_home.several_entrances" = "الشقة {floor}{door} موجودة في أكثر من مدخل. أي مدخل هو مدخلك، {entrances}؟"
+"identify_home.retry" = "لا أجد هذه الشقة. {hint}ما هو الطابق ورقم الشقة؟"
+"identify_home.floor_door" = "في الطابق {floor} الشقق هي {doors}. أيها شقتك؟"
+"identify_home.reask" = "ما هو الطابق ورقم الشقة؟"
+"confirm_home.ask" = "إذن العنوان {address}، {home}. هل هذا صحيح؟"
+"confirm_home.yes_no" = "عذرا، فقط للتأكد: {address}، {home}. هل هذا صحيح؟"
+"confirm_home.wrong" = "أعتذر عن ذلك. ما هو الطابق ورقم الشقة؟"
+"home_not_identified.collect" = "لم أتمكن من تحديد شقتك. أخبرني بطلبك على أي حال؛ سأرسل ملخصا إلى إدارة العقار مع رقم هاتفك."
+"home_not_identified.noted" = "لم أتمكن من تحديد شقتك، لكنني سجلت بلاغك. سأرسل ملخصا إلى إدارة العقار مع رقم هاتفك ليتواصلوا معك. مع السلامة."
+"home_not_identified.farewell" = "شكرا لك. أرسلت الملخص إلى إدارة العقار، وسيتواصلون معك. مع السلامة."
+"collect_request.ask" = "{greeting}ما المشكلة؟"
+"collect_request.retry" = "عذرا، لم أفهم المشكلة. ماذا يحدث؟"
+"collect_request.greeting" = "ممتاز. "
+"confirm_summary.summary" = "دعني أتأكد أنني فهمت: {summary}. هل هذا صحيح؟"
+"confirm_summary.confirm_yes_no" = "عذرا، لم أفهم. هل الملخص صحيح؟ من فضلك قل نعم أو لا."
+"confirm_summary.correcting" = "حسنا، سأصحح ذلك."
+"confirm_summary.repeat_request" = "حسنا. أخبرني مرة أخرى بما يحدث، وبتفاصيل أكثر إن أمكن."
+"handle_emergency.notice" = "{seguridad} للتأكيد فقط: هناك حالة طوارئ في {address}. هل هذا صحيح؟"
+"handle_emergency.gas_safety" = "إذا شممت رائحة غاز، لا تشغل الأضواء أو الأجهزة ولا تشعل أي شيء؛ اخرج، وإذا كان ذلك آمنا افتح النوافذ. إذا كان أحد في خطر، اتصل بالرقم 999."
+"handle_emergency.fire_safety" = "إذا كان هناك حريق أو دخان، اخرج عن طريق الدرج، ولا تستخدم المصعد، واتصل بالرقم 997."
+"handle_emergency.general_safety" = "إذا كان أحد في خطر، اتصل بالرقم 999 الآن ولا تعرض نفسك للخطر."
+"unclassifiable.farewell" = "هذا الطلب خارج ما يمكنني التعامل معه تلقائيا. أرسلت ملخصا إلى إدارة العقار ليراجعه شخص. شكرا لاتصالك."
+"handoff_to_human.farewell" = "حسنا. سأرسل الآن ملخص مكالمتك إلى إدارة العقار ليتواصل معك شخص في أقرب وقت ممكن. شكرا، مع السلامة."
+"farewell.farewell" = "حسنا. شكرا لاتصالك؛ يمكنك الاتصال مجددا في أي وقت. مع السلامة."
+"notify_channel.closing" = "سجلت بلاغك. {notice} إذا لم يتواصل معك أحد خلال أربع وعشرين ساعة، يرجى الاتصال بنا مرة أخرى. شكرا لاتصالك، مع السلامة."
+"notify_channel.emergency_close" = "سجلت حالة الطوارئ وأحولها بأولوية إلى إدارة العقار. إذا كان أحد في خطر، اتصل بالرقم 999. شكرا لاتصالك."
+"notify_channel.no_specialist_notice" = "ستراجعه إدارة العقار اليوم، وتعين الفني المناسب، و{contact} لتحديد موعد الزيارة."
+"notify_channel.coordinator_notice" = "بسبب الاستعجال، أبلغ الآن المنسق و{specialist}. {specialist_capitalized} {contact} في أقرب وقت ممكن ليخبرك متى يمكنه الحضور؛ لا أستطيع تأكيد الموعد بعد."
+"notify_channel.administrator_notice" = "سأحوله إلى إدارة العقار، التي ستراجعه اليوم و{contact} لتشرح لك كيف ستتم معالجته."
+"notify_channel.specialist_notice" = "سأبلغ {specialist} الآن، و{contact} لتحديد موعد الزيارة. لا أستطيع إعطاءك موعدا بعد لأنه يعتمد على توفره؛ الخطوة التالية هي اتصاله بك."
+"notify_channel.phone_contact" = "سيتصل بك على هذا الرقم"
+"notify_channel.generic_contact" = "سيتواصل معك"

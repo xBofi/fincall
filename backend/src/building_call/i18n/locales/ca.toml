@@ -1,0 +1,290 @@
+# Català. Tracte de vostè, com en castellà. Mateix graf; plantilles traduïdes més avall.
+code = "ca"
+locale = "ca-ES"
+name = "Catalan"
+native_name = "Català"
+rtl = false
+parser = "generic"
+prompts = "en"
+
+[stt]
+provider = "assemblyai"
+language_code = "ca"
+fallback = "browser"
+
+[tts]
+elevenlabs_language = "ca"
+piper_voice = "ca_ES-upc_ona-medium"
+twilio_say_language = "ca-ES"
+twilio_say_voice = "Polly.Arlet-Neural"
+browser_lang = "ca-ES"
+
+[formats]
+currency = "EUR"
+emergency_number = "112"
+list_or = "o"
+list_and = "i"
+
+[lexicon]
+yes = ["si", "correcte", "exacte", "d'acord", "val", "clar", "efectivament", "perfecte", "aixi es", "es aixo", "ok"]
+no = ["no", "incorrecte", "negatiu", "de cap manera", "no es", "tampoc"]
+no_start = ["no"]
+refusal_words = ["incorrecte", "equivocat", "malament"]
+no_start_needs_pause = true
+refusal_followers = ["es", "era", "no", "aquesta", "aquest"]
+short_yes = ["s", "si si"]
+short_no = ["n", "no no"]
+not_heard = ["hi es", "hi ets", "encara hi es", "m ho repeteix", "repeteixi", "repeteix", "no l he sentit", "no el sento", "que ha dit", "com diu", "com"]
+hello = ["hola", "escolti", "digui", "hola hola"]
+filler = ["un moment", "un segon", "esperi", "esperi s", "a veure", "deixi m mirar", "no pengi"]
+greetings = ["hola", "bon dia", "bona tarda", "bona nit", "que tal", "digui m"]
+verbal_tics = ["ah eh oh ai doncs vale bé miri escolti perdoni perdó disculpi hola com que si no em li el la vostè senyor senyora és"]
+person = ["persona", "huma", "operador", "operadora", "algu", "parlar amb", "que m atengui", "maquina", "robot", "administrador"]
+farewell = ["adeu", "fins ara", "fins despres", "res mes", "ja trucare", "deixi ho", "oblidi ho", "penjo", "gracies adeu"]
+person_farewell_substring = true
+meta_bot = ["classific", "urgencia", "resum", "entes", "has dit", "diras", "dius", "assistent", "maquina"]
+address_stopwords = ["carrer", "c", "avinguda", "av", "plaça", "pl", "passeig", "pg", "numero", "num", "n", "del", "de", "la", "el", "els", "les", "l", "d", "a", "visc", "truco", "des", "es"]
+address_filler = ["visc", "a", "al", "la", "el", "es", "soc", "truco", "des", "de", "del", "numero", "carrer", "avinguda", "plaça", "passeig", "finca", "edifici", "miri", "doncs", "hola", "bon", "dia"]
+number_joiners = ["i"]
+number_joiner_required = false
+gas = ["gas", "butà", "propà"]
+fire = ["foc", "fum", "incendi", "flames", "cremant", "crema", "cremat"]
+turn_fillers = ["ah", "eh", "oh", "ai", "doncs", "miri", "escolti", "perdoni", "perdó", "disculpi", "hola", "bé", "vale", "a veure", "aleshores", "llavors", "i", "o sigui"]
+loose_answers = ["vale", "bé", "d'acord"]
+stt_terms = ["escala", "pis", "porta", "àtic", "baixos", "sí", "no"]
+names = ["catala", "catalan", "catalan", "katalanisch"]
+detection = ["el", "la", "els", "les", "de", "que", "i", "amb", "per", "meu", "meva", "aquest", "aquesta", "molt", "bon", "dia", "gracies", "carrer", "pis", "porta", "llum", "aigua", "fuita", "bany", "tinc", "visc", "soc", "som", "hi", "ha", "hem", "ara", "tambe", "sisplau", "doncs", "noi", "ningu", "res"]
+
+[lexicon.numbers]
+zero = 0
+u = 1
+un = 1
+una = 1
+dos = 2
+dues = 2
+tres = 3
+quatre = 4
+cinc = 5
+sis = 6
+set = 7
+vuit = 8
+nou = 9
+deu = 10
+onze = 11
+dotze = 12
+tretze = 13
+catorze = 14
+quinze = 15
+setze = 16
+disset = 17
+divuit = 18
+dinou = 19
+vint = 20
+trenta = 30
+quaranta = 40
+cinquanta = 50
+seixanta = 60
+setanta = 70
+vuitanta = 80
+noranta = 90
+cent = 100
+
+[home]
+entrance_markers = ["escala", "portal"]
+floor_markers = ["pis", "planta"]
+door_markers = ["porta", "lletra"]
+floor_words_not_in_text = ["entresol", "principal"]
+label = "{ordinal} {door}"
+label_with_entrance = "escala {entrance} {ordinal} {door}"
+spoken = "{ordinal} {door}"
+spoken_with_entrance = "escala {entrance}, {ordinal} {door}"
+stt_entrance = "escala {entrance}"
+stt_door = "porta {door}"
+stt_home = "{floor_name} {door}"
+
+[home.floors]
+baixos = "0"
+primer = "1"
+primera = "1"
+segon = "2"
+segona = "2"
+tercer = "3"
+tercera = "3"
+quart = "4"
+quarta = "4"
+cinque = "5"
+cinquena = "5"
+sise = "6"
+sisena = "6"
+sete = "7"
+setena = "7"
+vuite = "8"
+vuitena = "8"
+nove = "9"
+novena = "9"
+dese = "10"
+desena = "10"
+atic = "atic"
+entresol = "entresol"
+principal = "principal"
+
+[home.floor_names]
+0 = "baixos"
+1 = "primer"
+2 = "segon"
+3 = "tercer"
+4 = "quart"
+5 = "cinquè"
+6 = "sisè"
+7 = "setè"
+8 = "vuitè"
+9 = "novè"
+10 = "desè"
+
+[home.missing]
+door = "la porta"
+floor = "el pis"
+both = "el pis i la porta"
+
+[home.part_names]
+entrance = "escala"
+floor = "pis"
+door = "porta"
+
+[home.describe]
+entrances = "escales {list}"
+floors = "pisos de l'{first} al {last}"
+floor = "pis {floor}"
+doors = "portes {list}"
+door = "porta {door}"
+sentence = "En aquesta finca hi ha {parts}. "
+
+# CLDR (ca): 1r, 2n, 3r, 4t, 5è
+[home.ordinal_suffixes]
+one = "r"
+two = "n"
+few = "t"
+other = "è"
+
+[phrases]
+default_question = "En què el puc ajudar?"
+your_building = "la seva finca"
+detail_prefix = "Detall:"
+objection = "El veí no hi està d'acord: «{objection}»."
+equipment = "Equip: {description}"
+maintainer = "mantenidor {name} ({target})"
+contract = "contracte {contract}"
+warranty = "garantia fins al {date}"
+proposed = "Professional que s'hauria avisat: {name}."
+emergency_note = "EMERGÈNCIA: trucar al telèfon oficial de la finca i avisar el coordinador. Avisos simulats: l'assistent encara no truca ni envia res."
+equipment_detail = "Què li passa exactament, al {kind}, i des de quan?"
+faq_default = "Només puc gestionar incidències i sol·licituds de la seva finca. "
+turn_failed = "Perdoni, no l'he entès bé. Ho pot repetir?"
+technical_failure = "Disculpi, tinc un problema tècnic. Avisaré l'administrador perquè es posi en contacte amb vostè. Gràcies per trucar."
+service_unavailable = "Ho sentim, el servei no està disponible en aquest moment. Torni-ho a provar més tard."
+lowercase_summary = false
+
+[[faq]]
+keys = ["grav", "enregistr"]
+answer = "Sí: la trucada s'enregistra per gestionar la seva incidència i per control de qualitat. "
+stems = true
+
+[[faq]]
+keys = ["quan vindran", "quant trigaran", "trigar", "termini"]
+answer = "El termini depèn del professional; l'administrador l'informarà del seguiment. "
+stems = true
+
+[[faq]]
+keys = ["per que vol el meu nom", "per que necessita el meu nom", "el meu nom"]
+answer = "No necessito el seu nom: amb l'adreça i l'habitatge n'hi ha prou. "
+stems = true
+
+[[faq]]
+id = "who"
+keys = ["qui es", "qui ets", "maquina", "robot", "es una persona"]
+answer = "Sóc l'assistent automàtic de l'administrador de la seva comunitat. "
+stems = true
+
+[[faq]]
+keys = ["cost", "costa", "pagar", "preu"]
+answer = "Aquesta trucada no té cap cost addicional per a vostè. "
+stems = true
+
+[categories]
+plumbing = "lampisteria"
+electrical = "electricitat"
+elevator = "ascensor"
+cleaning = "neteja"
+locksmith = "serralleria"
+masonry = "paleteria"
+painting = "pintura"
+gardening = "jardineria"
+general_maintenance = "manteniment general"
+administrative = "gestió administrativa"
+
+[detail_questions]
+electrical = "Per orientar l'electricista: és un sol llum o diversos, i no s'encenen o fan pampallugues?"
+plumbing = "Per orientar el lampista: degota o surt aigua amb força, i sap d'on ve?"
+elevator = "L'ascensor està aturat del tot o funciona a estones? Hi ha algú a dins?"
+locksmith = "La porta no tanca, no obre, o és el pany? Des de quan?"
+cleaning = "En quina zona exactament i des de quan?"
+masonry = "On és exactament el desperfecte i quina mida té, aproximadament?"
+painting = "Quina zona cal pintar exactament i què li passa: humitat, desconxats, pintades?"
+_ = "Em pot donar algun detall més: on és exactament i des de quan passa?"
+unclassifiable = "Què és exactament el que falla i on és?"
+
+[work_type_reasons]
+replacement = "Cal canviar-ho sencer o fer obra: necessita pressupost i aprovació."
+insurance_claim = "Vandalisme o danys d'un tercer: valorar el comunicat a l'assegurança de la comunitat."
+neighbour_dispute = "És un problema de convivència entre veïns, no una avaria."
+private_unit = "Sembla que és dins d'un habitatge particular, no en una zona comuna."
+
+[templates]
+"global.repeat" = "És clar, l'hi repeteixo. {message}"
+"global.not_heard" = "Perdoni, l'hi repeteixo. {message}"
+"global.filler" = "És clar, sense pressa. Digui'm quan vulgui."
+"global.out_of_scope" = "Ho sento, només puc gestionar incidències i sol·licituds de la finca. {question}"
+"identify_estate.greeting" = "Hola, l'atén un assistent d'intel·ligència artificial de la seva comunitat. Aquesta trucada pot ser enregistrada per millorar la qualitat del servei. En quina finca es troba? Digui'm el carrer i el número."
+"identify_estate.greeting_reply" = "Hola, bon dia. En quina finca es troba? Digui'm el carrer i el número."
+"identify_estate.candidate" = "He identificat {address}. És correcte?"
+"identify_estate.confirm_yes_no" = "Perdoni, és correcta aquesta finca? Respongui sí o no."
+"identify_estate.retry" = "{reason} Em pot repetir el carrer i el número?"
+"identify_estate.reason_not_found" = "No he trobat aquesta adreça entre les finques que gestionem."
+"identify_estate.reason_not_understood" = "No he entès l'adreça de la finca."
+"identify_estate.reason_not_that_one" = "Entesos, no és aquesta."
+"estate_not_identified.collect" = "Ho sento, no aconsegueixo identificar la finca; potser no la gestiona aquest administrador. Si vol, expliqui'm breument què volia comunicar i quedarà registrat."
+"estate_not_identified.farewell" = "Gràcies. He registrat la seva trucada perquè l'equip de qualitat la revisi. Adéu."
+"identify_home.ask" = "Gràcies. Quin és el seu habitatge? Indiqui'm l'escala si n'hi ha, el pis i la porta."
+"identify_home.partial" = "Pres nota: {has}. I {falta}?"
+"identify_home.several_entrances" = "El {floor} {door} existeix a més d'una escala. A quina escala viu, {entrances}?"
+"identify_home.retry" = "No trobo aquest habitatge. {hint}Quin és el seu pis i la seva porta?"
+"identify_home.floor_door" = "Al {floor} les portes són {doors}. Quina és la seva?"
+"identify_home.reask" = "Quin és el seu pis i la seva porta?"
+"confirm_home.ask" = "Llavors és {address}, {home}. És correcte?"
+"confirm_home.yes_no" = "Perdoni, només per comprovar-ho: {address}, {home}. És correcte?"
+"confirm_home.wrong" = "Disculpi. Quin és el seu pis i la seva porta?"
+"home_not_identified.collect" = "No he pogut identificar correctament l'habitatge. Expliqui'm igualment la seva sol·licitud; enviaré un resum a l'administrador amb el seu número de telèfon."
+"home_not_identified.noted" = "No he pogut identificar el seu habitatge, però he pres nota de la incidència. Enviaré un resum a l'administrador amb el seu número de telèfon perquè es posi en contacte amb vostè. Adéu."
+"home_not_identified.farewell" = "Gràcies. He enviat el resum a l'administrador, que es posarà en contacte amb vostè. Adéu."
+"collect_request.ask" = "{greeting}Expliqui'm, què passa?"
+"collect_request.retry" = "Perdoni, no he entès el problema. Què passa?"
+"collect_request.greeting" = "Perfecte. "
+"confirm_summary.summary" = "Li resumeixo: {summary}. És correcte?"
+"confirm_summary.confirm_yes_no" = "Perdoni, no l'he entès. És correcte el resum? Respongui sí o no."
+"confirm_summary.correcting" = "D'acord, ho corregeixo."
+"confirm_summary.repeat_request" = "D'acord. Expliqui'm de nou què passa, amb més detall si pot."
+"handle_emergency.notice" = "{seguridad} Li confirmo: hi ha una emergència a {address}. És així?"
+"handle_emergency.gas_safety" = "Si fa olor de gas, no encengui llums ni aparells ni faci flama; surti i, si és segur, obri les finestres. Si algú corre perill, truqui al 112."
+"handle_emergency.fire_safety" = "Si hi ha foc o fum, surti per l'escala, sense fer servir l'ascensor, i truqui al 112."
+"handle_emergency.general_safety" = "Si algú corre perill, truqui al 112 ara mateix i no es posi en risc."
+"unclassifiable.farewell" = "Aquesta sol·licitud va més enllà del que puc gestionar automàticament. He enviat un resum a l'administrador perquè la revisi una persona. Gràcies per trucar."
+"handoff_to_human.farewell" = "D'acord. Envio ara un resum de la seva trucada a l'administrador perquè una persona es posi en contacte amb vostè com més aviat millor. Gràcies, adéu."
+"farewell.farewell" = "D'acord. Gràcies per trucar; pot tornar a trucar quan vulgui. Adéu."
+"notify_channel.closing" = "He registrat la seva incidència. {notice} Si en vint-i-quatre hores ningú no l'ha contactat, torni'ns a trucar. Gràcies per la seva trucada, adéu."
+"notify_channel.emergency_close" = "He registrat l'emergència i la passo amb prioritat a l'administrador de la seva comunitat. Si algú corre perill, truqui al 112. Gràcies per la seva trucada."
+"notify_channel.no_specialist_notice" = "L'administrador la revisarà avui mateix, li assignarà el professional adequat i {contact} per concertar la visita."
+"notify_channel.coordinator_notice" = "Per la urgència aviso ara mateix el coordinador i {specialist}. {specialist_capitalized} {contact} com més aviat millor per dir-li quan hi pot anar; encara no li puc confirmar l'hora."
+"notify_channel.administrator_notice" = "La passo a l'administrador, que la revisarà avui mateix i {contact} per explicar-li com es resoldrà."
+"notify_channel.specialist_notice" = "Ho comunico ara a {specialist}, que {contact} per concertar la visita. Encara no li puc donar hora perquè depèn de la seva disponibilitat; el pas següent és la seva trucada."
+"notify_channel.phone_contact" = "el trucarà a aquest mateix número"
+"notify_channel.generic_contact" = "es posarà en contacte amb vostè"

@@ -15,7 +15,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from difflib import SequenceMatcher
 from time import perf_counter
 from typing import Any
@@ -34,6 +34,7 @@ from building_call.graph.manifest import verify_transition
 from building_call.graph.state import CallState, Trace
 from building_call.graph.templates import CATALOG as TEMPLATE_CATALOG
 from building_call.graph.templates import render
+from building_call.i18n.formatting import format_date
 from building_call.i18n.models import Phrases
 from building_call.i18n.parsing import Parser
 from building_call.llm import wire
@@ -216,11 +217,19 @@ def _suggestion(
         if equipment.get("contract"):
             data.append(ph.contract.format(contract=equipment["contract"]))
         if equipment.get("warranty_until"):
-            data.append(ph.warranty.format(date=equipment["warranty_until"]))
+            data.append(ph.warranty.format(date=_date(equipment["warranty_until"])))
         parts.append(", ".join(data) + ".")
     if proposed is not None and (objection or work_type != "repair"):
         parts.append(ph.proposed.format(name=proposed.name))
     return " ".join(parts) or None
+
+
+def _date(value: Any) -> str:
+    """A stored ISO date as the call's language writes it ('Nov 24, 2026', '24 nov 2026')."""
+    try:
+        return format_date(date.fromisoformat(str(value)))
+    except ValueError:
+        return str(value)
 
 
 def _emergency_suggestion(state: CallState) -> str | None:

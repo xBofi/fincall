@@ -31,6 +31,9 @@ yes = ["si", "correcto", "exacto", "vale", "claro", "afirmativo", "eso es", "asi
 no = ["no", "incorrecto", "negativo", "para nada", "que no", "no es", "tampoco"]
 no_start = ["no"]
 refusal_words = ["incorrecto", "equivocado", "mal"]
+# "No funciona el portero" / "No hay luz" empiezan por "no" y son el problema
+no_start_needs_pause = true
+refusal_followers = ["es", "era", "no", "esa", "ese"]
 # AssemblyAI transcribe un "sí" corto como "S." y un "no" como "N." (medido 2026-08-28)
 short_yes = ["s", "si si", "s s"]
 short_no = ["n", "no no"]
@@ -211,6 +214,7 @@ answer = "No necesito su nombre: con la dirección y la vivienda es suficiente. 
 stems = true
 
 [[faq]]
+id = "who"
 keys = ["quien es", "quien eres", "maquina", "robot", "eres una persona", "es usted una persona"]
 answer = "Soy el asistente automático del administrador de su comunidad. "
 stems = true

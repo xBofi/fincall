@@ -55,6 +55,8 @@ class Formats(_Strict):
 
 
 class FaqEntry(_Strict):
+    #: Stable id so a persona can answer it its own way ("who" = "who are you?")
+    id: str = ""
     keys: list[str]
     answer: str
     #: True = the keys are word stems ("grab" matches "grabando"); False = whole words
@@ -128,8 +130,12 @@ class Lexicon(_Strict):
     number_joiner_required: bool = False
     gas: list[str] = Field(default_factory=list)
     fire: list[str] = Field(default_factory=list)
-    #: Words that only say the problem is not fixed ("isn't working"), not a refusal
+    #: Words that refuse wherever they are ("wrong", "incorrecto")
     refusal_words: list[str] = Field(default_factory=list)
+    #: The problem often starts with the word for "no" ("No funciona…"): a first "no" only
+    #: refuses with a pause after it, alone, or followed by one of `refusal_followers`
+    no_start_needs_pause: bool = False
+    refusal_followers: list[str] = Field(default_factory=list)
     #: Turn fillers for the voice agent: a turn made only of these waits for more ("Ah,
     #: vale, perdón."). Multi-word ones go together ("a ver": a lone "A." is a door letter)
     turn_fillers: list[str] = Field(default_factory=list)

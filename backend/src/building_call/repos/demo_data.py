@@ -318,7 +318,7 @@ def english(repo: MemoryRepository) -> None:
 
 
 #: Language -> demo set. A language without its own set uses the English one
-DEMOS = {"es": spanish, "en": english}
+DEMOS = {"es": spanish, "ca": spanish, "en": english}
 
 
 def load(repo: MemoryRepository, language: str) -> None:
