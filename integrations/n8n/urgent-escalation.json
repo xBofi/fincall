@@ -1,0 +1,136 @@
+{
+  "name": "Fincall · urgent ticket to SMS escalation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fincall-urgent",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "0e6e3fc2-6bbe-5417-aaa3-f03e36ded16c",
+      "name": "Fincall webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "ddb0b349-fc68-5d8d-8cee-111ca91827ed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fincall signs every request: X-Fincall-Signature = v1=HMAC-SHA256(secret, \"<ts>.<body>\").\n// The body is canonical JSON (sorted keys, compact), so it can be rebuilt from the parsed object.\n// Needs NODE_FUNCTION_ALLOW_BUILTIN=crypto and FINCALL_WEBHOOK_SECRET in n8n's environment.\nconst crypto = require('crypto');\nconst secret = $env.FINCALL_WEBHOOK_SECRET;\nif (!secret) throw new Error('FINCALL_WEBHOOK_SECRET is not set in n8n');\n\nconst canonical = (v) =>\n  Array.isArray(v) ? '[' + v.map(canonical).join(',') + ']'\n  : v !== null && typeof v === 'object'\n    ? '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}'\n    : JSON.stringify(v);\n\nconst req = $input.first().json;\nconst h = req.headers || {};\nconst ts = Number(h['x-fincall-timestamp']);\nif (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) {\n  throw new Error('Missing or stale X-Fincall-Timestamp (replay?)');\n}\nconst expected = 'v1=' + crypto.createHmac('sha256', secret).update(ts + '.' + canonical(req.body)).digest('hex');\nconst got = String(h['x-fincall-signature'] || '');\nif (got.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) {\n  throw new Error('Invalid X-Fincall-Signature');\n}\nreturn [{ json: { ...req.body, idempotency_key: h['idempotency-key'] || req.body.id } }];"
+      },
+      "id": "03c24f3c-0863-579c-8e89-4e7449273b2d",
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Escalate what cannot wait for the morning: emergencies, high-urgency tickets, and calls the\n// assistant handed to a person.\nconst urgent = (e) =>\n  e.type === 'emergency.detected' ||\n  e.type === 'handoff.requested' ||\n  (e.type === 'ticket.created' && ['high', 'emergency'].includes(e.data?.urgency));\nreturn $input.all().filter((i) => urgent(i.json)).map(({ json: e }) => {\n  const d = e.data || {};\n  const what = {\n    'emergency.detected': 'EMERGENCIA',\n    'handoff.requested': 'Vecino pide una persona',\n    'ticket.created': `Urgencia ${d.urgency}`,\n  }[e.type];\n  // SMS: short, no personal data beyond the building and the apartment\n  const sms = `[Fincall] ${what}: ${d.building || d.estate_id || '-'} ${d.apartment || ''}. ${d.summary || d.reason || d.request || ''}`.slice(0, 300);\n  return { json: { ...e, sms } };\n});"
+      },
+      "id": "a3b34eea-a7cf-5757-b49e-9eda80bc181d",
+      "name": "Only urgent events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "logic": "removeItemsWithAlreadySeenKeyValues",
+        "dedupeValue": "={{ $json.idempotency_key }}",
+        "options": {}
+      },
+      "id": "5dc51aa9-5e77-55b1-94b2-02b70b5c56b6",
+      "name": "Skip retried events",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "from": "+34000000000",
+        "to": "+34000000001",
+        "message": "={{ $json.sms }}",
+        "options": {}
+      },
+      "id": "8d9a201e-c562-59c9-aa46-21d88045f1b2",
+      "name": "SMS the on-call coordinator",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Fincall webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Only urgent events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only urgent events": {
+      "main": [
+        [
+          {
+            "node": "Skip retried events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip retried events": {
+      "main": [
+        [
+          {
+            "node": "SMS the on-call coordinator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Madrid"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
