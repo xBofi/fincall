@@ -122,7 +122,8 @@ class Settings(BaseSettings):
     # Telefonía real (proveedor Pendiente en la bóveda; Twilio es la primera implementación).
     # Cuando haya número: BC_TELEPHONY=twilio, BC_PUBLIC_URL=https://... (túnel o dominio),
     # credenciales de Twilio y `python -m building_call.telephony.configure`.
-    telephony: str = "none"  # none | twilio
+    # none | twilio | vonage | "twilio,vonage" (several carriers can be live at once)
+    telephony: str = "none"
     public_url: str = ""
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
@@ -137,6 +138,10 @@ class Settings(BaseSettings):
     twilio_number_languages: dict[str, str] = {}
     twilio_number_personas: dict[str, str] = {}
     telephony_bargein_words: int = 2
+    # Vonage Voice API (adapter built from the docs, NOT tested live: no account yet). The
+    # signature secret verifies the signed answer/event webhooks (JWT HS256).
+    vonage_signature_secret: str = ""
+    vonage_number: str = ""  # E.164, informative
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
     tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
     # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).

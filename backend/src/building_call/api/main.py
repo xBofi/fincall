@@ -73,16 +73,19 @@ from building_call.services import CallManager, CallNotFound
 from building_call.settings import settings
 from building_call.stt import UnavailableRecognizer, VoiceRecognizer, WhisperRecognizer
 from building_call.stt_streaming import AssemblyAIStreamingSession, validate_eu_endpoint
-from building_call.telephony.bridge import CallBridge, PhoneChannel
+from building_call.telephony.bridge import CallBridge
 from building_call.telephony.browser import (
     browser_ready_reason,
     console_identity,
     voice_access_token,
 )
 from building_call.telephony.browser_line import BrowserLineChannel, create_browser_line_router
+from building_call.telephony.carrier import CarrierChannel
 from building_call.telephony.configure import not_ready_reason
 from building_call.telephony.tts import create_tts, fragments
 from building_call.telephony.twilio import create_twilio_router
+from building_call.telephony.vonage import create_vonage_router
+from building_call.telephony.vonage import not_ready_reason as vonage_not_ready
 
 logger = logging.getLogger(__name__)
 
@@ -421,11 +424,19 @@ def create_app(
     # Telefonía: puente proveedor-agnóstico + adaptador Twilio. Sin configurar, solo expone /salud
     tts = create_tts(settings)
 
-    def telephony_ready() -> str | None:
+    def twilio_ready() -> str | None:
         return not_ready_reason(settings, tts.available(), streaming_factory is not None)
 
+    def vonage_ready() -> str | None:
+        return vonage_not_ready(settings, tts.available(), streaming_factory is not None)
+
+    def telephony_ready() -> str | None:
+        """None if at least one carrier can take calls; else why the first one cannot."""
+        reasons = [twilio_ready(), vonage_ready()]
+        return None if None in reasons else reasons[0]
+
     async def bridge_factory(
-        channel: PhoneChannel,
+        channel: CarrierChannel,
         phone: str | None,
         existing_call_id: str | None = None,
         language: str | None = None,
@@ -451,7 +462,8 @@ def create_app(
             persona=persona if persona in personas.personas() else None,
         )
 
-    app.include_router(create_twilio_router(settings, bridge_factory, telephony_ready))
+    app.include_router(create_twilio_router(settings, bridge_factory, twilio_ready))
+    app.include_router(create_vonage_router(settings, bridge_factory, vonage_ready))
 
     # The phone path without Twilio: the console's microphone as a phone line (same bridge)
     def browser_line_ready() -> str | None:
@@ -487,7 +499,7 @@ def create_app(
     @app.post("/api/telephony/twilio/browser-token")
     async def twilio_browser_token(user: Any = Depends(access.requires())) -> dict[str, str]:
         """Access Token so the console can call the agent through Twilio from the browser."""
-        reason = telephony_ready() or browser_ready_reason(settings)
+        reason = twilio_ready() or browser_ready_reason(settings)
         if reason is not None:
             raise HTTPException(503, reason)
         identity = console_identity(user.username)
@@ -545,7 +557,8 @@ def create_app(
             "provider": settings.telephony,
             "items": reason is None,
             "reason": reason,
-            "number": settings.twilio_number or None,
+            "number": settings.twilio_number or settings.vonage_number or None,
+            "carriers": {"twilio": twilio_ready(), "vonage": vonage_ready()},
             "public_url": settings.public_url or None,
             "tts": tts.name,
             "tts_available": tts.available(),
@@ -594,7 +607,7 @@ def create_app(
             "livekit": livekit_configured(),
             "access": access.mode,
             "telephony": settings.telephony if telephony_ready() is None else None,
-            "twilio_browser": telephony_ready() is None and browser_ready_reason(settings) is None,
+            "twilio_browser": twilio_ready() is None and browser_ready_reason(settings) is None,
             "browser_line": browser_line_ready() is None,
             "server_tts": tts.name if tts.available() else None,
             "graphs": sorted(REGISTRY),
