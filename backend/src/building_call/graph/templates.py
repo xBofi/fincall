@@ -435,6 +435,14 @@ CATALOG: dict[str, Template] = dict(
             "es su llamada.",
         ),
         _p(
+            "notify_channel.visit_notice",
+            "notify_channel",
+            "Caso normal con la herramienta de agenda (n8n): el hueco está reservado de forma "
+            "provisional en la agenda del profesional, que lo confirma al llamar.",
+            "Se lo comunico ahora a {specialist}. Según su agenda puede pasar {slot}; se lo "
+            "dejo reservado y {contact} para confirmarlo.",
+        ),
+        _p(
             "notify_channel.phone_contact",
             "notify_channel",
             "Fragmento: hay teléfono del llamante, así que le devolverán la llamada.",

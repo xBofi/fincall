@@ -142,6 +142,18 @@ class Settings(BaseSettings):
     # signature secret verifies the signed answer/event webhooks (JWT HS256).
     vonage_signature_secret: str = ""
     vonage_number: str = ""  # E.164, informative
+
+    # n8n (or any automation endpoint). Outgoing call events: signed webhooks (HMAC-SHA256 over
+    # "<timestamp>.<body>"), retries with backoff, Idempotency-Key. Empty URL = off.
+    n8n_webhook_url: str = ""
+    n8n_webhook_secret: str = ""  # shared with the receiver; SecretBroker id bc-n8n-webhook-secret
+    n8n_webhook_events: str = ""  # comma list of event types; empty = all
+    n8n_webhook_timeout_s: float = 5.0
+    n8n_webhook_attempts: int = 4
+    # Tool the agent calls during the call (`book_visit` node). Empty URL = no tool node. The
+    # timeout is spent inside the caller's last turn: keep it short and measure response_ms.
+    n8n_tool_url: str = ""
+    n8n_tool_timeout_s: float = 1.5
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
     tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
     # ElevenLabs (BC_TTS=elevenlabs). Sin residencia UE salvo plan Enterprise (BC_ELEVENLABS_URL).

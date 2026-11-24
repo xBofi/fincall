@@ -51,6 +51,8 @@ from building_call.graph.state import CallState
 from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
+from building_call.integrations.n8n_tool import N8nTools
+from building_call.integrations.webhooks import RetryPolicy, WebhookSender
 from building_call.kpis_api import create_kpis_router
 from building_call.livekit_api import (
     create_livekit_router,
@@ -344,6 +346,30 @@ def signing_secret() -> str:
     return secrets.token_urlsafe(48)
 
 
+def create_webhook_sender(s: Any) -> WebhookSender | None:
+    if not s.n8n_webhook_url:
+        return None
+    if not s.n8n_webhook_secret:
+        logger.error("BC_N8N_WEBHOOK_URL sin BC_N8N_WEBHOOK_SECRET: los eventos no se envían")
+        return None
+    return WebhookSender(
+        url=s.n8n_webhook_url,
+        secret=s.n8n_webhook_secret,
+        timeout_s=s.n8n_webhook_timeout_s,
+        policy=RetryPolicy(attempts=max(1, s.n8n_webhook_attempts)),
+        only=frozenset(e.strip() for e in s.n8n_webhook_events.split(",") if e.strip()),
+    )
+
+
+def create_n8n_tools(s: Any) -> N8nTools | None:
+    if not s.n8n_tool_url:
+        return None
+    if not s.n8n_webhook_secret:
+        logger.error("BC_N8N_TOOL_URL sin BC_N8N_WEBHOOK_SECRET: la herramienta queda apagada")
+        return None
+    return N8nTools(s.n8n_tool_url, s.n8n_webhook_secret, s.n8n_tool_timeout_s)
+
+
 def create_app(
     deps: Dependencies | None = None,
     stt: VoiceRecognizer | None = None,
@@ -369,7 +395,11 @@ def create_app(
     if streaming_factory is AUTO:
         streaming_factory = _default_streaming_factory()
     recognizer: VoiceRecognizer = stt
-    manager = CallManager(deps, phraser=create_phraser())
+    # n8n: outgoing call events and the agent's tools. Both off without their URL
+    webhooks = create_webhook_sender(settings)
+    if deps.tools is None:
+        deps.tools = create_n8n_tools(settings)
+    manager = CallManager(deps, phraser=create_phraser(), events=webhooks)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):  # type: ignore[no-untyped-def]
@@ -394,6 +424,8 @@ def create_app(
         purge_task = asyncio.create_task(periodic_purge())
         yield
         purge_task.cancel()
+        if webhooks is not None:
+            await webhooks.drain()
 
     app = FastAPI(title="Building Call Assistant", version="0.4.0", lifespan=lifespan)
     app.state.repo = deps.repo
@@ -609,6 +641,7 @@ def create_app(
             "telephony": settings.telephony if telephony_ready() is None else None,
             "twilio_browser": twilio_ready() is None and browser_ready_reason(settings) is None,
             "browser_line": browser_line_ready() is None,
+            "n8n": {"events": webhooks is not None, "tool": deps.tools is not None},
             "server_tts": tts.name if tts.available() else None,
             "graphs": sorted(REGISTRY),
             "thresholds_ms": {name: limit for limit, name in THRESHOLDS_MS},

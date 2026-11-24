@@ -70,6 +70,9 @@ class Dependencies:
     )
     # Hybrid routing (BC_NLP_HYBRID): the turn classifier answers before the LLM when it is sure
     router: HybridRouter | None = None
+    # Tools the agent can call during the call (n8n webhooks, `integrations.n8n_tool`). None =
+    # no tools: the flow is exactly the one without integrations.
+    tools: Any = None
 
     def discard_speculations(self, call_id: str) -> None:
         for future in self.speculations.pop(call_id, {}).values():
@@ -2046,10 +2049,52 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         await deps.repo.save_incident(incident)
         return _advance(
             state,
-            "notify_channel",
+            "book_visit" if _can_book_visit(state) else "notify_channel",
             incident_id=incident.id,
             result="incident_created",
             trace=_with_trace(state, node, "incident_created", incident.id),
+        )
+
+    def _can_book_visit(state: CallState) -> bool:
+        """Only a repair with a maintainer already assigned, and never an emergency: there the
+        caller is told to call 112 and the administrator is warned first."""
+        return (
+            deps.tools is not None
+            and bool(state.get("specialist_id"))
+            and state.get("urgency") != "emergency"
+        )
+
+    async def book_visit(state: CallState) -> dict[str, Any]:
+        """Tool node: ask n8n for a slot in the maintainer's calendar and hold it.
+
+        Says nothing by itself; `notify_channel` mentions the slot only if it was booked. Any
+        failure falls back to the usual closing ("he will call you to arrange the visit")."""
+        node = "book_visit"
+        request = {
+            "call_id": state["call_id"],
+            "incident_id": state.get("incident_id"),
+            "category": state.get("category"),
+            "urgency": state.get("urgency"),
+            "estate_id": state.get("estate_id"),
+            "building": state.get("estate_address"),
+            "apartment": state.get("home_label"),
+            "specialist_id": state.get("specialist_id"),
+            "specialist_name": state.get("specialist_name"),
+            "summary": state.get("summary") or state.get("request"),
+        }
+        try:
+            outcome = await deps.tools.book_visit(request)
+            visit = outcome.as_state()
+        except Exception as e:  # noqa: BLE001 - a tool never breaks the call
+            logger.exception("book_visit falló en la llamada %s", state["call_id"])
+            visit = {"status": "error", "slot": None, "booking_id": None, "reason": type(e).__name__}
+        detail = visit["slot"] if visit["status"] == "booked" else str(visit.get("reason"))
+        return _advance(
+            state,
+            "notify_channel",
+            visit=visit,
+            turn_timings=_timings(state, tool_ms=visit.get("ms")),
+            trace=_with_trace(state, node, f"visit_{visit['status']}", detail or ""),
         )
 
     async def notify_channel(state: CallState) -> dict[str, Any]:
@@ -2112,9 +2157,18 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             )
         else:
             target = specialist if rule_target == "specialist" else rule_target
-            notice = render(
-                "notify_channel.specialist_notice", specialist=specialist, contact=contact
-            )
+            visit = state.get("visit") or {}
+            if visit.get("status") == "booked" and visit.get("slot"):
+                notice = render(
+                    "notify_channel.visit_notice",
+                    specialist=specialist,
+                    slot=visit["slot"],
+                    contact=contact,
+                )
+            else:
+                notice = render(
+                    "notify_channel.specialist_notice", specialist=specialist, contact=contact
+                )
         message = render("notify_channel.closing", notice=notice)
         return _advance(
             state,
@@ -2145,5 +2199,6 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         "farewell": farewell,
         "assign_specialist": assign_specialist,
         "create_ticket": create_ticket,
+        "book_visit": book_visit,
         "notify_channel": notify_channel,
     }
