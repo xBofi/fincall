@@ -60,16 +60,21 @@ como está compilado y enseña, nodo a nodo, por qué la llamada fue a cada siti
 - **Repetir llamada**: cualquier llamada guardada, paso a paso (← → Inicio Fin Espacio), con el
   turno de la conversación de cada visita y el diff de estado o el estado acumulado.
 - **Demo**: `http://localhost:5173/demo` reproduce una llamada grabada a través del grafo real,
-  sin sesión, backend ni telefonía (`?theme=dark`, `?lang=en`). Se vuelve a grabar con
+  sin sesión, backend ni telefonía (`?theme=dark`, `?lang=en|ca|ar|hi|ur`). Se vuelve a grabar con
   `cd backend; uv run python evals/record_demo_call.py --model qwen3.5:latest`; un test falla si
   el grafo cambia y la grabación no.
 
 | Claro | Oscuro |
 | --- | --- |
 | ![Demo, tema claro](docs/images/routing/demo-light.png) | ![Demo, tema oscuro](docs/images/routing/demo-dark.png) |
-| ![Repetición con diff de estado](docs/images/routing/replay-state-light.png) | ![Interfaz RTL](docs/images/routing/demo-rtl.png) |
+| ![Repetición con diff de estado](docs/images/routing/replay-state-light.png) | ![Árabe, RTL](docs/images/routing/demo-rtl.png) |
+| ![Urdu, RTL](docs/images/routing/demo-rtl-ur-light.png) | ![Simular llamada con el grafo en vivo](docs/images/routing/simulate-live-light.png) |
 
-Tests: `cd backend; uv run pytest tests/test_routing_view.py` y `cd frontend; corepack pnpm run test`.
+La vista está en los seis idiomas de la consola (es, en, ca, ar, hi, ur; RTL en árabe y urdu): textos
+con claves `routing.*`/`flow.*` en `frontend/src/i18n/messages/`, y títulos de nodo y condiciones de
+ruta traducidos por id (`routing.graph.*`). El resumen de cada nodo se queda en el idioma del código.
+
+Tests: `cd backend; uv run --extra voice pytest tests/test_routing_view.py` y `cd frontend; corepack pnpm run test`.
 
 ## Arrancar la aplicación en local
 
