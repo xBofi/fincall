@@ -160,6 +160,30 @@ OS has an Urdu one). If AssemblyAI is unavailable, the console falls back to the
 speech recognition (`browser_lang`); phone calls need AssemblyAI. Local Ollama models are weak
 in Urdu and Hindi: use Gemini for those languages in production.
 
+### Run the demo
+
+One script starts everything for a browser call through Twilio: the API with in-memory data
+(no PostgreSQL), the console behind ngrok, and Twilio browser calls.
+
+1. Once: `backend/.secretbroker` maps `BC_TWILIO_ACCOUNT_SID`, `BC_TWILIO_AUTH_TOKEN`,
+   `BC_TWILIO_API_KEY_SID` and `BC_TWILIO_API_KEY_SECRET` (names only, no values), and
+   `BC_TWILIO_TWIML_APP_SID`, `BC_OWNER_EMAIL` and the voice settings are in `backend/.env`.
+2. Give it your fixed ngrok domain, then run it:
+
+   ```powershell
+   $env:BC_PUBLIC_URL = "https://<your-domain>.ngrok-free.dev"   # or -PublicUrl, or a SecretBroker config entry
+   .\scripts\start-demo.ps1
+   ```
+
+   It prints the URL to open once `/api/health` answers through the tunnel. Ctrl+C stops the
+   API, the console and ngrok. Logs are in `%TEMP%\fincall-demo`.
+3. Open the URL, click *Visit Site* on the ngrok notice, and sign in with Google or Microsoft.
+4. In **Simulate a call**, pick the voice mode **Twilio**, choose the call language (or
+   *Detect automatically*), and press **Start call**.
+
+Data lives in memory and is gone when the script stops. A browser call costs Twilio's Client
+rate per minute.
+
 ### Talking to the agent from the browser, as a phone caller
 
 Two ways to test the **phone path** (μ-law 8 kHz, server STT and TTS, barge-in, delivery
