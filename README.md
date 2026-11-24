@@ -249,6 +249,45 @@ the bridge. The real carrier path, still with no phone number. Setup, once:
 5. Restart the API: `GET /api/health` shows `twilio_browser: true` and the console enables the
    mode. On a trial account Twilio plays a short notice first; the console presses the key.
 
+## Integrations
+
+How calls reach the agent and how the agent reaches the rest of the business:
+
+```mermaid
+flowchart LR
+  subgraph Carriers
+    TW[Twilio<br/>Media Streams<br/>μ-law 8 kHz]
+    VO[Vonage<br/>Voice WebSocket<br/>linear16 16 kHz]
+    SIP[SIP trunk / softphone<br/>INVITE · RTP G.711]
+  end
+  TW -- TwiML + wss --> CH[CarrierChannel<br/>telephony/carrier.py]
+  VO -- NCCO + wss --> CH
+  SIP --> LKS[livekit-sip] --> LK[LiveKit room<br/>voice agent]
+  CH --> BR[CallBridge<br/>STT · barge-in · TTS · ledger]
+  BR --> G[LangGraph call flow<br/>CallManager]
+  LK --> G
+  G -- book_visit tool<br/>signed, 1.5 s timeout --> N8T[n8n: Google Calendar]
+  N8T -- slot or fallback --> G
+  G -- signed events<br/>HMAC · retries · Idempotency-Key --> N8E[n8n workflows]
+  N8E --> OUT[e-mail · Slack · SMS escalation]
+```
+
+| Integration | What it does | Status | Code / docs |
+|---|---|---|---|
+| **Twilio** | Inbound calls over Media Streams: signed TwiML webhook, μ-law WebSocket, marks, `clear` barge-in, DTMF | Tested with a fake carrier; no live number yet | `telephony/twilio.py`, `docs/TELEFONIA.md` |
+| **Vonage** | Answer webhook → NCCO `connect` to a linear16 16 kHz WebSocket; signed JWT webhooks, `notify` marks, `clear`, `websocket:dtmf` | **Mocks only, never tested live** (no account) | `telephony/vonage.py`, «Twilio vs Vonage» in `docs/TELEFONIA.md` |
+| **SIP** | `livekit-sip` answers INVITEs from a trunk or a local softphone, one LiveKit room per call, REFER to a person | Local pilot with a softphone and an automated SIP bench; no real trunk yet | `telephony/sip.py`, «SIP: decisión y diseño» in `docs/TELEFONIA.md` |
+| **n8n** | Signed call events (`call.started`, `ticket.created`, `emergency.detected`, `handoff.requested`, `call.ended`) and the `book_visit` tool node the agent calls during the call | Unit-tested; run end to end against a local n8n (see below) | `integrations/`, `integrations/n8n/README.md` |
+
+All carriers implement one interface (`CarrierChannel`: `audio_format`, `send_audio`, `mark`,
+`clear`, `hang_up`), so the speech pipeline, the graph and the metrics are the same whoever
+carries the call. Integrations are best-effort: if n8n is down, the call goes on exactly as it
+would without it.
+
+Local n8n: `sb run -- docker compose --profile n8n up -d n8n`, import the workflows from
+`integrations/n8n/`, then set `BC_N8N_WEBHOOK_URL` / `BC_N8N_TOOL_URL` (step by step in
+`integrations/n8n/README.md`).
+
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
 bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENTOS`, `BC_LOGIN_BLOQUEO_S`);
