@@ -345,8 +345,32 @@ export interface CallRecordDetail {
   tracks: { id: string; channel: string; duration_ms: number | null; expires_at: string; available: boolean; url: string | null }[]
 }
 
+export interface LatencySummary {
+  n: number
+  p50: number | null
+  p95: number | null
+}
+
+/** Conversation KPIs of the stored calls (backend `kpis.py`: one place for the definitions). */
+export interface ConversationKpis {
+  calls: number
+  finished_calls: number
+  containment_rate: number | null
+  handoff_rate: number | null
+  needs_human_rate: number | null
+  abandon_rate: number | null
+  emergency_rate: number | null
+  reprompt_rate: number | null
+  turns_per_call: number | null
+  llm_calls_per_call: number | null
+  avg_handle_time_s: number | null
+  response_ms: LatencySummary
+  server_ms: LatencySummary
+}
+
 export const operations = {
   summary: () => ask<OperationsSummary>('/api/operations/summary'),
+  kpis: (limit = 200) => ask<{ aggregate: ConversationKpis; window: number }>(`/api/operations/kpis?limit=${limit}`),
   calls: (state?: string) => ask<CallRecord[]>(`/api/operations/calls${state ? `?state=${state}` : ''}`),
   detail: (id: string) => ask<CallRecordDetail>(`/api/operations/calls/${id}`),
   caseOptions: () => ask<CaseOptions>('/api/operations/cases/options'),

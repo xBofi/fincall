@@ -51,6 +51,7 @@ from building_call.graph.state import CallState
 from building_call.graph.tracing import TRACE_BUS
 from building_call.i18n import personas
 from building_call.inbox_api import create_inbox_router
+from building_call.kpis_api import create_kpis_router
 from building_call.livekit_api import (
     create_livekit_router,
     is_agent,
@@ -217,6 +218,25 @@ def create_llm() -> Any:
             credentials_path=settings.vertex_credentials,
             timeout_s=settings.vertex_timeout_s,
         )
+    if mode == "openai":
+        from building_call.llm.openai import OpenAIModel
+
+        return OpenAIModel(
+            settings.openai_api_key,
+            settings.openai_model,
+            base_url=settings.openai_url,
+            reasoning_effort=settings.openai_reasoning_effort or None,
+            timeout_s=settings.openai_timeout_s,
+        )
+    if mode == "bedrock":
+        from building_call.llm.bedrock import BedrockModel
+
+        return BedrockModel(
+            settings.bedrock_api_key,
+            settings.bedrock_model,
+            region=settings.bedrock_region,
+            timeout_s=settings.bedrock_timeout_s,
+        )
     cloud = WorkersAIModel(
         settings.cloudflare_account_id,
         settings.cloudflare_api_token,
@@ -230,6 +250,15 @@ def create_llm() -> Any:
             cloud, local, preferred=0, extra_wait_ms=settings.race_extra_wait_ms
         )
     raise ValueError(f"BC_LLM desconocido: {settings.llm}")
+
+
+def create_router() -> Any:
+    """Hybrid router (BC_NLP_HYBRID), or None: off, or the classifier is not available."""
+    if not settings.nlp_hybrid:
+        return None
+    from building_call.nlp.hybrid import build_router
+
+    return build_router(settings.nlp_model_dir, settings.nlp_threshold)
 
 
 def create_phraser() -> OllamaModel | None:
@@ -325,7 +354,7 @@ def create_app(
             repo: Any = PostgresRepository(settings.database_url)
         else:
             repo = MemoryRepository()
-        deps = Dependencies(repo=repo, llm=create_llm())
+        deps = Dependencies(repo=repo, llm=create_llm(), router=create_router())
     if stt is None:
         stt = (
             WhisperRecognizer(
@@ -526,6 +555,7 @@ def create_app(
     app.include_router(
         create_operations_router(deps.repo, access, manager.metrics, audio_store)  # type: ignore[arg-type]
     )
+    app.include_router(create_kpis_router(deps.repo, access, manager.metrics))  # type: ignore[arg-type]
     # Flujo del asistente: grafo, plantillas editables, prompts (solo lectura) y catálogos
     app.include_router(create_flow_router(deps.repo, deps.repo, access))  # type: ignore[arg-type]
     # Bandeja del administrador: incidencias pendientes de su decisión y sus acciones

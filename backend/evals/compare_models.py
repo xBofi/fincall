@@ -4,6 +4,7 @@ clasificación. Mide exactitud y latencia (p50/p95) para decidir el modelo de pr
 Uso:
     uv run python evals/compare_models.py --modelos qwen3.5:4b,qwen2.5:1.5b --repeticiones 1
     uv run python evals/compare_models.py --modelos vertex:gemini-3.5-flash-lite,cf:@cf/qwen/qwen3.8-27b
+    sb run -- uv run python evals/compare_models.py --models openai:gpt-6-luna,bedrock:eu.anthropic.claude-haiku-5-5
 """
 
 from __future__ import annotations
@@ -214,6 +215,30 @@ def _create_llm(name: str, ollama_url: str) -> Any:
             if (path := env.get("BC_VERTEX_CREDENTIALS"))
             else "",
             timeout_s=60,
+        )
+    if name.startswith(("openai:", "bedrock:")):
+        # Keys from the environment (`sb run -- ...` with SecretBroker), never printed
+        import os
+
+        env = {**_read_env(), **os.environ}
+        provider, model = name.split(":", 1)
+        if provider == "openai":
+            from building_call.llm.openai import OpenAIModel
+
+            return OpenAIModel(
+                env.get("BC_OPENAI_API_KEY", ""),
+                model,
+                base_url=env.get("BC_OPENAI_URL", "https://api.openai.com"),
+                reasoning_effort=env.get("BC_OPENAI_REASONING_EFFORT") or None,
+                timeout_s=60,
+            )
+        from building_call.llm.bedrock import BedrockModel
+
+        return BedrockModel(
+            env.get("BC_BEDROCK_API_KEY", ""),
+            model,
+            region=env.get("BC_BEDROCK_REGION", "eu-west-1"),
+            timeout_s=120,  # the first call with a new schema compiles it (docs: up to 120 s)
         )
     if name.startswith("cf:"):
         env = _read_env()

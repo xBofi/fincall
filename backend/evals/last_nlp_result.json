@@ -1,0 +1,448 @@
+{
+  "language": "es",
+  "llm": "qwen3.5:latest",
+  "classifier": "setfit/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "results": [
+    {
+      "system": "LLM only (qwen3.5:latest)",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.7777777777777778,
+        "macro_f1": 0.6897435897435897,
+        "per_class": {
+          "continue": 0.8615384615384616,
+          "correct": 0.3,
+          "hang_up": 1.0,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 0.0,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 5288.9717999933055,
+      "p95_ms": 6615.132600010838,
+      "llm_share": 1.0,
+      "cost_per_1000_calls_usd": 0.6598582677165356
+    },
+    {
+      "system": "Classifier only (paraphrase-multilingual-MiniLM-L12-v2)",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8148148148148148,
+        "macro_f1": 0.7477529594514971,
+        "per_class": {
+          "continue": 0.8818897637795275,
+          "correct": 0.4,
+          "hang_up": 0.2857142857142857,
+          "human": 0.6666666666666666,
+          "out_of_scope": 1.0,
+          "question": 1.0,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.8478260869565217,
+        "macro_f1": 0.8947338935574229,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 0.6666666666666666,
+          "electrical": 0.6666666666666667,
+          "elevator": 0.8235294117647058,
+          "gardening": 1.0,
+          "locksmith": 1.0,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 0.8571428571428571,
+          "unclassifiable": 0.9333333333333333
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 0.6739130434782609,
+        "macro_f1": 0.6265540636544472,
+        "per_class": {
+          "emergency": 0.4705882352941177,
+          "high": 0.625,
+          "low": 0.5217391304347825,
+          "medium": 0.8888888888888888
+        }
+      },
+      "p50_ms": 9.0,
+      "p95_ms": 11.0,
+      "llm_share": 0.0,
+      "cost_per_1000_calls_usd": 0.0
+    },
+    {
+      "system": "Hybrid @ 0.8",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8024691358024691,
+        "macro_f1": 0.805952380952381,
+        "per_class": {
+          "continue": 0.875,
+          "correct": 0.3,
+          "hang_up": 1.0,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 0.8,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 5203.636300005484,
+      "p95_ms": 6624.132600010838,
+      "llm_share": 0.9133858267716536,
+      "cost_per_1000_calls_usd": 0.6018992125984252
+    },
+    {
+      "system": "Hybrid @ 0.6",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8271604938271605,
+        "macro_f1": 0.772890406162465,
+        "per_class": {
+          "continue": 0.890625,
+          "correct": 0.35294117647058826,
+          "hang_up": 0.5,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 1.0,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 4972.282499990077,
+      "p95_ms": 6620.464999998338,
+      "llm_share": 0.8031496062992126,
+      "cost_per_1000_calls_usd": 0.5304850393700787
+    },
+    {
+      "system": "Hybrid @ 0.7",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8148148148148148,
+        "macro_f1": 0.8355080614923135,
+        "per_class": {
+          "continue": 0.8818897637795275,
+          "correct": 0.3,
+          "hang_up": 1.0,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 1.0,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 5159.7677000083495,
+      "p95_ms": 6620.464999998338,
+      "llm_share": 0.8818897637795275,
+      "cost_per_1000_calls_usd": 0.5826047244094488
+    },
+    {
+      "system": "Hybrid @ 0.9",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8024691358024691,
+        "macro_f1": 0.805952380952381,
+        "per_class": {
+          "continue": 0.875,
+          "correct": 0.3,
+          "hang_up": 1.0,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 0.8,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 5281.767599992221,
+      "p95_ms": 6624.132600010838,
+      "llm_share": 0.937007874015748,
+      "cost_per_1000_calls_usd": 0.6175464566929134
+    },
+    {
+      "system": "Hybrid @ 0.95",
+      "intent": {
+        "n": 81,
+        "accuracy": 0.8024691358024691,
+        "macro_f1": 0.805952380952381,
+        "per_class": {
+          "continue": 0.875,
+          "correct": 0.3,
+          "hang_up": 1.0,
+          "human": 1.0,
+          "out_of_scope": 0.6666666666666666,
+          "question": 0.8,
+          "repeat": 1.0
+        }
+      },
+      "category": {
+        "n": 46,
+        "accuracy": 0.9782608695652174,
+        "macro_f1": 0.9850267379679144,
+        "per_class": {
+          "administrative": 1.0,
+          "cleaning": 1.0,
+          "electrical": 0.9411764705882353,
+          "elevator": 1.0,
+          "gardening": 1.0,
+          "locksmith": 0.9090909090909091,
+          "masonry": 1.0,
+          "painting": 1.0,
+          "plumbing": 1.0,
+          "unclassifiable": 1.0
+        }
+      },
+      "urgency": {
+        "n": 46,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "per_class": {
+          "emergency": 1.0,
+          "high": 1.0,
+          "low": 1.0,
+          "medium": 1.0
+        }
+      },
+      "p50_ms": 5281.767599992221,
+      "p95_ms": 6624.132600010838,
+      "llm_share": 0.9606299212598425,
+      "cost_per_1000_calls_usd": 0.6322960629921259
+    }
+  ],
+  "entities": {
+    "regex": {
+      "address": {
+        "n": 6,
+        "recall": 0.0,
+        "precision": 0.0,
+        "spurious": 0
+      },
+      "entrance": {
+        "n": 3,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 3
+      },
+      "floor": {
+        "n": 12,
+        "recall": 0.9166666666666666,
+        "precision": 0.9166666666666666,
+        "spurious": 9
+      },
+      "door": {
+        "n": 8,
+        "recall": 0.375,
+        "precision": 1.0,
+        "spurious": 1
+      },
+      "name": {
+        "n": 4,
+        "recall": 0.0,
+        "precision": 0.0,
+        "spurious": 0
+      }
+    },
+    "spacy": {
+      "address": {
+        "n": 6,
+        "recall": 0.8333333333333334,
+        "precision": 1.0,
+        "spurious": 0
+      },
+      "entrance": {
+        "n": 3,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 2
+      },
+      "floor": {
+        "n": 12,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 7
+      },
+      "door": {
+        "n": 8,
+        "recall": 0.75,
+        "precision": 0.8571428571428571,
+        "spurious": 0
+      },
+      "name": {
+        "n": 4,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 0
+      }
+    },
+    "combined": {
+      "address": {
+        "n": 6,
+        "recall": 0.8333333333333334,
+        "precision": 1.0,
+        "spurious": 0
+      },
+      "entrance": {
+        "n": 3,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 3
+      },
+      "floor": {
+        "n": 12,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 8
+      },
+      "door": {
+        "n": 8,
+        "recall": 0.875,
+        "precision": 1.0,
+        "spurious": 1
+      },
+      "name": {
+        "n": 4,
+        "recall": 1.0,
+        "precision": 1.0,
+        "spurious": 0
+      }
+    }
+  }
+}

@@ -28,10 +28,28 @@ voice = [
     "livekit-plugins-elevenlabs==1.8.5",
     "livekit-plugins-silero==1.8.5",
 ]
+# Classic NLP: Hugging Face (SetFit) turn classifier and spaCy entities. Optional: the API works
+# without it and the hybrid router stays off. Install with: uv sync --extra nlp
+nlp = [
+    "setfit>=1.2.0",
+    "sentence-transformers>=5.0",
+    "scikit-learn>=1.6",
+    "spacy>=3.8.0",
+    "torch>=2.15.0",
+]
 
 [project.scripts]
 building-call = "building_call.api.main:run"
 building-call-agent = "building_call.voice.agent:main"
+
+# CUDA wheels for training on Windows (RTX 4070 SUPER); other platforms take torch from PyPI
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu132", marker = "sys_platform == 'win32'" }]
 
 [build-system]
 requires = ["uv_build>=0.11.15,<0.12.0"]

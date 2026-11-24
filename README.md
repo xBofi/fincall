@@ -255,3 +255,100 @@ bloqueo temporal tras 5 intentos fallidos por usuario o IP (`BC_LOGIN_MAX_INTENT
 todo acceso y toda gestión de usuarios quedan en la auditoría. `BC_SESSION_SECRET` firma las URLs con las que
 se descargan las grabaciones: es **obligatorio** (mínimo 32 caracteres) con `BC_REPOSITORY=postgres` y la API
 se niega a arrancar sin él; genéralo con `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+
+## NLP models and evaluation
+
+The call graph interprets each caller turn with one LLM request. `backend/src/building_call/nlp/`
+adds classic NLP in front of it, **off by default** (`BC_NLP_HYBRID=false`):
+
+- **Turn classifier (Hugging Face, SetFit).** A multilingual sentence-transformer
+  (`paraphrase-multilingual-MiniLM-L12-v2`), fine-tuned contrastively, with one
+  logistic-regression head each for intent, incident category, urgency and work type. One encode
+  answers all four in about 10 ms on CPU. Training data, the reproducible script and the reasons
+  for this model are in [`backend/nlp/MODEL_CARD.md`](backend/nlp/MODEL_CARD.md). The weights
+  are not in git; `nlp/train_classifier.py` rebuilds them in about a minute on an RTX 4070
+  SUPER.
+- **spaCy entities.** One blank pipeline per language with an `EntityRuler`: address, entrance,
+  floor, door, building, name, phone and email in es, en, ca, ar, hi and ur. The home words come
+  from each language's locale file.
+- **Hybrid routing.** The classifier answers first. The graph skips the LLM only when every
+  needed label is at or above `BC_NLP_THRESHOLD` (0.8) and no entity is found in the turn. That
+  covers two cases: a global intent with no data ("¿esto se graba?", "quiero hablar con una
+  persona") and a plain problem description. Corrections always go to the LLM. Handing over or
+  hanging up still needs the caller's explicit words.
+
+Results on the gold sets, which are never trained on (`evals/gold_*.jsonl`): es has 81 intent
+rows and 46 classification rows; en has 131 intent rows and 46 classification rows. The LLM is
+the local `qwen3.5:latest` (9.7B, Ollama).
+
+| Language | System | Intent acc | Intent macro-F1 | Category acc | Category macro-F1 | Urgency acc | Urgency macro-F1 | p50 ms | p95 ms | Turns to the LLM | USD / 1,000 calls* |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| es | LLM only | 77.8 % | 0.690 | 97.8 % | 0.985 | 100 % | 1.000 | 5 289 | 6 615 | 100 % | 0.66 |
+| es | Classifier only | 81.5 % | 0.748 | 84.8 % | 0.895 | 67.4 % | 0.627 | 9 | 11 | 0 % | 0.00 |
+| es | **Hybrid @ 0.8** | **80.2 %** | **0.806** | 97.8 % | 0.985 | 100 % | 1.000 | 5 204 | 6 624 | 91 % | 0.60 |
+| en | LLM only | 90.8 % | 0.872 | 97.8 % | 0.988 | 97.8 % | 0.984 | 2 042 | 3 553 | 100 % | 0.67 |
+| en | Classifier only | 82.4 % | 0.660 | 87.0 % | 0.894 | 69.6 % | 0.701 | 10 | 13 | 0 % | 0.00 |
+| en | **Hybrid @ 0.8** | **91.6 %** | **0.901** | 97.8 % | 0.988 | 97.8 % | 0.984 | 2 029 | 3 564 | 94 % | 0.63 |
+
+\* LLM requests priced as the production model (`gemini-3.5-flash-lite`: $0.30 / $2.50 per
+1M input/output tokens, Gemini API price list, 2026-11-24). Tokens are estimated (characters /
+4), and a call is assumed to make 4 LLM-eligible turns. Local models cost $0.
+
+```powershell
+cd backend
+uv sync --extra nlp
+uv run python nlp/data/build_dataset.py --seed 13
+uv run python nlp/train_classifier.py
+uv run python evals/compare_nlp.py --llm qwen3.5:latest --language es --thresholds 0.6,0.7,0.8,0.9,0.95
+uv run python evals/compare_nlp.py --llm qwen3.5:latest --language en --thresholds 0.6,0.7,0.8,0.9,0.95
+uv run python evals/compare_nlp.py --entities-only --language es   # spaCy vs regex
+```
+
+What the numbers say:
+
+- **Hybrid beats LLM-only on intent in both languages and never loses on category or urgency.**
+  The classifier catches questions to the assistant that the LLM misses ("question" F1 goes
+  from 0.00 to 0.80 in Spanish and from 0.80 to 1.00 in English). It answers 6 to 9 % of turns
+  without the LLM, which cuts the estimated cost by 6 to 9 %.
+- **The classifier alone is not enough.** Urgency is a judgement call and the classifier gets
+  67 to 70 % of it. Since the router needs category, urgency and work type all at or above the
+  threshold, problem descriptions stay on the LLM. At 0.7 the router starts answering them, and
+  English category accuracy drops to 95.7 %. 0.8 is the lowest threshold with no loss in either
+  language. The threshold sweep (0.6 to 0.95) is in `evals/last_nlp_result*.json`.
+- **Latency:** the classifier adds about 10 ms per turn. The LLM latencies above come from a
+  9.7B model that did not always fit fully in GPU memory on the test machine (other apps were
+  holding VRAM; the es run was the slower one). They show the relative cost, not production
+  latency. The production LLM (Vertex
+  `gemini-3.5-flash-lite`) was measured at p50 626 / p95 722 ms (`settings.py`). The saving
+  is the classifier-answered turns, which take about 11 ms instead of an LLM round trip.
+- **Entities (gold recall).** In Spanish, the combined extractor lifts door from 38 % (regex) to
+  88 % and floor from 92 % to 100 %. It adds address (83 %) and name (100 %), which the regex
+  never had. In English, address and name reach 100 %, and floor and door stay as good as the
+  regex. Arabic, Hindi, Urdu and Catalan have unit tests but no gold set yet.
+
+Cloud LLMs: `BC_LLM=openai` (Responses API with strict Structured Outputs, default
+`gpt-6-luna`) and `BC_LLM=bedrock` (Converse API with structured output, Bedrock API key,
+`eu-*` regions only, default `eu.anthropic.claude-haiku-5-5`) sit behind the same interface. Compare
+them with `sb run -- uv run python evals/compare_models.py --models openai:gpt-6-luna,bedrock:eu.anthropic.claude-haiku-5-5`
+once their keys are in SecretBroker (`BC_OPENAI_API_KEY`, `BC_BEDROCK_API_KEY`).
+
+## Call metrics
+
+`GET /api/operations/kpis?limit=200` (aggregate of the last N stored calls) and
+`GET /api/operations/calls/{id}/kpis` (one call) compute conversation KPIs from what the
+operational repository already stores: calls, turns and graph decisions. They have the
+reviewer roles of the rest of the console and return no personal data. The **Rendimiento**
+screen shows them in a panel (texts in the six console languages, RTL for Arabic and Urdu; see
+`docs/screenshots/kpi-panel-*.png`).
+
+| KPI | Definition (`backend/src/building_call/kpis.py`) |
+|---|---|
+| Containment rate | Finished calls the assistant resolved alone (result `incident_created`) |
+| Human handoff rate | Finished calls where the caller asked for a person (`handed_to_administrator`) |
+| Needs the administrator | Finished calls that were not contained, abandoned ones excluded |
+| Abandon rate | Finished calls that ended `abandoned` |
+| Reprompt / fallback rate | Caller turns where the conversation did not move on (same node after the turn, or a repeat/filler), over all caller turns |
+| Emergency rate | Calls that reached `handle_emergency` without ruling the emergency out |
+| Turns per call, LLM requests per call | Caller turns (the greeting does not count); `llm_calls` from the turn timings |
+| Average handle time | `finished_at - started_at` of finished calls |
+| Latency p50 / p95 | `response_ms` (end of caller voice to start of bot voice, from the metrics registry) and `server_ms` (stored per turn) |

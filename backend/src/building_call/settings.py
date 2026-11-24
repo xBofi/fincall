@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/building_call"
 
     # LLM: "auto" (carrera si hay credenciales de Cloudflare, si no ollama) | "ollama" | "workers_ai" |
-    # "vertex" (Gemini en Vertex AI, solo Europa) |
+    # "vertex" (Gemini en Vertex AI, solo Europa) | "openai" | "bedrock" (AWS, solo Europa) |
     # "carrera" (Cloudflare preferido por exactitud; si el local acaba antes, espera este margen).
     # Medido 2026-08-28: local 92%/p95 828 ms; Cloudflare 100%/p95 10 s; carrera+150 ms 96%/p95 831 ms.
     llm: str = "auto"
@@ -59,6 +59,31 @@ class Settings(BaseSettings):
     )
     vertex_credentials: str = ""
     vertex_timeout_s: float = 20.0
+
+    # OpenAI (BC_LLM=openai): Responses API with Structured Outputs (strict JSON schema).
+    # Model and prices from developers.openai.com (2026-11-24). EU data residency needs an
+    # eligible project and the regional host: BC_OPENAI_URL=https://eu.api.openai.com
+    openai_api_key: str = ""
+    openai_model: str = "gpt-6-luna"
+    openai_url: str = "https://api.openai.com"
+    # Reasoning effort sent as `reasoning.effort`; empty = the model's default
+    openai_reasoning_effort: str = ""
+    openai_timeout_s: float = 20.0
+
+    # AWS Bedrock (BC_LLM=bedrock): Converse API with a Bedrock API key (Bearer) and structured
+    # output. Region SOLO europea (validated); the EU inference profile keeps data in the EU
+    bedrock_api_key: str = ""
+    bedrock_region: str = "eu-west-1"
+    bedrock_model: str = "eu.anthropic.claude-haiku-5-5"
+    bedrock_timeout_s: float = 20.0
+
+    # Hybrid routing (nlp/): the Hugging Face turn classifier answers first and the LLM is only
+    # called below the threshold. Off until evals/compare_nlp.py proves it; needs the `nlp` extra
+    # and the weights from nlp/train_classifier.py
+    nlp_hybrid: bool = False
+    nlp_model_dir: str = "nlp/models/turn-classifier"
+    # 0.8: the lowest with no accuracy loss vs LLM-only on both gold sets (evals/compare_nlp.py)
+    nlp_threshold: float = 0.8
 
     # STT por lotes en servidor: "none" (el navegador transcribe) | "whisper" (faster-whisper local)
     stt: str = "none"

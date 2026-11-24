@@ -83,7 +83,7 @@ class Interpretation(BaseModel):
     objection: str | None = None
     # Métrica: milisegundos de la llamada al modelo (0 si no se llamó)
     llm_ms: int = Field(default=0, exclude=True)
-    origin: Literal["llm", "deterministic"] = Field(default="llm", exclude=True)
+    origin: Literal["llm", "deterministic", "classifier"] = Field(default="llm", exclude=True)
 
     @model_validator(mode="after")
     def _split_apartment(self) -> Interpretation:
