@@ -21,6 +21,7 @@ from collections.abc import Callable
 from time import perf_counter
 from typing import Any, Protocol
 
+from building_call import i18n
 from building_call.recording import ConversationRecorder
 from building_call.telephony.audio import PhoneInput, PhoneOutput, energy
 from building_call.telephony.tts import fragments
@@ -33,11 +34,8 @@ VOICE_THRESHOLD = 300  # RMS PCM16; igual que la consola web
 # se le pide que repita y, si vuelve a fallar, se despide y la llamada queda para revisar.
 TURN_LIMIT_S = 10.0
 MAX_CONSECUTIVE_FAILURES = 2
-REPEAT_PHRASE = "Perdone, no le he entendido bien. ¿Puede repetirlo?"
-FAILURE_PHRASE = (
-    "Disculpe, estoy teniendo un problema técnico. Avisaré al administrador para que se ponga "
-    "en contacto con usted. Gracias por llamar."
-)
+# What the caller hears when a turn fails is in the call's language: `Phrases.turn_failed` and
+# `Phrases.technical_failure` in `i18n/locales/<language>.toml`
 
 
 class PhoneChannel(Protocol):
@@ -56,7 +54,7 @@ class CallBridge:
     def __init__(
         self,
         manager: Any,
-        streaming_factory: Callable[[int, list[str]], Any],
+        streaming_factory: Callable[[int, list[str], str], Any],
         tts: Any,
         channel: PhoneChannel,
         *,
@@ -66,7 +64,12 @@ class CallBridge:
         audio_store: Any = None,
         bargein_words: int = 2,
         turn_limit_s: float = TURN_LIMIT_S,
+        existing_call_id: str | None = None,
+        language: str | None = None,
     ) -> None:
+        """`existing_call_id`: the console opens the call (and shows it live) before the
+        browser dials Twilio. `language`: chosen for this call (the number, a stream
+        parameter); None = `BC_LANGUAGE`."""
         self.manager = manager
         self.streaming_factory = streaming_factory
         self.tts = tts
@@ -80,6 +83,9 @@ class CallBridge:
         self._consecutive_failures = 0
 
         self.call_id: str | None = None
+        self.existing_call_id = existing_call_id
+        self.requested_language = language
+        self.language = i18n.get(language).code if language else i18n.default_code()
         self.playing_turn: int | None = None
         self.finished = False
         self._session: Any = None
@@ -92,13 +98,20 @@ class CallBridge:
     # ------------------------------------------------------------------ ciclo de vida
 
     async def begin(self) -> str:
-        state = await self.manager.begin(self.phone)
+        if self.existing_call_id:
+            state = await self.manager.get(self.existing_call_id)
+        else:
+            state = await self.manager.begin(self.phone, self.requested_language)
         self.call_id = state["call_id"]
-        self._session = self.streaming_factory(16000, self.vocabulary)
+        self.language = str(state.get("language") or self.language)
+        self._session = self.streaming_factory(16000, self.vocabulary, self.language)
         await self._session.open()
         self._events_task = asyncio.create_task(self._pump_events(), name="telefonia-eventos")
         await self._say(state)
         return str(self.call_id)
+
+    def _phrase(self, name: str) -> str:
+        return str(getattr(i18n.get(self.language).phrases, name))
 
     async def close(self) -> None:
         if self._closed:
@@ -165,7 +178,7 @@ class CallBridge:
         pcm = bytearray()
         try:
             # Se envía cada trozo según llega del TTS: el vecino oye el inicio sin esperar la frase
-            async for part in fragments(self.tts, text):
+            async for part in fragments(self.tts, text, self.language):
                 pcm += part
                 for chunk in output.convert(part):
                     if first_at is None:
@@ -214,7 +227,7 @@ class CallBridge:
             if self._consecutive_failures < MAX_CONSECUTIVE_FAILURES:
                 current = await self.manager.get(self.call_id)
                 await self._say(
-                    {"bot_messages": [REPEAT_PHRASE], "turn": current.get("turn", 0)}
+                    {"bot_messages": [self._phrase("turn_failed")], "turn": current.get("turn", 0)}
                 )
             else:
                 await self._farewell_on_failure("el asistente falló varias veces seguidas")
@@ -225,7 +238,7 @@ class CallBridge:
     async def _farewell_on_failure(self, reason: str) -> None:
         assert self.call_id is not None
         state = await self.manager.close_on_failure(self.call_id, reason)
-        await self._say({**state, "bot_messages": [FAILURE_PHRASE]})
+        await self._say({**state, "bot_messages": [self._phrase("technical_failure")]})
 
     async def _pump_events(self) -> None:
         try:

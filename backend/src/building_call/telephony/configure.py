@@ -82,12 +82,45 @@ async def configure_number(settings: Any, client: httpx.AsyncClient) -> dict[str
     }
 
 
+TWIML_APP_NAME = "FinCall console"
+
+
+async def ensure_twiml_app(settings: Any, client: httpx.AsyncClient) -> str:
+    """TwiML App the console's browser calls go to (the same voice webhook as the number).
+    Creates it, or updates the one with the same name. Returns its SID. A TwiML App needs no
+    phone number and costs nothing until a call is made."""
+    auth = (settings.twilio_account_sid, settings.twilio_auth_token)
+    base = f"{API_TWILIO}/Accounts/{settings.twilio_account_sid}"
+    public_url = settings.public_url.rstrip("/")
+    data = {
+        "FriendlyName": TWIML_APP_NAME,
+        "VoiceUrl": public_url + VOICE_PATH,
+        "VoiceMethod": "POST",
+        "StatusCallback": public_url + CALL_STATUS_PATH,
+        "StatusCallbackMethod": "POST",
+    }
+    r = await client.get(
+        f"{base}/Applications.json", params={"FriendlyName": TWIML_APP_NAME}, auth=auth
+    )
+    r.raise_for_status()
+    apps = r.json().get("applications", [])
+    url = f"{base}/Applications/{apps[0]['sid']}.json" if apps else f"{base}/Applications.json"
+    r = await client.post(url, data=data, auth=auth)
+    r.raise_for_status()
+    return str(r.json()["sid"])
+
+
 async def _main(argv: list[str]) -> int:
     from building_call.settings import settings
     from building_call.telephony.tts import create_tts
 
     parser = argparse.ArgumentParser(description="Prepara el número de Twilio para el voicebot")
     parser.add_argument("--verify", action="store_true", help="solo comprobar, sin tocar Twilio")
+    parser.add_argument(
+        "--twiml-app",
+        action="store_true",
+        help="crear o actualizar solo la TwiML App de las llamadas desde la consola (sin número)",
+    )
     args = parser.parse_args(argv)
 
     tts = create_tts(settings)
@@ -112,6 +145,10 @@ async def _main(argv: list[str]) -> int:
         print(f"URL pública OK: {settings.public_url}")
         if args.verify:
             print("Comprobación completa: todo listo para configurar el número.")
+            return 0
+        if args.twiml_app:
+            app_sid = await ensure_twiml_app(settings, client)
+            print(f"TwiML App «{TWIML_APP_NAME}» lista: BC_TWILIO_TWIML_APP_SID={app_sid}")
             return 0
         summary = await configure_number(settings, client)
     print(f"Número {summary['number']} configurado:")

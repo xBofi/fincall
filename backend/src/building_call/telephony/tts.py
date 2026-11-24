@@ -26,6 +26,8 @@ from typing import Any, Protocol
 
 import httpx
 
+from building_call import i18n
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,27 +37,42 @@ class VoiceSynthesizer(Protocol):
 
     def available(self) -> bool: ...
 
-    async def synthesize(self, text: str) -> bytes: ...
+    async def synthesize(self, text: str, language: str | None = None) -> bytes: ...
 
 
-async def fragments(tts: VoiceSynthesizer, text: str) -> AsyncIterator[bytes]:
-    """Audio por trozos si el sintetizador sabe darlo así; si no, la frase entera de una vez."""
+async def fragments(
+    tts: VoiceSynthesizer, text: str, language: str | None = None
+) -> AsyncIterator[bytes]:
+    """Audio por trozos si el sintetizador sabe darlo así; si no, la frase entera de una vez.
+    `language`: el de la llamada; None = el activo."""
     if isinstance(tts, ElevenLabsSynthesizer):
-        async for chunk in tts.fragments(text):
+        async for chunk in tts.fragments(text, language):
             yield chunk
     else:
-        yield await tts.synthesize(text)
+        yield await tts.synthesize(text, language)
 
 
-_ORDINALS = (
+_SPANISH_ORDINALS = (
     "", "primer", "segund", "tercer", "cuart", "quint", "sext", "séptim", "octav", "noven", "décim",
+)  # fmt: skip
+_ENGLISH_ORDINALS = (
+    "", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+    "tenth",
 )  # fmt: skip
 _ORDINAL = re.compile(r"\b(10|[1-9])\s?([ºª])")
 
 
-def text_for_voice(text: str) -> str:
-    """Lo que la voz leería mal: "1º A" sonaba "un hilo A" con ElevenLabs (llamada 2026-10-11)."""
-    text = _ORDINAL.sub(lambda m: _ORDINALS[int(m[1])] + ("o" if m[2] == "º" else "a"), text)
+def text_for_voice(text: str, language: str | None = None) -> str:
+    """Lo que la voz leería mal: "1º A" sonaba "un hilo A" con ElevenLabs (llamada 2026-10-11).
+    Español: "primero A"; inglés: "first" (una plantilla editada o una etiqueta antigua pueden
+    traer "º"); el resto de idiomas no usa "º"."""
+    code = language or i18n.active_code()
+    if code == "es":
+        text = _ORDINAL.sub(
+            lambda m: _SPANISH_ORDINALS[int(m[1])] + ("o" if m[2] == "º" else "a"), text
+        )
+    elif code == "en":
+        text = _ORDINAL.sub(lambda m: _ENGLISH_ORDINALS[int(m[1])], text)
     return " ".join(text.split())
 
 
@@ -77,6 +94,10 @@ class _Cache:
             self._data.popitem(last=False)
 
 
+class UnsupportedLanguage(RuntimeError):
+    """The synthesizer can't speak the call's language: the next one in the chain should."""
+
+
 class UnavailableSynthesizer:
     name = "none"
     rate = 16000
@@ -84,7 +105,7 @@ class UnavailableSynthesizer:
     def available(self) -> bool:
         return False
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
         raise RuntimeError("No hay TTS de servidor configurado (BC_TTS / BC_PIPER_MODEL)")
 
 
@@ -163,8 +184,8 @@ class PiperSynthesizer:
             async with self._mutex:
                 await asyncio.to_thread(self._synthesize_in_process, "Hola.")
 
-    async def synthesize(self, text: str) -> bytes:
-        text = text_for_voice(text)
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
+        text = text_for_voice(text, language)
         if not text:
             return b""
         if (pcm := self._cache.get(text)) is not None:
@@ -207,7 +228,7 @@ class WorkersAISynthesizer:
     def available(self) -> bool:
         return bool(self.account_id and self.api_token) and shutil.which(self.ffmpeg) is not None
 
-    async def _request_mp3(self, text: str) -> bytes:
+    async def _request_mp3(self, text: str, lang: str) -> bytes:
         url = (
             f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
         )
@@ -216,7 +237,7 @@ class WorkersAISynthesizer:
             r = await client.post(
                 url,
                 headers={"Authorization": f"Bearer {self.api_token}"},
-                json={"prompt": text, "lang": "es"},
+                json={"prompt": text, "lang": lang},
             )
         finally:
             if self._client is None:
@@ -239,14 +260,18 @@ class WorkersAISynthesizer:
             raise RuntimeError(f"ffmpeg falló: {err.decode(errors='ignore')[:200]}")
         return pcm
 
-    async def synthesize(self, text: str) -> bytes:
-        text = text_for_voice(text)
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
+        spec = i18n.get(language or i18n.active_code())
+        if not spec.tts.melotts_lang:
+            raise UnsupportedLanguage(f"MeloTTS no habla {spec.name} ({spec.code})")
+        text = text_for_voice(text, spec.code)
         if not text:
             return b""
-        if (pcm := self._cache.get(text)) is not None:
+        key = f"{spec.code}:{text}"
+        if (pcm := self._cache.get(key)) is not None:
             return pcm
-        pcm = await self._mp3_to_pcm(await self._request_mp3(text))
-        self._cache.put(text, pcm)
+        pcm = await self._mp3_to_pcm(await self._request_mp3(text, spec.tts.melotts_lang))
+        self._cache.put(key, pcm)
         return pcm
 
 
@@ -281,15 +306,23 @@ class ElevenLabsSynthesizer:
         except httpx.HTTPError as e:
             logger.warning("ElevenLabs no responde al precalentar: %s", type(e).__name__)
 
-    async def fragments(self, text: str) -> AsyncIterator[bytes]:
-        text = text_for_voice(text)
+    def voice_for(self, language: str) -> str:
+        """The language's own voice if the locale file names one, else the configured voice."""
+        return i18n.get(language).tts.elevenlabs_voice or self.voice
+
+    async def fragments(self, text: str, language: str | None = None) -> AsyncIterator[bytes]:
+        spec = i18n.get(language or i18n.active_code())
+        text = text_for_voice(text, spec.code)
         if not text:
             return
-        if (pcm := self._cache.get(text)) is not None:
+        voice = self.voice_for(spec.code)
+        key = f"{spec.code}:{voice}:{text}"
+        if (pcm := self._cache.get(key)) is not None:
             yield pcm
             return
-        url = f"{self.url}/v1/text-to-speech/{self.voice}/stream?output_format=pcm_{self.rate}"
-        body = {"text": text, "model_id": self.model, "language_code": "es"}
+        url = f"{self.url}/v1/text-to-speech/{voice}/stream?output_format=pcm_{self.rate}"
+        # language_code: ISO 639-1, accepted by the v3/v4 models for all our languages
+        body = {"text": text, "model_id": self.model, "language_code": spec.tts.elevenlabs_language}
         full = bytearray()
         remainder = b""  # un byte suelto entre trozos: PCM16 va por pares
         async with self._client.stream(
@@ -305,10 +338,10 @@ class ElevenLabsSynthesizer:
                 if chunk:
                     full += chunk
                     yield chunk
-        self._cache.put(text, bytes(full))
+        self._cache.put(key, bytes(full))
 
-    async def synthesize(self, text: str) -> bytes:
-        return b"".join([chunk async for chunk in self.fragments(text)])
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
+        return b"".join([chunk async for chunk in self.fragments(text, language)])
 
 
 def create_tts(settings: Any) -> VoiceSynthesizer:
