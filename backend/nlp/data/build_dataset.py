@@ -517,7 +517,7 @@ def build(seed: int, copies: int = 2) -> list[dict[str, object]]:
             for variant in _vary(text, lang, rng, copies):
                 rows.append(
                     {"text": variant, "lang": lang, "intent": "continue", "category": category,
-                     "urgency": urgency, "work_type": work_type}
+                     "urgency": urgency, "work_type": work_type, "group": text}
                 )  # fmt: skip
     for lang, intents in (("es", INTENTS_ES), ("en", INTENTS_EN), ("ca", INTENTS_CA)):
         for text, intent in intents:

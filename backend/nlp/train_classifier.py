@@ -52,18 +52,23 @@ def pair_label(row: dict[str, Any]) -> str:
 
 
 def split(rows: list[dict[str, Any]], fraction: float, seed: int) -> tuple[list[Any], list[Any]]:
-    """Stratified by the pair label, deterministic."""
+    """Stratified by the pair label and grouped: the augmented variants of one sentence
+    (`group`) stay on the same side, so validation never sees a near copy of a training row."""
     rng = random.Random(seed)
-    by_label: dict[str, list[dict[str, Any]]] = {}
+    groups: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
-        by_label.setdefault(pair_label(row), []).append(row)
-    train, val = [], []
+        groups.setdefault(str(row.get("group") or row["text"]), []).append(row)
+    by_label: dict[str, list[list[dict[str, Any]]]] = {}
+    for key in sorted(groups):
+        by_label.setdefault(pair_label(groups[key][0]), []).append(groups[key])
+    train: list[dict[str, Any]] = []
+    val: list[dict[str, Any]] = []
     for label in sorted(by_label):
-        group = by_label[label][:]
-        rng.shuffle(group)
-        k = max(1, round(len(group) * fraction)) if len(group) >= 4 else 0
-        val += group[:k]
-        train += group[k:]
+        label_groups = by_label[label][:]
+        rng.shuffle(label_groups)
+        k = max(1, round(len(label_groups) * fraction)) if len(label_groups) >= 4 else 0
+        val += [r for g in label_groups[:k] for r in g]
+        train += [r for g in label_groups[k:] for r in g]
     return train, val
 
 

@@ -109,7 +109,8 @@ class SetFitTurnClassifier:
         if not (path / "heads.joblib").exists():
             raise FileNotFoundError(f"No classifier weights in {path}: run nlp/train_classifier.py")
         meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
-        encoder = SentenceTransformer(str(path / "body"), device=device or "cpu")
+        # Its encode() has a richer signature than the Encoder protocol: checked at runtime
+        encoder: Any = SentenceTransformer(str(path / "body"), device=device or "cpu")
         heads: dict[str, Head] = joblib.load(path / "heads.joblib")
         return cls(encoder, heads, name=f"setfit/{meta.get('base_model', 'unknown')}")
 

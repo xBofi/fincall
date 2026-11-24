@@ -208,3 +208,18 @@ def test_scoring_accepts_any_listed_answer() -> None:
 def test_per_class_f1() -> None:
     f1 = per_class_f1(["a", "a", "b"], ["a", "b", "b"])
     assert f1["a"] == pytest.approx(2 / 3) and f1["b"] == pytest.approx(2 / 3)
+
+
+def test_the_trained_weights_load_and_answer() -> None:
+    """Smoke test of the real model; skipped without the nlp extra or the trained weights."""
+    from pathlib import Path
+
+    pytest.importorskip("sentence_transformers")
+    weights = Path(__file__).resolve().parents[1] / "nlp" / "models" / "turn-classifier"
+    if not (weights / "heads.joblib").exists():
+        pytest.skip("no trained weights: run nlp/train_classifier.py")
+    clf = load_classifier(weights)
+    assert clf is not None
+    p = clf.predict("Quiero hablar con una persona")
+    assert p.intent.value == "human" and p.intent.confidence > 0.5
+    assert clf.predict("Hay una fuga de agua en el garaje").category.value == "plumbing"
