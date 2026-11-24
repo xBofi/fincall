@@ -199,12 +199,12 @@ async def test_floor_and_door_in_several_entrances_asks_the_entrance(manager: Ca
 
 
 async def test_the_name_is_neither_kept_nor_read_back(manager: CallManager) -> None:
-    """Andreu, 2026-10-22: the caller's name is not stored. Only what they said keeps it."""
+    """2026-10-22: the caller's name is not stored. Only what they said keeps it."""
     state = await _converse(
-        manager, ["Calle Mayor 12", "sí", "3 B", "Soy Reubofibra y no hay luz en la escalera"]
+        manager, ["Calle Mayor 12", "sí", "3 B", "Soy Lauragomera y no hay luz en la escalera"]
     )
     # The test model leaves the name inside the problem; the real one separates it
-    assert state["bot_messages"][-1].startswith("Le resumo: Soy Reubofibra y no hay luz")
+    assert state["bot_messages"][-1].startswith("Le resumo: Soy Lauragomera y no hay luz")
     assert "3º B" not in state["bot_messages"][-1]
     assert "declared_name" not in state and "name" not in state["interpretation"]
 
@@ -244,7 +244,7 @@ async def test_comment_about_the_bot_is_not_a_correction(
     state = await _converse(
         manager, ["Calle Mayor 12", "sí", "1 A", "Hay que pintar las paredes del corredor"]
     )
-    # El resumen dice lo entendido, no la categoría interna (Andreu, 2026-10-21)
+    # El resumen dice lo entendido, no la categoría interna (2026-10-21)
     assert "pintar las paredes" in state["bot_messages"][-1]
     assert "no he podido" not in state["bot_messages"][-1].lower()
     original = llm._interpret

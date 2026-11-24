@@ -1,6 +1,6 @@
 # Arquitectura escalable para muchas llamadas
 
-Fecha: 2026-10-23 · Estado: **Pendiente** (decisión de Andreu; nada de esto está aprobado) ·
+Fecha: 2026-10-23 · Estado: **Pendiente** (nada de esto está aprobado) ·
 Sustituye a las secciones «Capacidad estimada» e «Infraestructura propuesta» de
 [2026-10-10-plan-de-escalado-design.md](2026-10-10-plan-de-escalado-design.md), que suponían Twilio,
 Piper y Cloudflare. El resto de aquel plan (multi-administrador, paginación, avisos reales…) sigue vigente.
@@ -11,7 +11,7 @@ primera tarea de la etapa 1 es medirlas.
 
 ## 1. Cuánto tráfico hay que aguantar
 
-Escenario que plantea Andreu: 7–8 administradores, 300–400 fincas cada uno, 5–70 llamadas por finca y mes.
+Escenario de trabajo: 7–8 administradores, 300–400 fincas cada uno, 5–70 llamadas por finca y mes.
 
 | | Bajo | Central | Alto |
 |---|---|---|---|
@@ -179,7 +179,7 @@ flowchart LR
 - **Comprar en vez de construir:** comparar el coste de mantener LiveKit autoalojado con LiveKit Cloud
   (región UE y RGPD por verificar).
 
-## 5. Decisiones pendientes (de Andreu)
+## 5. Decisiones pendientes
 
 | # | Decisión | Recomendación |
 |---|---|---|

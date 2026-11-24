@@ -362,7 +362,7 @@ def test_the_app_fans_out_to_every_configured_url() -> None:
 # ---------------------------------------------------------------- the slot is always provisional
 
 #: How each language says that the visit is provisional and that the maintainer still has to
-#: confirm it (business rule, Andreu 2026-11-24). A new language must add its words here: the
+#: confirm it (business rule, 2026-11-24). A new language must add its words here: the
 #: test below fails for any supported language without an entry.
 PROVISIONAL_WORDS: dict[str, tuple[str, str]] = {
     "es": ("provisional", "pendiente de que el profesional la confirme"),

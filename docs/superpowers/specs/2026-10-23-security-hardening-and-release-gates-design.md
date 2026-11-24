@@ -1,6 +1,6 @@
 # Seguridad para salir a producción: servidor, telefonía, dependencias y puertas de despliegue
 
-Fecha: 2026-10-23 · Estado: **Provisional** (propuesta para revisar con Andreu) ·
+Fecha: 2026-10-23 · Estado: **Provisional** (propuesta pendiente de revisión) ·
 Tareas: `docs/superpowers/plans/2026-10-23-security-hardening.md`.
 
 Parte de lo que ya hay: la revisión de seguridad del 2026-10-22 (nota de la bóveda
@@ -46,7 +46,7 @@ comprobarlos al contratar.
 
 ## Estudio: tráfico malicioso contra un voicebot
 
-Lo que preocupa a Andreu existe y tiene nombre. Esta es la lista completa de lo que conocemos,
+El riesgo existe y tiene nombre. Esta es la lista completa de lo que conocemos,
 ordenada por lo probable que es en nuestro caso.
 
 ### 1. Fraude de peaje por la centralita (toll fraud / IRSF)
@@ -286,7 +286,7 @@ Es lo que falta según la auditoría. Las tareas están en el plan.
 
 ### CI/CD y puertas
 
-**Plataforma (decisión de Andreu).** El repositorio está en GitHub y ya tiene las ramas `develop`,
+**Plataforma (decisión de producto).** El repositorio está en GitHub y ya tiene las ramas `develop`,
 `preproduction` y `production`, pero CLAUDE.md fija GitLab CI para la app.
 
 La recomendación es **GitHub Actions**: el código ya vive allí, no hay que migrar nada y Dependabot
@@ -353,7 +353,7 @@ prevista. Nada más.
 **Componentes de terceros.** LiveKit, `livekit-sip`, Caddy, Postgres y Redis van con versión fijada.
 Un aviso de versión nueva (Renovate o RSS de releases) cubre los parches de seguridad.
 
-**Canal de alertas (decisión de Andreu: Telegram o correo).**
+**Canal de alertas (Telegram o correo).**
 - Una CVE crítica o alta en lo desplegado avisa **en el momento**.
 - El resto va en un resumen semanal.
 - Toda alerta trae el paquete, la versión arreglada y el PR si ya existe.
@@ -407,7 +407,7 @@ Un aviso de versión nueva (Renovate o RSS de releases) cubre los parches de seg
 
 **Pendiente de antes:** rotar la clave de AssemblyAI que estuvo en `.env.example`.
 
-## Decisiones pendientes de Andreu
+## Decisiones pendientes
 
 1. **CI:** GitHub Actions con GitHub Pro (recomendado) o migrar el repositorio a GitLab, como dice
    CLAUDE.md.

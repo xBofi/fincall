@@ -2133,7 +2133,7 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         # El vecino tiene que salir sabiendo qué va a pasar y quién le contactará. Nunca se da una
         # hora firme: nadie ha hablado aún con el profesional (regla de diseño, 2026-08-28). Con la
         # herramienta de agenda (n8n) activada se puede ofrecer un hueco, pero siempre como
-        # provisional y pendiente de que lo confirme el profesional (decisión de Andreu,
+        # provisional y pendiente de que lo confirme el profesional (decisión de producto,
         # 2026-11-24): `notify_channel.visit_notice`.
         contact = (
             render("notify_channel.phone_contact")

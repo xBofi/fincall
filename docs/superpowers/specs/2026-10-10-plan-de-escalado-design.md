@@ -1,6 +1,6 @@
 # Plan de escalado: de la demo a varias fincas
 
-Fecha: 2026-10-10 · Estado: **Provisional** (propuesta para revisar con Andreu y Marc) ·
+Fecha: 2026-10-10 · Estado: **Provisional** (propuesta pendiente de revisión) ·
 Origen: auditoría con 5 agentes (concurrencia, rendimiento, código backend, frontend, infraestructura).
 
 > Capacidad e infraestructura revisadas en [2026-10-23-call-scaling-architecture-design.md](2026-10-23-call-scaling-architecture-design.md).
@@ -102,9 +102,9 @@ Hay que validarlas con una prueba de carga antes de comprometerlas con un client
 Coste variable por llamada de 3 min (estimado): Twilio ~0,03–0,06 € + AssemblyAI ~0,01 € +
 LLM < 0,01 € → **~0,05–0,08 € por llamada**. El coste fijo domina hasta miles de llamadas/mes.
 
-## Decisiones pendientes de Andreu
+## Decisiones pendientes
 
-- **Proveedores por API** (decidido por Andreu el 2026-10-10): LLM en Cloudflare Workers AI, sin
+- **Proveedores por API** (decidido el 2026-10-10): LLM en Cloudflare Workers AI, sin
   GPU propia. Una GPU no carga un modelo por llamada (sirve las peticiones en lote y solo ~1 de
   cada 2–3 turnos llama al LLM), pero las colas en picos y operar el hardware no compensan
   frente a la elasticidad de una API. En producción, `BC_LLM=workers_ai` (no `carrera`, que

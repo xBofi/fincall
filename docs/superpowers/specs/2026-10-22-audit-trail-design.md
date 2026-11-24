@@ -10,10 +10,10 @@ Pass an audit (RGPD art. 5.2, 17 and 32). From the database alone we must be abl
 3. **Erasure:** a call can be erased on request, with everything derived from it, leaving a
    proof that it was erased but nothing of its content.
 
-Decided by Andreu on 2026-10-22 (he is also the company's legal and data-protection contact):
+Product decision of 2026-10-22:
 
 - Only **who** is recorded: no IP, no browser.
-- **Nobody sees the audit** in the application: no screen and no query API. Andreu asks
+- **Nobody sees the audit** in the application: no screen and no query API. The operator asks
   Claude, who reads the database (`building_call.audit.report`).
 - Retention of the audit log: **two years** (Confirmed).
 - **Personal data is per field:** a field is personal if it can end up identifying a person
@@ -147,6 +147,6 @@ installed triggers match the classes, a console change logged with the person's 
 ## Reading the log
 
 There is no audit screen nor query API (only `/api/audit/views*`, which writes). Claude reads
-it when Andreu asks, with `uv run python -m building_call.audit.report` (`changes`, `access`,
+it when The operator asks, with `uv run python -m building_call.audit.report` (`changes`, `access`,
 `record <table> <id>`, `erased <call_id>`, `fingerprint <value>`); each read is itself logged
 as `download` under actor `claude:report`.

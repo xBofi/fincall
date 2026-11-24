@@ -25,7 +25,7 @@ was heard word by word.
 - **Ledger from LiveKit:** on `conversation_item_added` the agent counts the synchronized words
   (`corte_por_palabras`) and reports `texto_entregado`. Completed speech reports the whole text.
 - **Close:** after the farewell, `ControlLlamada` decides whether to hang up or to say the cut
-  next-step notice again first (Andreu, 2026-10-21: the next step matters, the incident number
+  next-step notice again first (product decision, 2026-10-21: the next step matters, the incident number
   is not spoken).
 - **Console:** a «LiveKit» mode (`livekit-client 2.22.3`, loaded on demand). It calls
   `POST /api/livekit/token` (console users only), which returns a room with an
@@ -119,7 +119,7 @@ showed three separate causes:
   - `muletillas_y_saludo` fails only over LiveKit. The turn now arrives in one piece ("Ah,
     vale, perdón. Pues sí. Piso 1, puerta."), but AssemblyAI drops the final "A" in every
     live run (5 of 5). It does not drop it when the same audio is sent outside LiveKit.
-  - With the "A" missing, the graph takes the "B" in "Bofi" as the door. That is a graph bug
+  - With the "A" missing, the graph takes the "B" in the caller's surname as the door. That is a graph bug
     to add to `gold_interpretacion.jsonl`.
   - `portal_ambiguo`: AssemblyAI hears "El tercero es" for "El tercero A es" about half the
     time, over both LiveKit and WebSocket.

@@ -105,7 +105,7 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
-    # Acceso a la consola: solo con Google o Microsoft (decisión de Andreu, 2026-10-21). Quien
+    # Acceso a la consola: solo con Google o Microsoft (decisión de producto, 2026-10-21). Quien
     # entra con BC_OWNER_EMAIL (correo verificado por el proveedor) es owner; el resto solicita
     # acceso y el owner lo concede. Claves solo en backend/.env.
     console_url: str = "http://localhost:5173"  # retorno: {url_consola}/api/auth/oidc/{p}/retorno
@@ -172,7 +172,7 @@ class Settings(BaseSettings):
     # Audio de llamadas: directorio privado, URL firmada de corta duración, retención
     audio_dir: str = ".audio"
     audio_retention_days: int = 14
-    # Audit log (changes and accesses): two years, Confirmed by Andreu as DPO (2026-10-22)
+    # Audit log (changes and accesses): two years, product decision (2026-10-22)
     audit_retention_days: int = 730
     audio_url_seconds: int = 300
 

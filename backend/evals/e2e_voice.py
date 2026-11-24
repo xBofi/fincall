@@ -72,7 +72,7 @@ SCENARIOS: list[dict[str, Any]] = [
             "Sí, vivo en la calle Mayor número doce.",
             "Sí.",
             "Ah, vale, perdón. Pues sí, piso uno, puerta A.",
-            "Con Andreu Bofi Pla.",
+            "Con Laura Gómez Ruiz.",
             "Mira, hay que pintar las paredes del corredor porque no están nada bien.",
             "El corredor del primero, tienen humedad y desconchones.",
             "Sí, es correcto.",

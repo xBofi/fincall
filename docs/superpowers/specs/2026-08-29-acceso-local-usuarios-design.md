@@ -6,7 +6,7 @@
 
 La consola es para personal interno. Google OAuth exigía una pantalla de consentimiento de tipo
 *Externo* al no existir Google Workspace, es decir, una app "para el público" con verificación y
-usuarios de prueba: lo contrario de lo que se quiere. Decisión de Andreu: quitar Google y gestionar
+usuarios de prueba: lo contrario de lo que se quiere. Decisión de producto: quitar Google y gestionar
 los usuarios dentro de la propia aplicación, con una pestaña para añadir y eliminar personas.
 
 ## Diseño

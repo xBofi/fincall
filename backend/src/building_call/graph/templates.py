@@ -307,7 +307,7 @@ CATALOG: dict[str, Template] = dict(
             "confirm_summary",
             "Se le lee al vecino lo entendido y se espera un sí o un no. {who} queda vacío: el "
             "nombre del vecino no se guarda; la vivienda ya está registrada y no se lee. La "
-            "categoría y la urgencia son internas y no se leen (Andreu, 2026-10-21).",
+            "categoría y la urgencia son internas y no se leen (2026-10-21).",
             "Le resumo: {summary}. ¿Es correcto?",
             question=True,
         ),
@@ -438,7 +438,7 @@ CATALOG: dict[str, Template] = dict(
             "notify_channel.visit_notice",
             "notify_channel",
             "Caso normal con la herramienta de agenda (n8n) activada: se ofrece el hueco SIEMPRE "
-            "como provisional, pendiente de que lo confirme el profesional (decisión de Andreu, "
+            "como provisional, pendiente de que lo confirme el profesional (decisión de producto, "
             "2026-11-24). Sin herramienta o si falla, se dice specialist_notice.",
             "Se lo comunico ahora a {specialist}. Le dejo reservada una visita provisional "
             "{slot}, pendiente de que el profesional la confirme: {contact} para confirmarla.",

@@ -150,7 +150,7 @@ timeout falls back to the usual closing ("he will call you to arrange the visit"
 
 The node only runs for a repair with a maintainer assigned and never in an emergency.
 
-**Business rule (Andreu, 2026-11-24).** The assistant never gives a firm time: nobody has spoken
+**Business rule (2026-11-24).** The assistant never gives a firm time: nobody has spoken
 to the maintainer yet. When the n8n tool is enabled it may offer a slot, but always as
 **provisional, pending confirmation by the maintainer**, and that is what the closing says in
 every language (`notify_channel.visit_notice`; a test fails if a language's wording drops it).

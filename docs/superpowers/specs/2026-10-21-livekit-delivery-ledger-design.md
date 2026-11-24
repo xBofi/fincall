@@ -8,7 +8,7 @@ legal notice) and drop what did not (courtesy, a paraphrase). LiveKit Agents, se
 becomes the media layer: it is what knows, word by word, how far the audio got before a
 barge-in.
 
-Decided by Andreu on 2026-10-21: LiveKit **self-hosted** (Ubuntu/Docker), not LiveKit Cloud. The
+Product decision of 2026-10-21: LiveKit **self-hosted** (Ubuntu/Docker), not LiveKit Cloud. The
 audio never leaves our server (RGPD). This replaces the "LiveKit deferred" note in
 `2026-08-28-voice-pipeline-latency-design.md`.
 
@@ -38,8 +38,8 @@ class Pieza(TypedDict):
 
 - `pregunta`: templates with `pregunta=True`. If it was not heard, it must be asked again.
 - `aviso`: the AI and recording notice in the greeting (legal) and the next step at the close
-  (Confirmed by Andreu, 2026-10-21). If it was not heard, it is said again before anything else.
-  The incident number is not spoken (Confirmed by Andreu, 2026-10-21): the close never reads it.
+  (confirmed, 2026-10-21). If it was not heard, it is said again before anything else.
+  The incident number is not spoken (confirmed, 2026-10-21): the close never reads it.
 - `dato`: the summary ("Le resumo: …"), the identified address. If it was not heard and it was
   being confirmed, the confirmation does not count (see §3).
 - `cortesia`: "Perfecto", "De acuerdo, lo corrijo". It is dropped and never repeated.

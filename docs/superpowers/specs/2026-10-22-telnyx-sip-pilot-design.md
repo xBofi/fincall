@@ -1,6 +1,6 @@
 # Prueba de telefonía: Telnyx por trunk SIP + LiveKit SIP
 
-**Fecha:** 2026-10-22 · **Estado:** Provisional (propuesta, pendiente de que Andreu la apruebe) ·
+**Fecha:** 2026-10-22 · **Estado:** Provisional (propuesta, pendiente de aprobación) ·
 Sustituye como camino principal al puente Twilio Media Streams
 (`2026-08-29-telefonia-design.md`), que queda como respaldo.
 
@@ -10,7 +10,7 @@ Comprobar con llamadas reales que el modelo «nuestra propia centralita» funcio
 invertir en escalado y documentación:
 
 1. Un número español de Telnyx recibe llamadas **desviadas** desde la línea de un administrador
-   (en la prueba, el móvil de Andreu) y el bot las atiende.
+   (en la prueba, un móvil de pruebas) y el bot las atiende.
 2. Desde la llamada, el bot **transfiere** a un teléfono humano cuando el vecino lo pide.
 3. Medimos lo que decide si seguimos: `response_ms` por teléfono, si llega el número del vecino
    tras el desvío, calidad del audio a 8 kHz con AssemblyAI y si las transferencias funcionan.
@@ -56,7 +56,7 @@ Si no: se documenta por qué y se prueba el respaldo (Twilio).
 - **Audio**: códec G.711 A-law (el de la red española) entre Telnyx y LiveKit. LiveKit lo
   convierte para el agente. Se mide si AssemblyAI pierde exactitud con audio telefónico.
 
-## Lo que hace Andreu (no se puede automatizar)
+## Lo que hace el responsable (no se puede automatizar)
 
 1. Cuenta de empresa en Telnyx: verificación y recarga de saldo prepago.
 2. Pedir un número español y subir la documentación que pida Telnyx (empresa y dirección).

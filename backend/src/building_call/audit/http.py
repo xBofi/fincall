@@ -4,7 +4,7 @@ It sets the request id (the `X-Request-ID` header if present, otherwise a new on
 channel. Authentication sets the actor afterwards (`Access`, the agent secret); the Twilio
 routes have no session and are recorded as the telephony. Pure ASGI rather than
 `BaseHTTPMiddleware`: the route runs in the same context, with no copies between tasks.
-No IP or browser is recorded (Andreu, 2026-10-22): only who.
+No IP or browser is recorded (2026-10-22): only who.
 """
 
 from __future__ import annotations

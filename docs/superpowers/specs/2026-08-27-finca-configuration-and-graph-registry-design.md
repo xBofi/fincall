@@ -4,7 +4,7 @@
 
 Define how Building Call Assistant models per-finca behaviour so that a new finca with a different configuration can be onboarded without touching the call flow code, while allowing a finca to run a different LangGraph graph when its process genuinely differs.
 
-Status legend follows the vault convention: **Confirmado** (stated by Andreu), **Provisional** (proposed), **Pendiente** (requires external input).
+Status legend follows the vault convention: **Confirmado** (stated by the product owner), **Provisional** (proposed), **Pendiente** (requires external input).
 
 ## Decisions
 
@@ -77,7 +77,7 @@ One prompt per node, shared by all fincas. Finca-specific values (category catal
 
 ## Development and validation phase — Confirmado
 
-The first development increment must let Andreu validate that the agents work correctly before any paid API is used:
+The first development increment must let the product owner validate that the agents work correctly before any paid API is used:
 
 - LLM: local Ollama (`qwen3.5:4b` by default, `qwen3:8b` for quality checks). LiveKit, paid voice providers and paid LLM APIs are not used in this phase. LiteLLM is likewise deferred until a paid provider is introduced.
 - Speech: the browser Web Speech API (SpeechRecognition for STT, SpeechSynthesis for TTS). No paid voice provider.
@@ -94,4 +94,4 @@ Telephony provider and real-time media layer (LiveKit is the candidate, self-hos
 - A finca that needs a different process is served by registering one graph and setting its `grafo` field.
 - Every stored call references the configuration version and graph used.
 - Changing a global default propagates to every finca that did not override it.
-- Andreu can complete a simulated call end to end in the browser with local models only.
+- The product owner can complete a simulated call end to end in the browser with local models only.

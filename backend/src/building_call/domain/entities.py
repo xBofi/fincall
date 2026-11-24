@@ -45,7 +45,7 @@ class Estate(BaseModel):
 
 
 #: Qué tipo de actuación pide la incidencia. Solo `repair` se avisa directamente a un
-#: profesional; el resto lo decide el administrador (regla de Andreu, 2026-10-21)
+#: profesional; el resto lo decide el administrador (regla de producto, 2026-10-21)
 WorkType = Literal["repair", "replacement", "insurance_claim", "neighbour_dispute", "private_unit"]
 WORK_TYPES: tuple[str, ...] = ("repair", "replacement", "insurance_claim", "neighbour_dispute", "private_unit")
 

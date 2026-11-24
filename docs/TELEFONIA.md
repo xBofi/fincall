@@ -119,7 +119,7 @@ Estado: código listo y probado con proveedor simulado (`backend/tests/test_tele
 comprar un número español en minutos y expone el audio de la llamada por WebSocket. Otro proveedor
 por WebSocket solo requiere un adaptador nuevo que implemente `CarrierChannel` (`telephony/carrier.py`).
 
-## Qué hace falta de Andreu
+## Qué hace falta del responsable
 
 1. Cuenta de Twilio con un número de voz (España, `+34…`). En la consola de Twilio: **Account SID**
    y **Auth Token**.

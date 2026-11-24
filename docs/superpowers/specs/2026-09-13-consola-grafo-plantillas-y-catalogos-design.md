@@ -1,6 +1,6 @@
 # Consola: grafo del bot, plantillas editables y catálogos
 
-**Fecha:** 2026-09-13 · **Estado:** Implementado el 2026-09-13 (Provisional hasta que Andreu lo valide en uso)
+**Fecha:** 2026-09-13 · **Estado:** Implementado el 2026-09-13 (Provisional hasta validarlo en uso)
 **Repo:** app (`develop`), carpetas `backend/` y `frontend/`
 
 ## 1. Problema

@@ -1,4 +1,4 @@
-"""Audit report, for Claude when Andreu asks. Nobody else reads the log (Andreu, 2026-10-22).
+"""Audit report, read on request by an operator. Nobody else reads the log (2026-10-22).
 
     uv run python -m building_call.audit.report changes --table incidents --record inc-1
     uv run python -m building_call.audit.report access --actor user:usr-1 --since 2026-10-01

@@ -1,6 +1,6 @@
 """Acceso con Google y Microsoft: identidad del proveedor y estado de la solicitud de acceso.
 
-Las cuentas con contraseña dejan de entrar (decisión de Andreu, 2026-10-21): su hash pasa a ser
+Las cuentas con contraseña dejan de entrar (decisión de producto, 2026-10-21): su hash pasa a ser
 opcional y conservan `estado_acceso = concedido` para que el owner las vea y las borre.
 
 Revision ID: 0006

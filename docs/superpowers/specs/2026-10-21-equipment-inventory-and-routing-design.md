@@ -13,7 +13,7 @@ A door-entry system is serviced by its installer or maintainer. Vandalism usuall
 community's insurance, and replacing the unit needs the administrator's approval. The bot should
 have registered the incident for the administrator, with a suggestion.
 
-## Business rules (Provisional, from Andreu 2026-10-21; to be copied to the vault on `bofi`)
+## Business rules (Provisional, 2026-10-21)
 
 1. **The bot notifies a professional directly only if all of these hold:**
    - the incident is a **repair** (not a replacement or works, not insurance or a third party,

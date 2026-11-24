@@ -4,7 +4,7 @@
   business table, written by a trigger (the application cannot forge them).
 - `audit_changes`: one row per insert, update and delete, written by triggers.
 - `audit_access`: who read, listed, viewed, played or downloaded what, and for how long.
-- Both append-only. No IP or browser: only who (Andreu, 2026-10-22).
+- Both append-only. No IP or browser: only who (2026-10-22).
 - The sentinel call `deleted-call`, that the incidents of an erased call point to.
 - The caller's name is no longer kept: `calls.declared_name` goes, and so does the name in the
   stored interpretations, the live state and the decision log.

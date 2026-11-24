@@ -2,7 +2,7 @@
 
 ## Decision
 
-Decided by Andreu on 2026-10-21. This replaces the 2026-08-29 rule "no external OAuth, internal
+Product decision of 2026-10-21. This replaces the 2026-08-29 rule "no external OAuth, internal
 users with password":
 
 - The console is entered **only** with Google or Microsoft (OpenID Connect). The username and

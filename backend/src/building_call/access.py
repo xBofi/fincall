@@ -1,6 +1,6 @@
 """Acceso a la consola operativa: Google o Microsoft, solicitudes de acceso y roles.
 
-Decisión de Andreu (2026-10-21): no hay contraseñas. Reglas:
+Decisión de producto (2026-10-21): no hay contraseñas. Reglas:
 - Se entra con Google o Microsoft (`oidc.py`). La persona es (proveedor, sujeto); el correo solo
   cuenta si el proveedor lo verifica.
 - `BC_OWNER_EMAIL` entra directamente como owner. El resto ve una página de bienvenida y solicita

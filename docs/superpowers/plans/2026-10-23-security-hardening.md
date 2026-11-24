@@ -12,7 +12,7 @@ Estado: **Provisional** (pendiente de las decisiones del final de la spec).
 - **Tam.:** S (≤ medio día), M (1–2 días), L (más).
 - **Piloto:** «Sí» bloquea el piloto con número real; «—» se puede hacer después.
 
-## Bloque A — Cuentas y secretos (Andreu, sin código)
+## Bloque A — Cuentas y secretos (manual, sin código)
 
 | ID | Tarea | Hecho cuando | Tam. | Piloto |
 |---|---|---|---|---|
@@ -71,7 +71,7 @@ Estado: **Provisional** (pendiente de las decisiones del final de la spec).
 | E1 | Workflow `ci.yml` (PR y push a `develop`): ruff, mypy, pytest (memoria y Postgres de servicio), migraciones arriba y abajo, Bandit, Semgrep, gitleaks, pip-audit/osv-scanner, `pnpm audit --prod`, oxlint, build del frontend, hadolint, `compose config`, build de imágenes y Trivy. **Actions fijadas por SHA**, permisos mínimos (`permissions: contents: read`) | Un PR con una dependencia vulnerable o un secreto de prueba falla | M | Sí |
 | E2 | Arreglar lo que E1 destape (p. ej. los errores de mypy) o suprimirlo con justificación escrita y fecha de revisión | `ci.yml` en verde en `develop` | M | Sí |
 | E3 | Dependabot (o Renovate) para uv, pnpm, Docker, compose y GitHub Actions: seguridad al momento, versiones agrupadas cada semana | Llegan los primeros PR y pasan por las puertas | S | Sí |
-| E4 | `gitleaks` también como pre-commit local (Claude, Codex y Andreu) | Un commit con un token de prueba se rechaza en local | S | — |
+| E4 | `gitleaks` también como pre-commit local (agentes y desarrolladores) | Un commit con un token de prueba se rechaza en local | S | — |
 | E5 | `release.yml` (PR a `preproduction`): imágenes construidas una vez, publicadas en GHCR por digest, firmadas con cosign sin clave, con SBOM CycloneDX adjunto | Cada versión tiene digests, firma y SBOM | M | Sí |
 | E6 | **Preproducción efímera** (`preprod.yml`, tras fusionar en `preproduction`). OpenTofu crea la instancia por horas, el DNS `pre.` y el despliegue de los digests de E5. Migraciones sobre datos sintéticos. Pruebas de humo, banco SIP `e2e_sip.py` con claves de preproducción y puerta de latencia (`response_ms` p95 ≤ 1500), ZAP baseline y de API, y `validate_production()`. **Se destruye con `if: always()`** | Una ejecución completa termina con la instancia borrada y el check «preprod OK» en el SHA | L | — (antes de la primera versión que no sea el piloto) |
 | E7 | Limpieza nocturna: borrar cualquier instancia o DNS `pre-*` de más de 2 h | Una instancia dejada a propósito desaparece sola | S | — |

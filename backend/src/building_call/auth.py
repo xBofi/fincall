@@ -1,6 +1,6 @@
 """Primitivas de autenticación: el token de sesión es opaco y en base de datos solo vive su hash.
 
-Las contraseñas desaparecieron con el acceso por Google y Microsoft (Andreu, 2026-10-21).
+Las contraseñas desaparecieron con el acceso por Google y Microsoft (2026-10-21).
 """
 
 from __future__ import annotations

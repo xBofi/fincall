@@ -94,7 +94,7 @@ async def test_reviewer_sees_call_records_transcript_and_decisions(
     transcript = (await client.get(f"/api/operations/calls/{cid}/transcript")).json()
     assert transcript[0]["role"] == "bot"
 
-    # Nobody queries the audit log from the console (Andreu, 2026-10-22)
+    # Nobody queries the audit log from the console (2026-10-22)
     assert (await client.get("/api/operations/audit")).status_code == 404
 
 

@@ -1,6 +1,6 @@
 # Consola más intuitiva para la demo a clientes
 
-Fecha: 2026-10-10 · Estado: aprobado por Andreu (petición directa) · Ámbito: solo `frontend/`
+Fecha: 2026-10-10 · Estado: aprobado · Ámbito: solo `frontend/`
 
 ## Problema
 

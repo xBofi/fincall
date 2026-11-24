@@ -1,6 +1,6 @@
 """Tratamiento especial de emergencias (gas, fuego, humo, alguien atrapado).
 
-Bóveda (Confirmado por Andreu): las emergencias están desactivadas inicialmente y se tratan como
+Bóveda (Confirmado): las emergencias están desactivadas inicialmente y se tratan como
 `high`. Con el ajuste `emergencies_enabled`, el bot da primero una indicación de seguridad, no
 pide detalle ni lee el resumen largo, crea la incidencia como emergencia y deja el aviso al
 coordinador y al teléfono oficial de la finca como simulado (nunca llama ni envía nada).

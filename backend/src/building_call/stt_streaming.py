@@ -28,7 +28,7 @@ class AssemblyAIConfigError(ValueError):
 
 
 def validate_eu_endpoint(url: str) -> str:
-    """Solo se permiten endpoints europeos (decisión de Andreu, 2026-08-28)."""
+    """Solo se permiten endpoints europeos (decisión de producto, 2026-08-28)."""
     if ".eu.assemblyai.com" not in url:
         raise AssemblyAIConfigError(
             f"Endpoint AssemblyAI no europeo rechazado: {url}. Use https://api.eu.assemblyai.com"
@@ -64,7 +64,7 @@ class AssemblyAIStreamingSession:
         """Fin de turno: AssemblyAI cierra el turno cuando su confianza de que la frase ha
         terminado supera `eot_confidence` y hay `eot_silence_ms` de silencio; si no está
         seguro, espera `max_silence_ms`. Los valores por defecto del proveedor (0.7 / 160 ms)
-        cortaban al vecino a mitad de frase (prueba de Andreu, 2026-08-28)."""
+        cortaban al vecino a mitad de frase (prueba manual, 2026-08-28)."""
         if not api_key:
             raise AssemblyAIConfigError("Falta BC_ASSEMBLYAI_API_KEY")
         if not host.endswith(".eu.assemblyai.com"):

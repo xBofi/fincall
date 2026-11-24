@@ -1,6 +1,6 @@
 """A quién llega cada incidencia: mantenedor del equipo, especialista o administrador.
 
-Regla de Andreu (2026-10-21, Provisional): solo se avisa directamente a un profesional cuando es
+Regla de producto (2026-10-21, Provisional): solo se avisa directamente a un profesional cuando es
 una reparación, hay alguien para ella y el vecino confirma sin objeciones. Lo demás lo decide el
 administrador, con una sugerencia. Spec: 2026-10-21-equipment-inventory-and-routing-design.md.
 """

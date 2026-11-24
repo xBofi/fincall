@@ -6,7 +6,7 @@ Guía operativa: `docs/TELEFONIA.md`.
 ## Objetivo
 
 Que una llamada de teléfono real pase por el mismo grafo, el mismo STT (AssemblyAI EU) y la misma
-persistencia que la consola web, sin tocar el grafo ni el gestor. Andreu entrega credenciales y
+persistencia que la consola web, sin tocar el grafo ni el gestor. El responsable entrega credenciales y
 número; el sistema queda configurado con un comando.
 
 ## Decisiones

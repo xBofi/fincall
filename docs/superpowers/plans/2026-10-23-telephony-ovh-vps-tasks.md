@@ -1,6 +1,6 @@
 # Tareas para activar la telefonía en el VPS de OVH
 
-**Fecha:** 2026-10-23 · **Estado:** Provisional (pendiente de que Andreu lo apruebe) ·
+**Fecha:** 2026-10-23 · **Estado:** Provisional (pendiente de aprobación) ·
 Parte de la spec `../specs/2026-10-22-telnyx-sip-pilot-design.md` (fase 1). Es la «etapa 1» del
 plan de escalado que lleva la sesión orquestadora.
 
@@ -20,7 +20,7 @@ plan de escalado que lleva la sesión orquestadora.
   de carga antes de dar por buena la etapa.
 - **Consola:** no se expone a internet; se entra por túnel SSH.
 
-## Andreu
+## Responsable
 
 1. Empresa o alta de autónomo. Es el bloqueo para tener un número español.
 2. Contratar el VPS y dar acceso SSH con clave.
@@ -34,7 +34,7 @@ plan de escalado que lleva la sesión orquestadora.
 
 ## Claude
 
-1. Integrar `feat/sip-local` en `develop` cuando Andreu lo apruebe.
+1. Integrar `feat/sip-local` en `develop` cuando se apruebe.
 2. Preparar el VPS: Docker, usuario sin root, SSH solo con clave, fail2ban y cortafuegos en dos
    capas (red de OVH y `ufw`). LiveKit en red del host y reglas en `DOCKER-USER`, porque Docker se
    salta `ufw`. Las medidas contra el abuso del trunk las define el estudio de seguridad.

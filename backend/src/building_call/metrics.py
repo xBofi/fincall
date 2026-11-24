@@ -1,7 +1,7 @@
 """Métricas de latencia del pipeline de voz.
 
 La métrica principal es `response_ms`: desde el final del audio del vecino hasta el inicio del
-audio del bot. Umbrales fijados por Andreu (2026-08-28):
+audio del bot. Umbrales fijados (2026-08-28):
 
     <= 700 ms  excelente
     <= 1200 ms objetivo

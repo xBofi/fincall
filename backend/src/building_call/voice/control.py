@@ -17,7 +17,7 @@ había escuchado. Por eso aquí:
   cerrado en silencio no espera nada.
 
 Al final no hay turno siguiente: si el vecino cortó el cierre, el agente repite lo que no oyó
-del aviso (el siguiente paso) antes de colgar. Confirmado por Andreu el 2026-10-21: el siguiente
+del aviso (el siguiente paso) antes de colgar. Confirmado el 2026-10-21: el siguiente
 paso es importante.
 """
 

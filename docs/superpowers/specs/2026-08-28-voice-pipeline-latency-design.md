@@ -3,7 +3,7 @@
 ## Goal
 
 Make the call feel natural while keeping LangGraph in control, and drive the response latency —
-**end of the caller's speech to start of the assistant's speech** — down to Andreu's targets:
+**end of the caller's speech to start of the assistant's speech** — down to these targets:
 
 | Response latency | Rating |
 |---|---|
@@ -16,7 +16,7 @@ Make the call feel natural while keeping LangGraph in control, and drive the res
 Every change to the pipeline is measured against these thresholds (p50 and p95) with the tooling
 described below. No paid APIs in this phase: local Ollama, browser Web Speech API or local
 open-source models. LiveKit stays deferred; the API contract is transport-agnostic so a LiveKit
-agent can later replace the browser as the client. Reference design: `xBofi/andreu-portfolio`.
+agent can later replace the browser as the client.
 
 ## Pipeline
 

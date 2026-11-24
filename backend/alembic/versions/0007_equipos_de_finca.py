@@ -3,7 +3,7 @@
 Cada finca puede listar sus equipos (portero, ascensor, puerta de garaje...) con marca, modelo,
 instalador y mantenedor: se avisa al mantenedor antes que a un profesional genérico. La
 incidencia guarda el equipo, el tipo de actuación y la sugerencia para el administrador (regla de
-Andreu, 2026-10-21).
+producto, 2026-10-21).
 
 Revision ID: 0007
 Revises: 0006

@@ -1,4 +1,4 @@
-"""Purge of the audit log after its retention period (two years, Confirmed by Andreu).
+"""Purge of the audit log after its retention period (two years, confirmed).
 
 It is the only thing that may delete from the log: it marks the transaction with
 `fincall.purge = 'on'`, which the append-only trigger accepts for `DELETE` and nothing else.

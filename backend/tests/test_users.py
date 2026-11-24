@@ -107,7 +107,7 @@ async def test_configured_providers(app: Any) -> None:
 
 async def test_the_owner_gets_in_directly(app: Any, oidc: FakeOidc) -> None:
     async with _client(app) as c:
-        assert await _log_in(c, oidc, sub="g-1", email=OWNER, email_verified=True, name="Andreu")
+        assert await _log_in(c, oidc, sub="g-1", email=OWNER, email_verified=True, name="Owner")
         me = await _me(c)
         assert me["authenticated"] and me["user"]["role"] == "owner"
         assert me["user"]["access_state"] == "granted"
@@ -290,9 +290,9 @@ async def test_unverified_email_is_neither_stored_nor_shown(app: Any, oidc: Fake
             sub="ms-9",
             tid=company,
             iss=f"https://login.microsoftonline.com/{company}/v2.0",
-            email="marc@empresa.es",
-            name="Marc",
+            email="pablo@empresa.es",
+            name="Pablo",
         )
         me = (await _me(fake))["user"]
         assert me["email"] is None
-        assert "marc@empresa.es" not in me["username"]
+        assert "pablo@empresa.es" not in me["username"]

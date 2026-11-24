@@ -2,7 +2,7 @@
 
 The console opens a view when a record with personal data is on screen, sends a heartbeat
 while it stays and closes it when it leaves. Nobody can query the log from the console
-(Andreu, 2026-10-22): Andreu asks Claude, who reads it with `building_call.audit.report`.
+(2026-10-22): an operator asks Claude, who reads it with `building_call.audit.report`.
 """
 
 from __future__ import annotations

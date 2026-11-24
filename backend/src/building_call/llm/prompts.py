@@ -12,10 +12,10 @@ from building_call.llm import prompts_en, wire
 CLASSIFICATION_VERSION = "clasificacion-v6"
 
 #: Qué entra en cada categoría del catálogo por defecto. Un administrador puede tener códigos
-#: propios: sin descripción, el modelo solo ve el código. Provisional hasta que Andreu lo valide.
+#: propios: sin descripción, el modelo solo ve el código. Provisional hasta validarlo.
 CATEGORY_DESCRIPTION = {
     "plumbing": "agua, tuberías, grifos, desagües, atascos, fugas",
-    # El portero automático no: lo atiende su instalador o mantenedor (Andreu, 2026-10-21)
+    # El portero automático no: lo atiende su instalador o mantenedor (2026-10-21)
     "electrical": "luces, bombillas, enchufes, interruptores, cuadro eléctrico, timbre",
     "elevator": "el ascensor: cabina, puertas, botones, ruidos",
     "cleaning": "suciedad, basura, cristales rotos en el suelo, olores de basura",
