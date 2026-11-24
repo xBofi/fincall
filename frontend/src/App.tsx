@@ -64,7 +64,7 @@ const FlowPanel = lazy(() => import('./components/FlowPanel').then((m) => ({ def
 const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.Inbox })))
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
 
-type SttMode = 'browser' | 'server' | 'streaming' | 'livekit' | 'twilio'
+type SttMode = 'browser' | 'server' | 'streaming' | 'livekit' | 'twilio' | 'line'
 type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | 'users' | 'requests'
 
 /** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
@@ -220,7 +220,7 @@ export default function App() {
       const t: MeasuredTurn = {
         turn: v.turn,
         mode: voiceEndAt === null ? 'text' : 'voice',
-        stt: voiceEndAt === null ? null : mode === 'streaming' || mode === 'livekit' || mode === 'twilio' ? 'server' : mode,
+        stt: voiceEndAt === null ? null : mode === 'streaming' || mode === 'livekit' || mode === 'twilio' || mode === 'line' ? 'server' : mode,
         server_ms: v.timings.server_ms,
         interpretation_ms: v.timings.interpretation_ms,
         llm_calls: v.timings.llm_calls,
@@ -435,14 +435,16 @@ export default function App() {
     else livekitRef.current = session
   }
 
-  /** Por Twilio: el navegador llama a Twilio y la llamada llega al agente como una de teléfono. */
-  const startTwilio = async () => {
+  /** Por Twilio (la red telefónica real) o por la línea del navegador (el mismo puente, sin
+   * Twilio): la llamada llega al agente como una de teléfono y la consola la sigue en directo. */
+  const startTwilio = async (carrier: 'twilio' | 'line' = 'twilio') => {
     const v = await api.begin({ language: callLanguage || null, persona: persona || null })
     viewRef.current = v
     setView(v)
     const generation = generationRef.current
-    const { openTwilio } = await import('./twilioCall')
-    const session = await openTwilio(v.call_id, {
+    const open =
+      carrier === 'line' ? (await import('./phoneLine')).openPhoneLine : (await import('./twilioCall')).openTwilio
+    const session = await open(v.call_id, {
       onView: (updated) => {
         viewRef.current = updated
         setView(updated)
@@ -479,8 +481,8 @@ export default function App() {
         await startLiveKit()
         return
       }
-      if (optionsRef.current.sttMode === 'twilio') {
-        await startTwilio()
+      if (optionsRef.current.sttMode === 'twilio' || optionsRef.current.sttMode === 'line') {
+        await startTwilio(optionsRef.current.sttMode)
         return
       }
       const v = await api.begin({ language: callLanguage || null, persona: persona || null })
@@ -636,6 +638,7 @@ export default function App() {
           onChange={(value) => setSttMode(value as SttMode)}
           options={[
             { label: 'Twilio', value: 'twilio', disabled: !health?.twilio_browser },
+            { label: t('voice.mode.line'), value: 'line', disabled: !health?.browser_line },
             { label: 'LiveKit', value: 'livekit', disabled: !health?.livekit },
             { label: t('voice.mode.server'), value: 'streaming', disabled: !sttStreamingOk },
             { label: t('voice.mode.browser'), value: 'browser', disabled: !sttNavegadorOk },

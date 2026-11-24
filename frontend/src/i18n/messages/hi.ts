@@ -34,6 +34,7 @@ export const hi: Messages = {
   'voice.mode.server': 'सर्वर',
   'voice.mode.browser': 'ब्राउज़र',
   'voice.mode.recording': 'रिकॉर्डिंग',
+  'voice.mode.line': 'फ़ोन लाइन (Twilio के बिना)',
   'voice.modes.hint': '«Twilio» और «LiveKit» असली कॉल का रास्ता हैं: आवाज़, बीच में बोलना और लेजर सर्वर पर।',
   'voice.silence': 'टर्न खत्म करने वाली चुप्पी: {ms} ms',
 

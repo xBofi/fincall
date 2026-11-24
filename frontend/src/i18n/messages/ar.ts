@@ -34,6 +34,7 @@ export const ar: Messages = {
   'voice.mode.server': 'الخادم',
   'voice.mode.browser': 'المتصفح',
   'voice.mode.recording': 'التسجيل',
+  'voice.mode.line': 'خط هاتف (بدون Twilio)',
   'voice.modes.hint': '«Twilio» و«LiveKit» هما مسار المكالمات الحقيقية: الصوت والمقاطعة والسجل على الخادم.',
   'voice.silence': 'الصمت الذي ينهي الدور: {ms} مللي ثانية',
 

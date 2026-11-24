@@ -70,15 +70,16 @@ from building_call.services import CallManager, CallNotFound
 from building_call.settings import settings
 from building_call.stt import UnavailableRecognizer, VoiceRecognizer, WhisperRecognizer
 from building_call.stt_streaming import AssemblyAIStreamingSession, validate_eu_endpoint
-from building_call.telephony.bridge import CallBridge
+from building_call.telephony.bridge import CallBridge, PhoneChannel
 from building_call.telephony.browser import (
     browser_ready_reason,
     console_identity,
     voice_access_token,
 )
+from building_call.telephony.browser_line import BrowserLineChannel, create_browser_line_router
 from building_call.telephony.configure import not_ready_reason
 from building_call.telephony.tts import create_tts, fragments
-from building_call.telephony.twilio import TwilioChannel, create_twilio_router
+from building_call.telephony.twilio import create_twilio_router
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +393,7 @@ def create_app(
         return not_ready_reason(settings, tts.available(), streaming_factory is not None)
 
     async def bridge_factory(
-        channel: TwilioChannel,
+        channel: PhoneChannel,
         phone: str | None,
         existing_call_id: str | None = None,
         language: str | None = None,
@@ -419,6 +420,30 @@ def create_app(
         )
 
     app.include_router(create_twilio_router(settings, bridge_factory, telephony_ready))
+
+    # The phone path without Twilio: the console's microphone as a phone line (same bridge)
+    def browser_line_ready() -> str | None:
+        if streaming_factory is None:
+            return "Falta el STT en streaming (BC_ASSEMBLYAI_API_KEY)"
+        if not tts.available():
+            return "Falta una voz de servidor (BC_TTS)"
+        return None
+
+    async def authorize_console(ws: WebSocket) -> bool:
+        return await access.user_from_request(ws) is not None  # type: ignore[arg-type]
+
+    async def open_call(call_id: str) -> bool:
+        try:
+            return not (await manager.get(call_id)).get("finished")
+        except CallNotFound:
+            return False
+
+    async def line_bridge(channel: BrowserLineChannel, call_id: str) -> CallBridge:
+        return await bridge_factory(channel, None, call_id)
+
+    app.include_router(
+        create_browser_line_router(authorize_console, line_bridge, browser_line_ready, open_call)
+    )
     # Las APIs de la llamada de la consola (iniciar, mensajes, voz, métricas) exigen sesión: la
     # telefonía entra por su propio adaptador firmado, así que ya no hay motivo para dejarlas abiertas
     protected = [Depends(access.requires())]
@@ -537,6 +562,7 @@ def create_app(
             "access": access.mode,
             "telephony": settings.telephony if telephony_ready() is None else None,
             "twilio_browser": telephony_ready() is None and browser_ready_reason(settings) is None,
+            "browser_line": browser_line_ready() is None,
             "server_tts": tts.name if tts.available() else None,
             "graphs": sorted(REGISTRY),
             "thresholds_ms": {name: limit for limit, name in THRESHOLDS_MS},

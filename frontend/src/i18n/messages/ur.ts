@@ -34,6 +34,7 @@ export const ur: Messages = {
   'voice.mode.server': 'سرور',
   'voice.mode.browser': 'براؤزر',
   'voice.mode.recording': 'ریکارڈنگ',
+  'voice.mode.line': 'فون لائن (Twilio کے بغیر)',
   'voice.modes.hint': '«Twilio» اور «LiveKit» اصل کالوں کا راستہ ہیں: آواز، مداخلت اور لیجر سرور پر۔',
   'voice.silence': 'ٹرن ختم کرنے والی خاموشی: {ms} ms',
 

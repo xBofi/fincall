@@ -160,21 +160,36 @@ OS has an Urdu one). If AssemblyAI is unavailable, the console falls back to the
 speech recognition (`browser_lang`); phone calls need AssemblyAI. Local Ollama models are weak
 in Urdu and Hindi: use Gemini for those languages in production.
 
-### Calling the agent from the browser through Twilio
+### Talking to the agent from the browser, as a phone caller
 
-The console can call the agent over the phone network without a phone number: the Twilio Voice
-JavaScript SDK (WebRTC) dials a TwiML App whose voice URL is the same webhook as the number, so
-the call goes through `<Connect><Stream>`, μ-law 8 kHz, the server TTS, barge-in and the delivery
-ledger exactly like a real call. The console opens the call first and shows it live.
+Two ways to test the **phone path** (μ-law 8 kHz, server STT and TTS, barge-in, delivery
+ledger, two-track recording) without a phone number. Both are voice modes of the console's
+simulator, and the console follows the call live in either.
 
-1. In Twilio: an API key (Standard) for the Access Tokens. Keep the SID and secret in
-   SecretBroker (`BC_TWILIO_API_KEY_SID`, `BC_TWILIO_API_KEY_SECRET`).
-2. A public https URL for the API (`BC_PUBLIC_URL`, e.g. the ngrok domain) and
-   `BC_TELEPHONY=twilio` with the account SID and auth token.
-3. `uv run python -m building_call.telephony.configure --twiml-app` creates (or updates) the
-   "FinCall console" TwiML App and prints `BC_TWILIO_TWIML_APP_SID`. It buys nothing.
-4. In the console, choose **Twilio** as the voice mode and start the call. On a trial account
-   Twilio plays a short notice first; the console presses the key for you.
+**1. Phone line (no Twilio): `Phone line` mode.** The browser captures the microphone at 8 kHz,
+encodes G.711 μ-law in 20 ms frames and sends them over `WS /api/telephony/browser/line`, which
+speaks the Twilio Media Streams protocol (`start`/`media`/`mark`/`clear`/`stop`) and plugs into
+the same `CallBridge` as a phone call (`telephony/browser_line.py`, `frontend/src/phoneLine.ts`).
+It needs only the console session, `BC_ASSEMBLYAI_API_KEY` and a server voice (`BC_TTS`): no
+Twilio account, no public URL, no cost beyond STT/TTS.
+
+**2. Twilio Voice JS SDK (WebRTC): `Twilio` mode.** The browser gets a 15-minute Access Token
+(`POST /api/telephony/twilio/browser-token`, identity `console_<user>`) and dials a TwiML App
+whose voice URL is the same webhook as the phone number; Twilio then opens the Media Stream to
+the bridge. The real carrier path, still with no phone number. Setup, once:
+
+1. Twilio credentials in SecretBroker (tag `fincall`): account SID and auth token
+   (`BC_TWILIO_ACCOUNT_SID`, `BC_TWILIO_AUTH_TOKEN`), `BC_TELEPHONY=twilio`.
+2. A **Standard API key** created in the Twilio console (Account → API keys); store its SID and
+   secret as `BC_TWILIO_API_KEY_SID` / `BC_TWILIO_API_KEY_SECRET` (Access Tokens are signed with it).
+3. A public https URL for the API (`BC_PUBLIC_URL`, e.g. the fixed ngrok domain) so Twilio can
+   reach the webhook and the Media Stream.
+4. `uv run python -m building_call.telephony.configure --twiml-app` creates or updates the
+   "FinCall console" TwiML App (voice URL = the webhook) and prints `BC_TWILIO_TWIML_APP_SID`.
+   It creates nothing else and buys nothing; browser (Client) minutes are billed by Twilio at its
+   Client rate when a call is made.
+5. Restart the API: `GET /api/health` shows `twilio_browser: true` and the console enables the
+   mode. On a trial account Twilio plays a short notice first; the console presses the key.
 
 Seguridad: contraseñas solo como hash scrypt; token de sesión opaco en cookie `HttpOnly` (`Secure` fuera de
 localhost) con solo su hash en BD; sesiones revocables (logout, cambio de contraseña, desactivación, baja);
