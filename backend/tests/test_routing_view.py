@@ -225,3 +225,24 @@ async def test_sse_sends_a_snapshot_and_closes_for_a_finished_call(client: Async
 
 async def test_sse_unknown_call_is_404(client: AsyncClient) -> None:
     assert (await client.get("/api/calls/llam-nope/events")).status_code == 404
+
+
+# ------------------------------------------------------------------------------------- la demo
+
+DEMO = Path(__file__).resolve().parents[2] / "frontend/src/components/routing/demo/demoCall.json"
+
+
+def test_the_recorded_demo_still_matches_the_compiled_graph() -> None:
+    """Si el grafo cambia, hay que volver a grabar la demo (evals/record_demo_call.py)."""
+    demo = json.loads(DEMO.read_text(encoding="utf-8"))
+    current = export_graph()
+    assert [n["id"] for n in demo["structure"]["nodes"]] == [n["id"] for n in current["nodes"]]
+    assert [(e["id"], e["condition"]) for e in demo["structure"]["edges"]] == [
+        (e["id"], e["condition"]) for e in current["edges"]
+    ]
+    declared = {e["id"] for e in current["edges"]}
+    for turn in demo["turns"]:
+        for v in turn["visits"]:
+            target = "__end__" if v["target"] == "end" else v["target"]
+            assert v["declared"]
+            assert v["node"] == target or f"{v['node']}->{target}" in declared

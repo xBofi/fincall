@@ -1,8 +1,12 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { I18nProvider } from './i18n'
 import App from './App'
 import './index.css'
+
+/** Demo autónoma de la vista de enrutado: sin sesión, backend ni telefonía. */
+const DemoPage = lazy(() => import('./components/routing/DemoPage'))
+const isDemo = location.pathname.replace(/\/$/, '').endsWith('/demo') || new URLSearchParams(location.search).has('demo')
 
 /** Mismos escalones que `html { font-size }` en index.css: Ant Design mide en px, no en rem. */
 const SIZE_STEPS: [string, { fontSize: number; controlHeight: number }][] = [
@@ -24,7 +28,7 @@ function Root() {
   }, [])
   return (
     <I18nProvider theme={{ token }}>
-      <App />
+      {isDemo ? <Suspense fallback={null}><DemoPage /></Suspense> : <App />}
     </I18nProvider>
   )
 }
