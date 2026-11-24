@@ -207,6 +207,17 @@ export interface BrowserRecognition {
   resultAt: number
 }
 
+/** BCP-47 tag of the call's language for the browser's speech APIs (`GET /api/languages`,
+ * `browser_lang`). The console sets it when a call starts or switches language. */
+let speechLang = 'es-ES'
+
+export function setSpeechLanguage(tag: string): void {
+  if (tag && tag !== speechLang) {
+    speechLang = tag
+    chosenVoice = undefined
+  }
+}
+
 /** STT del navegador (Chrome/Edge). Un único enunciado; termina solo. */
 export function recognizeInBrowser(
   onState: (state: 'awaiting_voice' | 'speaking') => void,
@@ -219,7 +230,7 @@ export function recognizeInBrowser(
       return
     }
     const rec = new Ctor()
-    rec.lang = 'es-ES'
+    rec.lang = speechLang
     rec.interimResults = true
     rec.maxAlternatives = 1
     let voiceEndAt = 0
@@ -276,19 +287,21 @@ export interface Playback {
   cancel: () => void
 }
 
-let spanishVoice: SpeechSynthesisVoice | undefined
+let chosenVoice: SpeechSynthesisVoice | undefined
+/** The best installed voice for the call's language: a natural/online one if there is any. */
 function chooseVoice(): SpeechSynthesisVoice | undefined {
-  if (spanishVoice) return spanishVoice
+  if (chosenVoice) return chosenVoice
   const voices = window.speechSynthesis.getVoices()
-  spanishVoice =
-    voices.find((v) => v.lang === 'es-ES' && /natural|online/i.test(v.name)) ??
-    voices.find((v) => v.lang === 'es-ES') ??
-    voices.find((v) => v.lang.startsWith('es'))
-  return spanishVoice
+  const base = speechLang.slice(0, 2)
+  chosenVoice =
+    voices.find((v) => v.lang === speechLang && /natural|online/i.test(v.name)) ??
+    voices.find((v) => v.lang === speechLang) ??
+    voices.find((v) => v.lang.startsWith(base))
+  return chosenVoice
 }
 if (ttsAvailable()) {
   window.speechSynthesis.onvoiceschanged = () => {
-    spanishVoice = undefined
+    chosenVoice = undefined
     chooseVoice()
   }
 }
@@ -458,7 +471,7 @@ function speakWithBrowser(text: string, allowInterruption: boolean): Playback {
   }
   window.speechSynthesis.cancel()
   const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'es-ES'
+  u.lang = speechLang
   u.rate = 1.05
   const voice = chooseVoice()
   if (voice) u.voice = voice

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, Spin } from 'antd'
 import { auth, type AccessProvider } from '../api'
 import Logo from './Logo'
+import { t } from '../i18n'
 
 function GoogleIcon() {
   return (
@@ -37,7 +38,7 @@ export function Login() {
     auth
       .providers()
       .then(setProviders)
-      .catch(() => setError('No se ha podido contactar con el servidor.'))
+      .catch(() => setError(t('login.noServer')))
   }, [])
 
   return (
@@ -46,24 +47,24 @@ export function Login() {
         <div className="ops-brand">
           <Logo withName />
           <div className="ops-brand-product">
-            <h1 id="titulo-acceso">Centro operativo</h1>
+            <h1 id="titulo-acceso">{t('login.title')}</h1>
           </div>
         </div>
-        <p className="ops-login-note">Entra con tu cuenta. Cada acceso queda registrado.</p>
+        <p className="ops-login-note">{t('login.note')}</p>
         {failure && (
-          <Alert type="error" showIcon message="No se ha podido completar el inicio de sesión. Vuelve a intentarlo." style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon message={t('login.failed')} style={{ marginBottom: 16 }} />
         )}
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
         {providers === null && !error && <Spin className="ops-loading" />}
         {providers?.length === 0 && (
-          <Alert type="warning" showIcon message="El inicio de sesión no está configurado en el servidor." />
+          <Alert type="warning" showIcon message={t('login.notConfigured')} />
         )}
         <div className="ops-login-providers">
           {providers?.map((p) => {
             const Icon = ICONS[p.id]
             return (
               <Button key={p.id} size="large" block icon={Icon ? <Icon /> : undefined} onClick={() => auth.signInWith(p.id)}>
-                Continuar con {p.label}
+                {t('login.continue', { provider: p.label })}
               </Button>
             )
           })}

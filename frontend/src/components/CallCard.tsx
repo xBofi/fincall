@@ -4,6 +4,7 @@ import { CheckCircleFilled, ExclamationCircleFilled, InfoCircleFilled, LoadingOu
 import type { CallView } from '../api'
 import { channel, category, result, urgency } from '../texts'
 import { StatePanel } from './StatePanel'
+import { t } from '../i18n'
 
 type State = 'done' | 'now' | 'pending' | 'skipped'
 
@@ -19,20 +20,22 @@ function steps(v: CallView): Step[] {
   const d = v.data
   const u = urgency(d.urgency)
   // Con ticket, el destino es el propio profesional: no se repite su nombre
-  const target = d.notice_target && d.notice_target !== d.specialist_name ? ` a ${d.notice_target}` : ''
-  const notice = d.notice_channel ? `${d.specialist_name ?? 'Administrador'} · por ${channel(d.notice_channel)}${target}` : null
+  const target = d.notice_target && d.notice_target !== d.specialist_name ? t('card.noticeTo', { target: d.notice_target }) : ''
+  const notice = d.notice_channel
+    ? t('card.noticeVia', { who: d.specialist_name ?? t('card.administrator'), channel: channel(d.notice_channel), target })
+    : null
   return [
-    { title: 'Finca', value: d.estate_address, nodes: ['identify_estate', 'estate_not_identified'], note: d.estate_attempts ? `${d.estate_attempts} intento(s)` : null },
-    { title: 'Vivienda', value: d.home_label, nodes: ['identify_home', 'home_not_identified'], note: d.home_attempts ? `${d.home_attempts} intento(s)` : null },
-    { title: 'Qué le ocurre', value: d.request, nodes: ['collect_request', 'ask_detail'] },
-    { title: 'Tipo de avería', value: d.category ? category(d.category) : null, nodes: ['classify_problem'] },
+    { title: t('card.estate'), value: d.estate_address, nodes: ['identify_estate', 'estate_not_identified'], note: d.estate_attempts ? t('card.attempts', { n: d.estate_attempts }) : null },
+    { title: t('card.home'), value: d.home_label, nodes: ['identify_home', 'home_not_identified', 'confirm_home'], note: d.home_attempts ? t('card.attempts', { n: d.home_attempts }) : null },
+    { title: t('card.request'), value: d.request, nodes: ['collect_request', 'ask_detail'] },
+    { title: t('card.category'), value: d.category ? category(d.category) : null, nodes: ['classify_problem'] },
     {
-      title: 'Urgencia',
+      title: t('card.urgency'),
       value: u ? (
         <>
           <Tag color={u.color}>{u.text}</Tag>
           {d.declared_urgency && d.declared_urgency !== d.urgency && (
-            <small className="card-note">el vecino dijo «{urgency(d.declared_urgency)?.text}»</small>
+            <small className="card-note">{t('card.callerSaid', { urgency: urgency(d.declared_urgency)?.text ?? '' })}</small>
           )}
         </>
       ) : null,
@@ -40,11 +43,11 @@ function steps(v: CallView): Step[] {
     },
     // Emergencia con el tratamiento activado: indicación de seguridad en lugar del resumen largo
     ...(d.urgency === 'emergency'
-      ? [{ title: 'Indicación de seguridad', value: d.emergency_handled ? 'Dada · emergencia registrada' : null, nodes: ['handle_emergency'] }]
+      ? [{ title: t('card.safety'), value: d.emergency_handled ? t('card.safetyGiven') : null, nodes: ['handle_emergency'] }]
       : []),
-    { title: 'Resumen confirmado', value: d.confirmed ? 'Sí, el vecino lo confirmó' : null, nodes: ['confirm_summary'] },
-    { title: 'Incidencia', value: d.incident_id ? `Creada · ref. ${d.incident_id}` : null, nodes: ['validate_data', 'create_ticket'] },
-    { title: 'Aviso (simulado)', value: notice, nodes: ['assign_specialist', 'notify_channel'], note: d.suggestion },
+    { title: t('card.confirmed'), value: d.confirmed ? t('card.confirmedYes') : null, nodes: ['confirm_summary'] },
+    { title: t('card.incident'), value: d.incident_id ? t('card.incidentCreated', { id: d.incident_id }) : null, nodes: ['validate_data', 'create_ticket'] },
+    { title: t('card.notice'), value: notice, nodes: ['assign_specialist', 'notify_channel'], note: d.suggestion },
   ]
 }
 
@@ -65,14 +68,14 @@ export function CallCard({ view }: { view: CallView | null }) {
   if (!view) {
     return (
       <div className="card-empty">
-        <p>Aquí verás, en tiempo real, lo que el asistente va entendiendo:</p>
+        <p>{t('card.empty.intro')}</p>
         <ol>
-          <li>la finca y la vivienda desde la que llaman,</li>
-          <li>quién llama y qué le ocurre,</li>
-          <li>el tipo de avería y su urgencia,</li>
-          <li>y a qué profesional se avisa.</li>
+          <li>{t('card.empty.1')}</li>
+          <li>{t('card.empty.2')}</li>
+          <li>{t('card.empty.3')}</li>
+          <li>{t('card.empty.4')}</li>
         </ol>
-        <p>Cada dato se puede comprobar en «Fincas y profesionales».</p>
+        <p>{t('card.empty.check')}</p>
       </div>
     )
   }
@@ -82,6 +85,12 @@ export function CallCard({ view }: { view: CallView | null }) {
 
   return (
     <div className="card">
+      {view.language && (
+        <small className="card-language">
+          {t('card.language')}: <b>{view.language.toUpperCase()}</b>
+          {view.persona ? ` · ${view.persona}` : ''}
+        </small>
+      )}
       {r && view.finished && (
         <div className={`card-result is-${r.tone}`}>
           {r.tone === 'good' ? <CheckCircleFilled /> : r.tone === 'review' ? <ExclamationCircleFilled /> : <InfoCircleFilled />}
@@ -101,9 +110,9 @@ export function CallCard({ view }: { view: CallView | null }) {
               <div>
                 <span className="card-title">
                   {p.title}
-                  {e === 'now' && <em>preguntando ahora</em>}
+                  {e === 'now' && <em>{t('card.askingNow')}</em>}
                 </span>
-                <span className="card-value">{p.value ?? (e === 'skipped' ? 'No se llegó a este paso' : 'Pendiente')}</span>
+                <span className="card-value">{p.value ?? (e === 'skipped' ? t('card.notReached') : t('card.pending'))}</span>
                 {p.note && <small className="card-note">{p.note}</small>}
               </div>
             </li>
@@ -113,8 +122,8 @@ export function CallCard({ view }: { view: CallView | null }) {
 
       {view.data.summary && (
         <div className="card-summary">
-          <span>Resumen que se envía</span>
-          <p>{view.data.summary}</p>
+          <span>{t('card.summary')}</span>
+          <p dir="auto">{view.data.summary}</p>
         </div>
       )}
 
@@ -125,7 +134,7 @@ export function CallCard({ view }: { view: CallView | null }) {
         items={[
           {
             key: 'technical',
-            label: 'Detalle técnico (para el equipo)',
+            label: t('card.technical'),
             children: <StatePanel view={view} />,
           },
         ]}

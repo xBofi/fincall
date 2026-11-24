@@ -2,15 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Space, Tag, Typography } from 'antd'
 import { AudioOutlined, LoadingOutlined, SendOutlined, SoundOutlined } from '@ant-design/icons'
 import type { Turn } from '../api'
+import { t } from '../i18n'
+import type { MessageKey } from '../i18n/messages/es'
 
 export type VoiceState = 'idle' | 'awaiting_voice' | 'speaking' | 'processing' | 'respondiendo'
 
-const LABEL: Record<VoiceState, { text: string; color: string; icon?: React.ReactNode }> = {
-  idle: { text: 'En espera', color: 'default' },
-  awaiting_voice: { text: 'Escuchando… habla cuando quieras', color: 'processing', icon: <AudioOutlined /> },
-  speaking: { text: 'Le oigo…', color: 'green', icon: <AudioOutlined /> },
-  processing: { text: 'Pensando…', color: 'gold', icon: <LoadingOutlined /> },
-  respondiendo: { text: 'Asistente hablando (puede interrumpir)', color: 'blue', icon: <SoundOutlined /> },
+const LABEL: Record<VoiceState, { key: MessageKey; color: string; icon?: React.ReactNode }> = {
+  idle: { key: 'conv.idle', color: 'default' },
+  awaiting_voice: { key: 'conv.awaiting', color: 'processing', icon: <AudioOutlined /> },
+  speaking: { key: 'conv.speaking', color: 'green', icon: <AudioOutlined /> },
+  processing: { key: 'conv.processing', color: 'gold', icon: <LoadingOutlined /> },
+  respondiendo: { key: 'conv.responding', color: 'blue', icon: <SoundOutlined /> },
 }
 
 interface Props {
@@ -33,9 +35,9 @@ export function Conversation({ history, partial, voiceState, busy, finished, han
   }, [history, partial])
 
   const send = () => {
-    const t = text.trim()
-    if (!t || busy || finished) return
-    onSend(t)
+    const typed = text.trim()
+    if (!typed || busy || finished) return
+    onSend(typed)
     setText('')
   }
   const label = LABEL[voiceState]
@@ -44,23 +46,23 @@ export function Conversation({ history, partial, voiceState, busy, finished, han
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--color-rule)' }}>
         <Tag color={label.color} icon={label.icon}>
-          {label.text}
+          {t(label.key)}
         </Tag>
-        {handsFree && !finished && <Tag>manos libres</Tag>}
+        {handsFree && !finished && <Tag>{t('conv.handsFree')}</Tag>}
       </div>
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 12 }}>
-        {history.map((t, i) => (
-          <div key={i} className={`bubble ${t.role}`}>
+        {history.map((turn, i) => (
+          <div key={i} className={`bubble ${turn.role}`} dir="auto">
             <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
-              {t.role === 'bot' ? 'Asistente' : 'Vecino'}
+              {turn.role === 'bot' ? t('conv.bot') : t('conv.caller')}
             </Typography.Text>
-            {t.text}
+            {turn.text}
           </div>
         ))}
         {partial && (
-          <div className="bubble caller" style={{ opacity: 0.6 }}>
+          <div className="bubble caller" style={{ opacity: 0.6 }} dir="auto">
             <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
-              Vecino (transcribiendo)
+              {t('conv.transcribing')}
             </Typography.Text>
             {partial}
           </div>
@@ -74,17 +76,18 @@ export function Conversation({ history, partial, voiceState, busy, finished, han
             icon={<AudioOutlined />}
             onClick={onListen}
             disabled={busy || finished || voiceState !== 'idle'}
-            title="Escuchar un turno"
+            title={t('conv.listen')}
           />
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             onPressEnter={send}
-            placeholder={finished ? 'Llamada finalizada' : 'O escribe lo que diría el vecino…'}
+            placeholder={finished ? t('conv.finished') : t('conv.placeholder')}
+            dir="auto"
             disabled={busy || finished}
           />
           <Button type="primary" icon={<SendOutlined />} onClick={send} loading={busy} disabled={finished}>
-            Enviar
+            {t('conv.send')}
           </Button>
         </Space.Compact>
       </div>
