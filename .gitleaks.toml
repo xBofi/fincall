@@ -1,0 +1,17 @@
+# gitleaks configuration: the default rules plus a narrow allowlist of known false positives.
+# Each entry below was checked by hand; do not widen it to silence a new finding.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known false positives of the generic-api-key rule"
+regexTarget = "match"
+regexes = [
+  # Bedrock model ids in tests (the variable next to them is a fake test secret)
+  '''eu\.anthropic\.claude-[a-z0-9-]+''',
+  # Alembic revision ids in the English rename map
+  '''\d{4}_[a-z_]+",\s*"\d{4}_[a-z_]+"''',
+  # Prose in design docs
+  '''S3-compatible''',
+  '''keys, Seq/Langfuse/GlitchTip''',
+]
