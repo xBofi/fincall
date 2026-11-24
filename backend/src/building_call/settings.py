@@ -12,6 +12,10 @@ class Settings(BaseSettings):
 
     # "memoria" permite validar los agentes sin base de datos; "postgres" es el modo real.
     repository: str = "memory"
+
+    # Default language of a call (ISO 639-1, one of `building_call/i18n/locales/*.toml`). A call
+    # can pick another one (Twilio number, stream parameter, console) or switch after detection.
+    language: str = "es"
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/building_call"
 
     # LLM: "auto" (carrera si hay credenciales de Cloudflare, si no ollama) | "ollama" | "workers_ai" |
@@ -89,6 +93,11 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_number: str = ""  # E.164, p. ej. +34912345678
+    # Calls from the web console through Twilio (Voice JS SDK): an API key signs the browser's
+    # Access Token, and the TwiML App sends the call to the same voice webhook
+    twilio_api_key_sid: str = ""
+    twilio_api_key_secret: str = ""
+    twilio_twiml_app_sid: str = ""
     telephony_bargein_words: int = 2
     # TTS de servidor (solo telefonía; la consola web habla con el navegador)
     tts: str = "auto"  # auto | elevenlabs | piper | workers_ai | none
