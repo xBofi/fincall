@@ -95,23 +95,70 @@ El asistente puede atender un número real (Twilio Media Streams; proveedor Prov
 credenciales y una URL https pública, `uv run python -m building_call.telephony.configure` deja el
 número apuntando a la API. Guía completa en `docs/TELEFONIA.md`.
 
-### Languages (Spanish and US English)
+### Multilingual architecture
 
-The agent speaks Spanish (es-ES) and US English (en-US) on one shared LangGraph graph. A language
-is configuration, not code: `backend/src/building_call/i18n/locales/<code>.toml` holds its
-providers and voices, the word lists of the deterministic paths (yes/no, set phrases, apartments,
-spelled-out numbers), the translations of every template and the admin-facing phrases. Spanish is
-the source language of the templates (`graph/templates.py`); the tests check that every other
-language translates all of them with the same variables.
+The agent speaks **Spanish (es-ES), US English (en-US), Catalan (ca-ES), Arabic (ar-AE), Hindi
+(hi-IN) and Urdu (ur-PK)** on one shared LangGraph graph. A language is configuration, not code.
 
-- `BC_LANGUAGE` sets the default language of a call; `POST /api/calls {"language": "en"}`, a
-  `language` Media Streams parameter or the LiveKit job metadata choose another one per call.
-- `CallManager` activates the call's language around each turn (`i18n.use`), so nodes,
-  templates and parsers read it without threading it through every helper.
-- Prompts: Spanish keeps its tuned prompt set; English uses the prompts ported from the US
-  version (`llm/prompts_en.py`), measured with `evals/compare_models.py --language en`.
-- Tests: `tests/` runs the flows in Spanish and `tests/en/` the same flows in English with the
-  US demo buildings (`MemoryRepository("en")`).
+```text
+ caller audio ─▶ STT (AssemblyAI EU, language_codes) ──text──▶ CallManager
+                    ▲  UpdateConfiguration on switch               │ i18n.use(call language)
+                    │                                              │ personas.use(client persona)
+                    │                                              ▼
+            detection ◀── first turns: script + function words ── graph (shared nodes)
+            (+ AssemblyAI's language_code / confidence)            │  parser_for(lang): yes/no,
+                                                                   │  apartments, set phrases
+                                                                   │  render(id): template in lang
+                                                                   │  LLM prompt set: es | en+note
+                                                                   ▼
+ caller ear ◀── TTS chain per language (ElevenLabs → Piper → MeloTTS) ◀── reply text
+```
+
+- **One file per language**: `backend/src/building_call/i18n/locales/<code>.toml` holds the
+  locale, RTL flag, STT/TTS settings and voices, the word lists of the deterministic paths
+  (yes/no, refusals, set phrases, spelled-out numbers, floors and apartment words, gas/fire),
+  the translations of every template, FAQ answers, detail questions and admin-facing phrases.
+  Adding a 7th language means adding one file: the tests check it translates every template
+  with the same variables and question marks.
+- **Rules no word list can express** live in `i18n/parsing.py` (`Parser`, generic and lexicon
+  driven; `SpanishParser` keeps the rules tuned on real Spanish calls). Formats (dates, numbers,
+  currency, ordinals, lists) come from CLDR via Babel (`i18n/formatting.py`).
+- **Choosing the language of a call**: explicit (`POST /api/calls {"language"}`, the console,
+  a `language` Media Streams parameter, `BC_TWILIO_NUMBER_LANGUAGES` per called number), else
+  `BC_LANGUAGE` plus **detection** of the caller's first turns (`i18n/detection.py`: script,
+  Arabic vs Urdu letters and words, distinctive function words for Latin script, AssemblyAI's
+  reported language when it is sure). It switches only above `BC_LANGUAGE_DETECTION_THRESHOLD`
+  (default 0.6), otherwise the call stays in the default language. Asking by name ("English,
+  please") switches at any time and the current question is asked again in that language.
+- **Mid-call switch**: STT is steered with AssemblyAI `UpdateConfiguration` (no reconnect), TTS
+  changes `language_code`/voice per sentence; the phone bridge, the console WebSocket and the
+  LiveKit agent all follow it.
+- **Prompts**: Spanish keeps its measured prompt set; every other language uses the English
+  prompts (what models follow best) plus a note asking for values in the caller's language.
+- **Client personas** (`i18n/personas/<id>.toml`): agent name, ElevenLabs voice, tone for the
+  phrasing model, greeting and FAQ answers per language; chosen per number
+  (`BC_TWILIO_NUMBER_PERSONAS`), per call or by `BC_PERSONA`.
+- **Console**: six UI languages, right-to-left for Arabic and Urdu (`frontend/src/i18n`).
+
+#### Providers per language
+
+Checked against the providers' current documentation (November 2026).
+
+| Language | STT (streaming) | Server TTS | Local TTS (dev) | Twilio `<Say>` fallback | LLM |
+|---|---|---|---|---|---|
+| es-ES | AssemblyAI Universal-Streaming (EU) | ElevenLabs `eleven_v4_turbo` | Piper `es_ES-davefx-medium`, MeloTTS | `Polly.Lucia-Neural` | Gemini (Vertex EU) / Ollama |
+| en-US | AssemblyAI (EU) | ElevenLabs | Piper `en_US-lessac-medium`, MeloTTS | `Polly.Joanna-Neural` | Gemini / Ollama |
+| ca-ES | AssemblyAI (EU) | ElevenLabs (v3/v4 only: Flash v2.5 has no Catalan) | Piper `ca_ES-upc_ona-medium` | `Polly.Arlet-Neural` | Gemini |
+| ar-AE | AssemblyAI (EU) | ElevenLabs | Piper `ar_JO-kareem-medium` | `Polly.Hala-Neural` | Gemini |
+| hi-IN | AssemblyAI (EU) | ElevenLabs | Piper `hi_IN-pratham-medium` | `Polly.Kajal-Neural` | Gemini |
+| ur-PK | AssemblyAI (EU) | ElevenLabs (v3/v4 only) | **none** (no Piper voice) | **none**: falls back to `BC_LANGUAGE`'s voice | Gemini |
+
+Fallbacks: the server TTS is a per-language chain (`FallbackSynthesizer`): the configured
+provider first, then the next available one that speaks the language; Urdu has no local voice,
+so without ElevenLabs it has no server voice (the console then uses the browser's voice, if the
+OS has an Urdu one). If AssemblyAI is unavailable, the console falls back to the browser's
+speech recognition (`browser_lang`); phone calls need AssemblyAI. Local Ollama models are weak
+in Urdu and Hindi: use Gemini for those languages in production.
 
 ### Calling the agent from the browser through Twilio
 
