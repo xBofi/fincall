@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Card, Input, Space, Tag, Tooltip, Typography, message } from 'antd'
 import { RobotOutlined, UndoOutlined } from '@ant-design/icons'
+import { t } from '../i18n'
 import { ApiError, flujo, routing, type CallView, type Prompts, type Template } from '../api'
 import type { GraphStructure } from './routing/types'
 import { RoutingView, type Mode } from './routing/RoutingView'
@@ -19,7 +20,7 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
     try {
       await flujo.publish(template.id, text)
       setProblems([])
-      message.success('Publicado. El bot ya lo dice así.')
+      message.success(t('flow.published'))
       onUpdate()
     } catch (e) {
       if (e instanceof ApiError) {
@@ -34,7 +35,7 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
 
   const restore = async () => {
     setSaving(true)
-    try { await flujo.restore(template.id); message.success('Restaurado el texto original'); onUpdate() }
+    try { await flujo.restore(template.id); message.success(t('flow.restored')); onUpdate() }
     finally { setSaving(false) }
   }
 
@@ -42,7 +43,7 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
     <div className="flow-template">
       <div className="flow-template-head">
         <Text strong>{template.description}</Text>
-        {template.overridden && <Tag color="gold">editada · v{template.version}</Tag>}
+        {template.overridden && <Tag color="gold">{t('flow.edited', { version: template.version })}</Tag>}
       </div>
       <Input.TextArea
         value={text}
@@ -53,24 +54,24 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
       <div className="flow-template-footer">
         <Space size={4} wrap>
           {template.variables.map((v) => (
-            <Tooltip key={v} title="Dato que rellena el nodo. Tiene que seguir apareciendo.">
+            <Tooltip key={v} title={t('flow.varTip')}>
               <Tag className="flow-var">{'{' + v + '}'}</Tag>
             </Tooltip>
           ))}
           {template.question && (
-            <Tooltip title="Sin interrogante, la redacción natural se descarta y el vecino oye el texto plano.">
-              <Tag color="blue">debe preguntar</Tag>
+            <Tooltip title={t('flow.questionTip')}>
+              <Tag color="blue">{t('flow.mustAsk')}</Tag>
             </Tooltip>
           )}
         </Space>
         <Space size={6}>
           {template.overridden && (
             <Button size="small" icon={<UndoOutlined />} onClick={() => void restore()} disabled={saving}>
-              Original
+              {t('flow.original')}
             </Button>
           )}
           <Button size="small" type="primary" onClick={() => void save()} loading={saving} disabled={!dirty}>
-            Publicar
+            {t('flow.publish')}
           </Button>
         </Space>
       </div>
@@ -106,7 +107,7 @@ export function FlowPanel({
       const [g, p, pr] = await Promise.all([routing.structure(), flujo.templates(), flujo.prompts()])
       setStructure(g); setTemplates(p); setPrompts(pr)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo cargar el flujo')
+      setError(e instanceof Error ? e.message : t('flow.loadError'))
     }
   }, [])
 
@@ -117,9 +118,9 @@ export function FlowPanel({
     if (nodeId.startsWith('__')) return null
     return (
       <>
-        <Card size="small" title={`Lo que dice (${own.length})`}>
+        <Card size="small" title={t('flow.says', { n: own.length })}>
           {own.length === 0
-            ? <Text type="secondary">Este bloque no le dice nada al vecino: solo decide.</Text>
+            ? <Text type="secondary">{t('flow.saysNothing')}</Text>
             : isOwner
               ? own.map((p) => <TemplateEditor key={`${p.id}:${p.version}`} template={p} onUpdate={() => void load()} />)
               : own.map((p) => (
@@ -128,10 +129,10 @@ export function FlowPanel({
                     <Paragraph className="flow-text-plain">{p.text}</Paragraph>
                   </div>
                 ))}
-          {!isOwner && own.length > 0 && <Text type="secondary">Solo el propietario puede editar los textos.</Text>}
+          {!isOwner && own.length > 0 && <Text type="secondary">{t('flow.ownerOnly')}</Text>}
         </Card>
         {prompts && structure?.nodes.find((n) => n.id === nodeId)?.uses_llm && (
-          <Card size="small" title={<><RobotOutlined /> Instrucciones del modelo de lenguaje</>}>
+          <Card size="small" title={<><RobotOutlined /> {t('flow.prompts')}</>}>
             <Alert type="info" showIcon message={prompts.reason} className="flow-note" />
             {prompts.prompts.map((p) => (
               <details key={p.id} className="flow-prompt">

@@ -23,7 +23,8 @@ import '@xyflow/react/dist/style.css'
 import type { EdgeKind, GraphStructure, StructureNode } from './types'
 import type { ViewAt } from './trace'
 import { isTerminal, layOut, type Placed } from './layout'
-import { t } from './i18n'
+import { t } from '../../i18n'
+import { roleKey } from './labels'
 import { ROLE_ICON } from './roleIcons'
 
 type EdgeState = 'idle' | 'taken' | 'turn' | 'current'
@@ -86,7 +87,7 @@ const RoutingNode = memo(function RoutingNode({ data, selected }: NodeProps<Node
         <>
           <div className="rv-node-top">
             <span className="rv-node-icon" aria-hidden>{ROLE_ICON[node.role]}</span>
-            <span className="rv-node-role">{t(`routing.role.${node.role}`)}</span>
+            <span className="rv-node-role">{t(roleKey(node.role))}</span>
             {data.canRetry && (
               <span className={`rv-node-retry ${data.retried ? 'is-on' : ''}`} title={t('routing.legend.retry')} aria-hidden>↻</span>
             )}
@@ -192,7 +193,7 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
       selected: selected === n.id,
       draggable: false,
       connectable: false,
-      ariaLabel: t('routing.node.aria', { title: n.title, role: t(`routing.role.${n.role}`) }),
+      ariaLabel: t('routing.node.aria', { title: n.title, role: t(roleKey(n.role)) }),
       data: {
         node: n,
         terminal: isTerminal(n.id, structure),

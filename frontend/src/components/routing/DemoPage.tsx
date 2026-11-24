@@ -3,7 +3,7 @@ import { ConfigProvider, Segmented, theme as antdTheme } from 'antd'
 import { MoonOutlined, SunOutlined } from '@ant-design/icons'
 import Logo from '../Logo'
 import { RoutingView } from './RoutingView'
-import { t } from './i18n'
+import { isUiLanguage, t, UI_LANGUAGES, useI18n } from '../../i18n'
 
 type Theme = 'light' | 'dark'
 
@@ -13,30 +13,26 @@ const initialTheme = (): Theme => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-const initialLang = () => new URLSearchParams(location.search).get('lang') ?? document.documentElement.lang ?? 'es'
-
 /**
  * Demo autónoma de la vista de enrutado: `/demo` (o `?demo`). No necesita sesión, backend ni
  * telefonía: reproduce una llamada grabada a través del grafo real (`evals/record_demo_call.py`).
- * Pensada para enseñarla en una entrevista o grabar un vídeo.
+ * Pensada para enseñarla en una entrevista o grabar un vídeo. `?theme=dark`, `?lang=ar`.
  */
 export default function DemoPage() {
+  const { lang, setLang } = useI18n()
   const [mode, setMode] = useState<Theme>(initialTheme)
-  const [lang, setLang] = useState(initialLang)
+  useEffect(() => {
+    const asked = new URLSearchParams(location.search).get('lang')
+    if (isUiLanguage(asked)) setLang(asked)
+  }, [setLang])
   useEffect(() => {
     document.documentElement.dataset.theme = mode
     document.documentElement.style.colorScheme = mode
   }, [mode])
-  useEffect(() => {
-    document.documentElement.lang = lang
-    document.documentElement.dir = ['ar', 'ur'].includes(lang) ? 'rtl' : 'ltr'
-  }, [lang])
 
   return (
-    <ConfigProvider
-      direction={['ar', 'ur'].includes(lang) ? 'rtl' : 'ltr'}
-      theme={{ algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}
-    >
+    // Hereda idioma y dirección del I18nProvider; aquí solo cambia el algoritmo de color
+    <ConfigProvider theme={{ algorithm: mode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
       <div className={`rv-demo-page is-${mode}`}>
         <header className="rv-demo-bar">
           <Logo withName />
@@ -44,19 +40,19 @@ export default function DemoPage() {
           <div className="rv-demo-tools">
             <Segmented
               size="small"
-              aria-label="Language"
-              value={lang.slice(0, 2)}
-              onChange={(v) => setLang(String(v))}
-              options={[{ label: 'ES', value: 'es' }, { label: 'EN', value: 'en' }]}
+              aria-label={t('routing.demo.language')}
+              value={lang}
+              onChange={(v) => { if (isUiLanguage(String(v))) setLang(String(v) as typeof lang) }}
+              options={UI_LANGUAGES.map((l) => ({ label: l.native, value: l.code }))}
             />
             <Segmented
               size="small"
-              aria-label="Theme"
+              aria-label={t('routing.demo.theme')}
               value={mode}
               onChange={(v) => setMode(v as Theme)}
               options={[
-                { value: 'light', icon: <SunOutlined />, title: 'Light' },
-                { value: 'dark', icon: <MoonOutlined />, title: 'Dark' },
+                { value: 'light', icon: <SunOutlined />, title: t('routing.demo.light') },
+                { value: 'dark', icon: <MoonOutlined />, title: t('routing.demo.dark') },
               ]}
             />
           </div>

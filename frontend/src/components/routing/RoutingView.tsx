@@ -10,7 +10,8 @@ import { ROLE_ICON } from './roleIcons'
 import { ConversationPanel, DecisionPanel, NodePanel, StatePanel } from './Panels'
 import { Timeline } from './Timeline'
 import { useDocumentAttrs, useLiveTrace, usePlayback } from './hooks'
-import { t } from './i18n'
+import { t } from '../../i18n'
+import { localizeStructure, modeKey, roleKey, visitCondition } from './labels'
 import './routing.css'
 
 export type Mode = 'structure' | 'live' | 'replay' | 'demo'
@@ -82,7 +83,9 @@ export function RoutingView({
   }, [replayId])
 
   const demoModel = useMemo(() => (demo ? fromTurns(demo.turns) : null), [demo])
-  const structure = fetched ?? (mode === 'demo' ? demo?.structure ?? null : null)
+  const rawStructure = fetched ?? (mode === 'demo' ? demo?.structure ?? null : null)
+  // Títulos y condiciones en el idioma de la consola (el backend los da en el del código)
+  const structure = useMemo(() => (rawStructure ? localizeStructure(rawStructure, lang) : null), [rawStructure, lang])
 
   const model: TraceModel | null =
     mode === 'live' ? liveTrace.model
@@ -178,7 +181,7 @@ export function RoutingView({
             : v ? (
               v.target === v.node && v.awaiting_user
                 ? <><b>{title(v.node)}</b> · {t('routing.node.waiting')}</>
-                : <><b>{title(v.node)} → {title(v.target)}</b>{v.condition && <> · {v.condition}</>}{v.llm_calls > 0 && <> · LLM {Math.round(v.llm_ms)} ms</>}</>
+                : <><b>{title(v.node)} → {title(v.target)}</b>{structure && visitCondition(structure, v) && <> · {visitCondition(structure, v)}</>}{v.llm_calls > 0 && <> · LLM {Math.round(v.llm_ms)} ms</>}</>
             )
               : t('routing.live.empty.title')}
         </p>
@@ -232,7 +235,7 @@ export function RoutingView({
             aria-label={t('routing.mode.label')}
             value={mode}
             onChange={(v) => setMode(v as Mode)}
-            options={modes.map((m) => ({ value: m, label: t(`routing.mode.${m}`) }))}
+            options={modes.map((m) => ({ value: m, label: t(modeKey(m)) }))}
           />}
           {onReload && <Button size="small" icon={<ReloadOutlined />} onClick={onReload} aria-label={t('routing.reload')} title={t('routing.reload')} />}
         </div>
@@ -255,7 +258,7 @@ export function RoutingView({
           {canvas}
           <ul className="rv-legend" aria-label={t('routing.legend')}>
             {ROLES.map((r) => (
-              <li key={r}><span className={`rv-legend-swatch rv-role-${r}`} aria-hidden>{ROLE_ICON[r]}</span>{t(`routing.role.${r}`)}</li>
+              <li key={r}><span className={`rv-legend-swatch rv-role-${r}`} aria-hidden>{ROLE_ICON[r]}</span>{t(roleKey(r))}</li>
             ))}
             <li><span aria-hidden className="rv-legend-retry">↻</span>{t('routing.legend.retry')}</li>
             {mode !== 'structure' && <li><i className="rv-legend-line is-turn" aria-hidden />{t('routing.legend.taken')}</li>}

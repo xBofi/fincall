@@ -5,7 +5,8 @@ import type { GraphStructure, StructureNode } from './types'
 import type { Step, TraceModel, TurnInfo } from './trace'
 import { edgeIdOf, END_ID, stateAt } from './trace'
 import { ROLE_ICON } from './roleIcons'
-import { t } from './i18n'
+import { t, useI18n } from '../../i18n'
+import { originKey, visitCondition } from './labels'
 
 const show = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '—'
@@ -98,7 +99,7 @@ export function DecisionPanel({
         ) : v.declared && v.condition ? (
           <blockquote className="rv-condition">
             <span className="rv-condition-label">{t('routing.decision.condition')}</span>
-            {v.condition}
+            {visitCondition(structure, v)}
             <small className="rv-mono"> · {t('routing.decision.declared')} · {structure.routers.edges}()</small>
           </blockquote>
         ) : (
@@ -125,7 +126,7 @@ export function DecisionPanel({
             {origin && (
               <>
                 <span>{t('routing.decision.origin')}</span>
-                <span><Tag color={origin === 'deterministic' ? 'green' : 'purple'}>{t(`routing.decision.origin.${origin}`)}</Tag></span>
+                <span><Tag color={origin === 'deterministic' ? 'green' : 'purple'}>{originKey(origin) ? t(originKey(origin)!) : origin}</Tag></span>
               </>
             )}
             {intent && (
@@ -278,6 +279,7 @@ export function NodePanel({
   onSelect: (id: string) => void
   extra?: React.ReactNode
 }) {
+  const { lang: locale } = useI18n()
   if (!node) return <Empty className="rv-empty-panel" description={t('routing.panel.pick')} />
   const exits = structure.edges.filter((e) => e.source === node.id)
   return (
@@ -289,19 +291,20 @@ export function NodePanel({
       {node.summary && (
         <section className="rv-section">
           <h4>{t('routing.node.summary')}</h4>
-          <p>{node.summary}</p>
+          <p lang="es">{node.summary}</p>
+          {locale !== 'es' && <p className="rv-muted rv-small">{t('routing.node.sourceNote')}</p>}
         </section>
       )}
       {(node.deterministic_paths ?? []).length > 0 && (
         <section className="rv-section">
           <h4>{t('routing.node.deterministic')}</h4>
-          <div className="rv-tags">{node.deterministic_paths!.map((d) => <Tag key={d}>{d}</Tag>)}</div>
+          <div className="rv-tags" lang="es">{node.deterministic_paths!.map((d) => <Tag key={d}>{d}</Tag>)}</div>
         </section>
       )}
       {(node.effects ?? []).length > 0 && (
         <section className="rv-section">
           <h4>{t('routing.node.effects')}</h4>
-          <ul className="rv-list">{node.effects!.map((e) => <li key={e}>{e}</li>)}</ul>
+          <ul className="rv-list" lang="es">{node.effects!.map((e) => <li key={e}>{e}</li>)}</ul>
         </section>
       )}
       {exits.length > 0 && (

@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons'
 import type { GraphStructure } from './types'
 import type { TraceModel } from './trace'
-import { t } from './i18n'
+import { t } from '../../i18n'
 
 export interface TimelineProps {
   model: TraceModel

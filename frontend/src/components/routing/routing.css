@@ -323,3 +323,7 @@
 @media (max-width: 640px) {
   .rv .react-flow__minimap { display: none; }
 }
+
+/* Ids, códigos y cifras («1257 ms», `_next()`) son siempre LTR, también dentro de una interfaz RTL */
+.rv-mono, .rv-metric-value, .rv-timeline-pos { unicode-bidi: isolate; direction: ltr; }
+:root[dir='rtl'] .rv-metric-value { text-align: end; }
