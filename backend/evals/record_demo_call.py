@@ -41,6 +41,7 @@ SCRIPT = [
     "Hola, buenas, llamo de la calle Mayor doce",
     "Sí, esa es",
     "Tercero B",
+    "Sí",
     "Oiga, ¿esta llamada se graba?",
     "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
     "Sale con bastante fuerza, de debajo del lavabo",
@@ -84,6 +85,8 @@ async def record(model: str) -> dict[str, Any]:
         keep(state, line)
         if state.get("finished"):
             break
+    if not state.get("finished"):
+        raise SystemExit("El guion no llega al final de la llamada: ajústalo al grafo actual")
     return {
         "meta": {
             "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),

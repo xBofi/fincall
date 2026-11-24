@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import TEST_SECRET, make_session
 from httpx import ASGITransport, AsyncClient
+from session_helpers import TEST_SECRET, make_session
 
+from building_call import i18n
 from building_call.api.main import create_app
 from building_call.graph.export import export_graph
 from building_call.graph.manifest import MANIFEST
@@ -24,6 +25,7 @@ CONVERSATION = [
     "Vivo en la calle Mayor número 12",
     "sí",
     "tercero B",
+    "sí",  # confirma la vivienda leída junto a la finca (confirm_home)
     "Hay una fuga de agua en el baño y está inundando el suelo",
     "sí, correcto",
 ]
@@ -145,9 +147,9 @@ async def test_each_turn_records_its_node_visits(manager: CallManager) -> None:
 
 async def test_visits_explain_llm_and_state_changes(manager: CallManager) -> None:
     state = await manager.begin()
-    for text in CONVERSATION[:3]:
+    for text in CONVERSATION[:4]:
         state = await manager.message(state["call_id"], text)
-    state = await manager.message(state["call_id"], CONVERSATION[3])
+    state = await manager.message(state["call_id"], CONVERSATION[4])
     by_node = {v["node"]: v for v in state["turn_visits"]}
     collect = by_node["collect_request"]
     assert collect["llm_calls"] == 1
@@ -246,3 +248,46 @@ def test_the_recorded_demo_still_matches_the_compiled_graph() -> None:
             target = "__end__" if v["target"] == "end" else v["target"]
             assert v["declared"]
             assert v["node"] == target or f"{v['node']}->{target}" in declared
+
+
+# ---------------------------------------------------------------------------- los seis idiomas
+
+LANGUAGES = ["es", "en", "ca", "ar", "hi", "ur"]
+
+
+def test_the_six_languages_are_the_supported_ones() -> None:
+    assert sorted(LANGUAGES) == sorted(i18n.supported())
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+async def test_the_trace_is_the_same_graph_in_every_language(
+    manager: CallManager, code: str
+) -> None:
+    """La ruta no depende del idioma: mismos nodos, mismas condiciones declaradas; lo que se
+    le dice al vecino sale en su idioma y queda en la visita que lo dijo."""
+    state = await manager.begin(language=code)
+    visits = state["turn_visits"]
+    assert [(v["node"], v["target"]) for v in visits] == [
+        ("next_step", "identify_estate"),
+        ("identify_estate", "identify_estate"),
+    ]
+    assert visits[0]["condition"] == "no hay finca, o hay una candidata que confirmar"
+    assert all(v["declared"] for v in visits)
+    assert visits[1]["said"] == state["bot_messages"]
+
+
+async def test_each_language_says_its_own_greeting_in_the_trace(manager: CallManager) -> None:
+    said = {}
+    for code in LANGUAGES:
+        state = await manager.begin(language=code)
+        said[code] = state["turn_visits"][-1]["said"][0]
+    assert len(set(said.values())) == len(LANGUAGES)
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+async def test_the_call_view_carries_the_visits_in_every_language(client: AsyncClient, code: str) -> None:
+    call = (await client.post("/api/calls", json={"language": code})).json()
+    assert call.get("language", code) == code
+    assert [v["node"] for v in call["visits"]] == ["next_step", "identify_estate"]
+    again = (await client.get(f"/api/calls/{call['call_id']}")).json()
+    assert again["visits"] == call["visits"]

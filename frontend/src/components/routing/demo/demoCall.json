@@ -1,6 +1,6 @@
 {
  "meta": {
-  "recorded_at": "2026-11-24T13:25:45+00:00",
+  "recorded_at": "2026-11-24T14:53:01+00:00",
   "llm": "ollama/qwen3.5:latest",
   "result": "incident_created",
   "note": "Llamada guionizada por el grafo real con repositorio en memoria."
@@ -94,6 +94,21 @@
      "guarda la llamada con resultado `home_not_identified`",
      "avisa al administrador por correo"
     ]
+   },
+   {
+    "id": "confirm_home",
+    "role": "llm",
+    "kind": "question",
+    "title": "Confirmar vivienda",
+    "summary": "Lee juntas la finca y la vivienda (\"Entonces es Calle Mayor 12, tercero B. ¿Es correcto?\") antes de preguntar qué ocurre. Una corrección se vuelve a buscar y a leer; pasar directamente al problema cuenta como un sí. En una emergencia se salta.",
+    "stage": 2,
+    "uses_llm": true,
+    "deterministic_paths": [
+     "sí / no",
+     "no se ha oído (se repite el mensaje completo)",
+     "relleno (\"un momento\", \"a ver...\")"
+    ],
+    "effects": []
    },
    {
     "id": "collect_request",
@@ -315,6 +330,15 @@
     "kind": "forward"
    },
    {
+    "id": "next_step->confirm_home",
+    "source": "next_step",
+    "target": "confirm_home",
+    "condition": "hay finca y vivienda pero aún no se han leído juntas",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
     "id": "next_step->collect_request",
     "source": "next_step",
     "target": "collect_request",
@@ -502,6 +526,51 @@
     "conditional": true,
     "router": "_next",
     "kind": "forward"
+   },
+   {
+    "id": "confirm_home->confirm_home",
+    "source": "confirm_home",
+    "target": "confirm_home",
+    "condition": "repregunta: la respuesta no fue un sí, un no ni una corrección",
+    "conditional": true,
+    "router": "_next",
+    "kind": "retry"
+   },
+   {
+    "id": "confirm_home->next_step",
+    "source": "confirm_home",
+    "target": "next_step",
+    "condition": "confirmada, o corregida (se busca y se vuelve a leer)",
+    "conditional": true,
+    "router": "_next",
+    "kind": "return"
+   },
+   {
+    "id": "confirm_home->identify_home",
+    "source": "confirm_home",
+    "target": "identify_home",
+    "condition": "el vecino dice que no es la suya sin dar la buena",
+    "conditional": true,
+    "router": "_next",
+    "kind": "forward"
+   },
+   {
+    "id": "confirm_home->handoff_to_human",
+    "source": "confirm_home",
+    "target": "handoff_to_human",
+    "condition": "el vecino pide expresamente hablar con una persona",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
+   },
+   {
+    "id": "confirm_home->farewell",
+    "source": "confirm_home",
+    "target": "farewell",
+    "condition": "el vecino se despide expresamente sin aportar datos",
+    "conditional": true,
+    "router": "_next",
+    "kind": "global"
    },
    {
     "id": "collect_request->collect_request",
@@ -761,6 +830,7 @@
    "assign_specialist",
    "classify_problem",
    "collect_request",
+   "confirm_home",
    "confirm_summary",
    "create_ticket",
    "determine_urgency",
@@ -777,9 +847,9 @@
    "validate_data"
   ],
   "compiled": {
-   "nodes": 20,
-   "edges": 361,
-   "conditional_edges": 361
+   "nodes": 21,
+   "edges": 400,
+   "conditional_edges": 400
   },
   "drift": []
  },
@@ -794,8 +864,8 @@
    "final_node": "identify_estate",
    "interpretation": null,
    "timings": {
-    "graph_ms": 32,
-    "server_ms": 32,
+    "graph_ms": 38,
+    "server_ms": 38,
     "turn": 0
    },
    "visits": [
@@ -803,7 +873,7 @@
      "index": 0,
      "turn": 0,
      "node": "next_step",
-     "at_ms": 1795526741283,
+     "at_ms": 1795531978073,
      "ms": 0.0,
      "target": "identify_estate",
      "awaiting_user": false,
@@ -824,8 +894,8 @@
      "index": 1,
      "turn": 0,
      "node": "identify_estate",
-     "at_ms": 1795526741284,
-     "ms": 0.0,
+     "at_ms": 1795531978073,
+     "ms": 1.2,
      "target": "identify_estate",
      "awaiting_user": true,
      "finished": false,
@@ -874,8 +944,8 @@
      "index": 0,
      "turn": 1,
      "node": "identify_estate",
-     "at_ms": 1795526741286,
-     "ms": 0.5,
+     "at_ms": 1795531978078,
+     "ms": 0.3,
      "target": "identify_estate",
      "awaiting_user": true,
      "finished": false,
@@ -929,8 +999,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 3,
-    "server_ms": 3,
+    "graph_ms": 4,
+    "server_ms": 4,
     "turn": 2
    },
    "visits": [
@@ -938,8 +1008,8 @@
      "index": 0,
      "turn": 2,
      "node": "identify_estate",
-     "at_ms": 1795526741288,
-     "ms": 0.2,
+     "at_ms": 1795531978080,
+     "ms": 1.1,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -988,7 +1058,7 @@
      "index": 1,
      "turn": 2,
      "node": "next_step",
-     "at_ms": 1795526741289,
+     "at_ms": 1795531978082,
      "ms": 0.0,
      "target": "identify_home",
      "awaiting_user": false,
@@ -1009,7 +1079,7 @@
      "index": 2,
      "turn": 2,
      "node": "identify_home",
-     "at_ms": 1795526741290,
+     "at_ms": 1795531978082,
      "ms": 0.0,
      "target": "identify_home",
      "awaiting_user": true,
@@ -1039,10 +1109,10 @@
    "turn": 3,
    "caller": "Tercero B",
    "assistant": [
-    "Perfecto. Cuénteme, ¿qué ocurre?"
+    "Entonces es Calle Mayor 12, 3º B. ¿Es correcto?"
    ],
    "initial_node": "identify_home",
-   "final_node": "collect_request",
+   "final_node": "confirm_home",
    "interpretation": {
     "entrance": null,
     "floor": "3",
@@ -1052,8 +1122,8 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 3,
-    "server_ms": 3,
+    "graph_ms": 8,
+    "server_ms": 8,
     "turn": 3
    },
    "visits": [
@@ -1061,8 +1131,8 @@
      "index": 0,
      "turn": 3,
      "node": "identify_home",
-     "at_ms": 1795526741291,
-     "ms": 0.6,
+     "at_ms": 1795531978082,
+     "ms": 0.2,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1082,7 +1152,7 @@
      "trace": [
       {
        "action": "regex_extraction",
-       "detail": "entrance=None piso=3 puerta=B"
+       "detail": "entrance=None floor=3 door=B"
       }
      ],
      "validations": [],
@@ -1101,13 +1171,13 @@
      "index": 1,
      "turn": 3,
      "node": "next_step",
-     "at_ms": 1795526741292,
-     "ms": 0.1,
-     "target": "collect_request",
+     "at_ms": 1795531978082,
+     "ms": 4.5,
+     "target": "confirm_home",
      "awaiting_user": false,
      "finished": false,
      "consumed_utterance": false,
-     "condition": "falta saber qué le ocurre",
+     "condition": "hay finca y vivienda pero aún no se han leído juntas",
      "declared": true,
      "llm_calls": 0,
      "llm_ms": 0,
@@ -1116,7 +1186,7 @@
      "trace": [
       {
        "action": "home",
-       "detail": "entrance=None piso=3 puerta=B candidatas=1"
+       "detail": "entrance=None floor=3 door=B candidates=1"
       }
      ],
      "validations": [
@@ -1138,14 +1208,131 @@
       "home_label": {
        "before": null,
        "after": "3º B"
+      },
+      "home_parts": {
+       "before": null,
+       "after": {
+        "floor": "3",
+        "door": "B"
+       }
       }
      }
     },
     {
      "index": 2,
      "turn": 3,
+     "node": "confirm_home",
+     "at_ms": 1795531978092,
+     "ms": 0.1,
+     "target": "confirm_home",
+     "awaiting_user": true,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": null,
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "template",
+       "detail": "confirm_home.ask v0"
+      }
+     ],
+     "validations": [],
+     "said": [
+      "Entonces es Calle Mayor 12, 3º B. ¿Es correcto?"
+     ],
+     "diff": {}
+    }
+   ]
+  },
+  {
+   "turn": 4,
+   "caller": "Sí",
+   "assistant": [
+    "Perfecto. Cuénteme, ¿qué ocurre?"
+   ],
+   "initial_node": "confirm_home",
+   "final_node": "collect_request",
+   "interpretation": {
+    "intent": "continue",
+    "confirms": true,
+    "origin": "deterministic",
+    "llm_ms": 0
+   },
+   "timings": {
+    "interpretation_origin": "deterministic",
+    "graph_ms": 4,
+    "server_ms": 4,
+    "turn": 4
+   },
+   "visits": [
+    {
+     "index": 0,
+     "turn": 4,
+     "node": "confirm_home",
+     "at_ms": 1795531978092,
+     "ms": 0.2,
+     "target": "next_step",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": true,
+     "condition": "confirmada, o corregida (se busca y se vuelve a leer)",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": {
+      "intent": "continue",
+      "confirms": true,
+      "origin": "deterministic",
+      "llm_ms": 0
+     },
+     "confidence_signals": null,
+     "trace": [
+      {
+       "action": "home_confirmed",
+       "detail": "3º B"
+      }
+     ],
+     "validations": [
+      "home_confirmed_verbally"
+     ],
+     "said": [],
+     "diff": {
+      "home_confirmed": {
+       "before": null,
+       "after": true
+      }
+     }
+    },
+    {
+     "index": 1,
+     "turn": 4,
+     "node": "next_step",
+     "at_ms": 1795531978096,
+     "ms": 0.0,
+     "target": "collect_request",
+     "awaiting_user": false,
+     "finished": false,
+     "consumed_utterance": false,
+     "condition": "falta saber qué le ocurre",
+     "declared": true,
+     "llm_calls": 0,
+     "llm_ms": 0,
+     "interpretation": null,
+     "confidence_signals": null,
+     "trace": [],
+     "validations": [],
+     "said": [],
+     "diff": {}
+    },
+    {
+     "index": 2,
+     "turn": 4,
      "node": "collect_request",
-     "at_ms": 1795526741293,
+     "at_ms": 1795531978096,
      "ms": 0.0,
      "target": "collect_request",
      "awaiting_user": true,
@@ -1172,7 +1359,7 @@
    ]
   },
   {
-   "turn": 4,
+   "turn": 5,
    "caller": "Oiga, ¿esta llamada se graba?",
    "assistant": [
     "Sí: la llamada se registra para gestionar su incidencia y para control de calidad. Perfecto. Cuénteme, ¿qué ocurre?"
@@ -1183,23 +1370,23 @@
     "intent": "question",
     "question": "¿esta llamada se graba?",
     "origin": "llm",
-    "llm_ms": 1207
+    "llm_ms": 1044
    },
    "timings": {
-    "interpretation_ms": 1207,
+    "interpretation_ms": 1044,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1209,
-    "server_ms": 1209,
-    "turn": 4
+    "graph_ms": 1047,
+    "server_ms": 1047,
+    "turn": 5
    },
    "visits": [
     {
      "index": 0,
-     "turn": 4,
+     "turn": 5,
      "node": "collect_request",
-     "at_ms": 1795526741295,
-     "ms": 1207.9,
+     "at_ms": 1795531978099,
+     "ms": 1045.3,
      "target": "collect_request",
      "awaiting_user": true,
      "finished": false,
@@ -1207,12 +1394,12 @@
      "condition": "no ha contado todavía qué le ocurre",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1207,
+     "llm_ms": 1044,
      "interpretation": {
       "intent": "question",
       "question": "¿esta llamada se graba?",
       "origin": "llm",
-      "llm_ms": 1207
+      "llm_ms": 1044
      },
      "confidence_signals": null,
      "trace": [
@@ -1230,7 +1417,7 @@
    ]
   },
   {
-   "turn": 5,
+   "turn": 6,
    "caller": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
    "assistant": [
     "Para orientar al fontanero: ¿gotea o sale agua con fuerza, y sabe de dónde viene?"
@@ -1239,28 +1426,28 @@
    "final_node": "ask_detail",
    "interpretation": {
     "intent": "continue",
-    "problem": "fuga de agua en el baño",
+    "problem": "fuga de agua en el baño y está inundando el suelo",
     "category": "plumbing",
     "urgency": "high",
     "work_type": "repair",
     "origin": "llm",
-    "llm_ms": 1195
+    "llm_ms": 1256
    },
    "timings": {
-    "interpretation_ms": 1195,
+    "interpretation_ms": 1256,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1201,
-    "server_ms": 1201,
-    "turn": 5
+    "graph_ms": 1262,
+    "server_ms": 1262,
+    "turn": 6
    },
    "visits": [
     {
      "index": 0,
-     "turn": 5,
+     "turn": 6,
      "node": "collect_request",
-     "at_ms": 1795526742506,
-     "ms": 1195.8,
+     "at_ms": 1795531979148,
+     "ms": 1257.1,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1268,15 +1455,15 @@
      "condition": "solicitud recogida",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1195,
+     "llm_ms": 1256,
      "interpretation": {
       "intent": "continue",
-      "problem": "fuga de agua en el baño",
+      "problem": "fuga de agua en el baño y está inundando el suelo",
       "category": "plumbing",
       "urgency": "high",
       "work_type": "repair",
       "origin": "llm",
-      "llm_ms": 1195
+      "llm_ms": 1256
      },
      "confidence_signals": null,
      "trace": [],
@@ -1287,7 +1474,7 @@
        "before": {},
        "after": {
         "problem": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
-        "short_problem": "fuga de agua en el baño",
+        "short_problem": "fuga de agua en el baño y está inundando el suelo",
         "category": "plumbing",
         "urgency": "high",
         "work_type": "repair",
@@ -1298,10 +1485,10 @@
     },
     {
      "index": 1,
-     "turn": 5,
+     "turn": 6,
      "node": "next_step",
-     "at_ms": 1795526743703,
-     "ms": 0.0,
+     "at_ms": 1795531980406,
+     "ms": 0.1,
      "target": "determine_urgency",
      "awaiting_user": false,
      "finished": false,
@@ -1313,7 +1500,7 @@
      "interpretation": null,
      "confidence_signals": {
       "model": "ollama/qwen3.5:latest",
-      "prompt_version": "interpretacion-v7",
+      "prompt_version": "interpretacion-v8",
       "category_in_catalog": true,
       "merged_with_interpretation": true
      },
@@ -1329,7 +1516,7 @@
       "pending": {
        "before": {
         "problem": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo",
-        "short_problem": "fuga de agua en el baño",
+        "short_problem": "fuga de agua en el baño y está inundando el suelo",
         "category": "plumbing",
         "urgency": "high",
         "work_type": "repair",
@@ -1359,13 +1546,13 @@
       },
       "summary": {
        "before": null,
-       "after": "fuga de agua en el baño"
+       "after": "fuga de agua en el baño y está inundando el suelo"
       },
       "confidence_signals": {
        "before": null,
        "after": {
         "model": "ollama/qwen3.5:latest",
-        "prompt_version": "interpretacion-v7",
+        "prompt_version": "interpretacion-v8",
         "category_in_catalog": true,
         "merged_with_interpretation": true
        }
@@ -1374,9 +1561,9 @@
     },
     {
      "index": 2,
-     "turn": 5,
+     "turn": 6,
      "node": "determine_urgency",
-     "at_ms": 1795526743704,
+     "at_ms": 1795531980406,
      "ms": 0.0,
      "target": "next_step",
      "awaiting_user": false,
@@ -1405,9 +1592,9 @@
     },
     {
      "index": 3,
-     "turn": 5,
+     "turn": 6,
      "node": "next_step",
-     "at_ms": 1795526743705,
+     "at_ms": 1795531980407,
      "ms": 0.0,
      "target": "ask_detail",
      "awaiting_user": false,
@@ -1426,9 +1613,9 @@
     },
     {
      "index": 4,
-     "turn": 5,
+     "turn": 6,
      "node": "ask_detail",
-     "at_ms": 1795526743705,
+     "at_ms": 1795531980408,
      "ms": 0.0,
      "target": "ask_detail",
      "awaiting_user": true,
@@ -1455,10 +1642,10 @@
    ]
   },
   {
-   "turn": 6,
+   "turn": 7,
    "caller": "Sale con bastante fuerza, de debajo del lavabo",
    "assistant": [
-    "Le resumo: fuga de agua en el baño; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
+    "Le resumo: fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
    ],
    "initial_node": "ask_detail",
    "final_node": "confirm_summary",
@@ -1469,23 +1656,23 @@
     "urgency": "medium",
     "work_type": "repair",
     "origin": "llm",
-    "llm_ms": 1291
+    "llm_ms": 1099
    },
    "timings": {
-    "interpretation_ms": 1291,
+    "interpretation_ms": 1099,
     "llm_calls": 1,
     "interpretation_origin": "llm",
-    "graph_ms": 1295,
-    "server_ms": 1295,
-    "turn": 6
+    "graph_ms": 1103,
+    "server_ms": 1103,
+    "turn": 7
    },
    "visits": [
     {
      "index": 0,
-     "turn": 6,
+     "turn": 7,
      "node": "ask_detail",
-     "at_ms": 1795526743708,
-     "ms": 1291.9,
+     "at_ms": 1795531980409,
+     "ms": 1099.9,
      "target": "next_step",
      "awaiting_user": false,
      "finished": false,
@@ -1493,7 +1680,7 @@
      "condition": "detalle recogido, o el vecino no lo aporta",
      "declared": true,
      "llm_calls": 1,
-     "llm_ms": 1291,
+     "llm_ms": 1099,
      "interpretation": {
       "intent": "continue",
       "problem": "sale agua con fuerza de debajo del lavabo",
@@ -1501,7 +1688,7 @@
       "urgency": "medium",
       "work_type": "repair",
       "origin": "llm",
-      "llm_ms": 1291
+      "llm_ms": 1099
      },
      "confidence_signals": null,
      "trace": [
@@ -1518,16 +1705,16 @@
        "after": "Vale. Pues hay una fuga de agua en el baño y está inundando el suelo Detalle: Sale con bastante fuerza, de debajo del lavabo"
       },
       "summary": {
-       "before": "fuga de agua en el baño",
-       "after": "fuga de agua en el baño; sale agua con fuerza de debajo del lavabo"
+       "before": "fuga de agua en el baño y está inundando el suelo",
+       "after": "fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo"
       }
      }
     },
     {
      "index": 1,
-     "turn": 6,
+     "turn": 7,
      "node": "next_step",
-     "at_ms": 1795526745000,
+     "at_ms": 1795531981511,
      "ms": 0.0,
      "target": "confirm_summary",
      "awaiting_user": false,
@@ -1546,9 +1733,9 @@
     },
     {
      "index": 2,
-     "turn": 6,
+     "turn": 7,
      "node": "confirm_summary",
-     "at_ms": 1795526745001,
+     "at_ms": 1795531981512,
      "ms": 0.0,
      "target": "confirm_summary",
      "awaiting_user": true,
@@ -1568,14 +1755,14 @@
      ],
      "validations": [],
      "said": [
-      "Le resumo: fuga de agua en el baño; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
+      "Le resumo: fuga de agua en el baño y está inundando el suelo; sale agua con fuerza de debajo del lavabo. ¿Es correcto?"
      ],
      "diff": {}
     }
    ]
   },
   {
-   "turn": 7,
+   "turn": 8,
    "caller": "Sí, correcto",
    "assistant": [
     "He registrado su incidencia. Se lo comunico ahora a Fontanería Pérez, que se pondrá en contacto con usted para concertar la visita. Todavía no puedo darle hora porque depende de su disponibilidad; el siguiente paso es su llamada. Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, hasta luego."
@@ -1590,17 +1777,17 @@
    },
    "timings": {
     "interpretation_origin": "deterministic",
-    "graph_ms": 4,
-    "server_ms": 4,
-    "turn": 7
+    "graph_ms": 5,
+    "server_ms": 5,
+    "turn": 8
    },
    "visits": [
     {
      "index": 0,
-     "turn": 7,
+     "turn": 8,
      "node": "confirm_summary",
-     "at_ms": 1795526745003,
-     "ms": 0.2,
+     "at_ms": 1795531981514,
+     "ms": 0.1,
      "target": "validate_data",
      "awaiting_user": false,
      "finished": false,
@@ -1633,9 +1820,9 @@
     },
     {
      "index": 1,
-     "turn": 7,
+     "turn": 8,
      "node": "validate_data",
-     "at_ms": 1795526745004,
+     "at_ms": 1795531981515,
      "ms": 0.0,
      "target": "assign_specialist",
      "awaiting_user": false,
@@ -1661,9 +1848,9 @@
     },
     {
      "index": 2,
-     "turn": 7,
+     "turn": 8,
      "node": "assign_specialist",
-     "at_ms": 1795526745005,
+     "at_ms": 1795531981516,
      "ms": 0.0,
      "target": "create_ticket",
      "awaiting_user": false,
@@ -1698,9 +1885,9 @@
     },
     {
      "index": 3,
-     "turn": 7,
+     "turn": 8,
      "node": "create_ticket",
-     "at_ms": 1795526745005,
+     "at_ms": 1795531981516,
      "ms": 0.1,
      "target": "notify_channel",
      "awaiting_user": false,
@@ -1715,7 +1902,7 @@
      "trace": [
       {
        "action": "incident_created",
-       "detail": "inc-fe1edd52011e"
+       "detail": "inc-06e62178e85e"
       }
      ],
      "validations": [],
@@ -1723,7 +1910,7 @@
      "diff": {
       "incident_id": {
        "before": null,
-       "after": "inc-fe1edd52011e"
+       "after": "inc-06e62178e85e"
       },
       "result": {
        "before": null,
@@ -1733,10 +1920,10 @@
     },
     {
      "index": 4,
-     "turn": 7,
+     "turn": 8,
      "node": "notify_channel",
-     "at_ms": 1795526745006,
-     "ms": 0.0,
+     "at_ms": 1795531981517,
+     "ms": 0.1,
      "target": "end",
      "awaiting_user": false,
      "finished": true,
