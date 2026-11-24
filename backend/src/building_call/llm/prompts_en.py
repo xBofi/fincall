@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from building_call.domain.config import UNCLASSIFIABLE_CATEGORY
 
-INTERPRETATION_VERSION = "interpretation-en-v2"
+INTERPRETATION_VERSION = "interpretation-en-v3"
 CLASSIFICATION_VERSION = "classification-en-v1"
 PHRASING_VERSION = "phrasing-en-v1"
 
@@ -67,11 +67,12 @@ Keys:
 
 _CLASSIFY_SYSTEM = """
 - category: the issue's category if they describe one, exactly one of: {catalog}. It is decided by the thing that is broken, never by where it is or what is next to it: "the outlet next to the elevator doesn't work" is electrical; "crack in the mailroom wall" is masonry. If they do not name the broken thing, "unclassifiable": do not infer it from the verb even if it usually goes with one ("it stopped", "it's not working", "it broke", "it makes a noise" do not say what). If the broken thing has no category of its own in the catalog (gas, fire, pests…), "unclassifiable": never the closest one.
-- urgency: if they describe an issue: low (a nuisance with no risk or damage: burnt-out bulb, slow drip) | medium (affects normal use: no lights in common areas, door that won't close) | high (damage in progress or essential service down: flooding, elevator out of service, no water, debris falling) | emergency (immediate risk to people: someone trapped, smell of gas, fire).
-- work_type: what the issue needs, if they describe one: repair (fix something broken; the default, you may omit it) | replacement (replace something entirely or new construction) | insurance_claim (vandalism, theft, storm damage, damage by a third party: goes to insurance) | neighbour_dispute (noise, nuisances or conflicts with neighbors) | private_unit (inside a private apartment, not the common areas). Damage done by someone (vandalism, theft, a car hitting the garage door) is insurance_claim even if it also needs fixing."""
+- urgency: if they describe an issue: low (a nuisance with no risk or damage: burnt-out bulb, slow drip) | medium (affects normal use: no lights in common areas, door that won't close) | high (damage in progress or essential service down: flooding, an elevator that is stopped or stuck, no water, no heat, no hot water, debris falling) | emergency (immediate risk to people: someone trapped, smell of gas, fire).
+- work_type: what the issue needs, if they describe one: repair (fix something broken; the default, you may omit it) | replacement (replace something entirely or new construction) | insurance_claim (vandalism, theft, storm damage, damage by a third party: goes to insurance) | neighbour_dispute (noise, nuisances or conflicts with neighbors) | private_unit (inside a private apartment, not the common areas). Damage done by someone (vandalism, theft, a car hitting the garage door) is insurance_claim even if it also needs fixing.
+- Whenever you give a problem, give its category and urgency in the same object too: never leave them out ("unclassifiable" when no category fits). Someone trapped or not responding, a smell of gas, fire, smoke or sparks is always emergency, whatever else is said. Example: "The faucet in the laundry room is dripping" -> {{"problem":"faucet in the laundry room is dripping","category":"plumbing","urgency":"low"}}"""
 
 _EQUIPMENT_SYSTEM = """
-- equipment: if the issue affects one of this building's pieces of equipment, its id, exactly one of: {equipment_list}. If they name the type of equipment ("the elevator", "the intercom") and the building has only one of that type, it is that one. If it affects none, omit it."""
+- equipment: if the issue affects one of this building's pieces of equipment, its id, exactly one of: {equipment_list}. If they name the type of equipment ("the elevator", "the intercom") and the building has only one of that type, it is that one. Give it whenever the broken thing is that equipment or any part of it (its doors, buttons, light, panel, motor), together with the category; a place next to it ("a puddle in front of the elevator") is not the equipment. If it affects none, omit it."""
 
 FORMAT = """
 

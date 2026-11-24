@@ -139,6 +139,12 @@ class Lexicon(_Strict):
     #: Turn fillers for the voice agent: a turn made only of these waits for more ("Ah,
     #: vale, perdón."). Multi-word ones go together ("a ver": a lone "A." is a door letter)
     turn_fillers: list[str] = Field(default_factory=list)
+    #: Other words for a piece of equipment: "buzzer" -> "intercom", "lift" -> "elevator"
+    equipment_synonyms: dict[str, str] = Field(default_factory=dict)
+    #: "In front of the elevator": a place next to the equipment, not the equipment
+    place_words: list[str] = Field(default_factory=list)
+    #: Description words too generic to name equipment ("door" in "garage door")
+    equipment_generic_words: list[str] = Field(default_factory=list)
     #: Alone they count as a "yes", so they are not fillers
     loose_answers: list[str] = Field(default_factory=list)
     #: Words of the base STT vocabulary (keyterms)

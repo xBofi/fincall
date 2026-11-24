@@ -222,3 +222,27 @@ def test_stt_terms_in_each_language() -> None:
     assert {"Calle Mayor 12", "portal 2", "puerta B", "tercero B"} <= set(es)
     en = i18n.parser_for("en").stt_terms(["12 Main Street"], ["2"], ["3"], ["B"])
     assert {"12 Main Street", "entrance 2", "apartment 3B"} <= set(en)
+
+
+MAIN12 = [("eq-main12-intercom", "Fermax Citymax intercom (entrance)"), ("eq-main12-elevator", "Orona elevator")]
+ELM5 = [("eq-elm5-garage", "Nice automatic garage door (garage)")]
+
+
+@pytest.mark.parametrize(
+    ("code", "text", "equipment", "expected"),
+    [
+        ("en", "The elevator got stuck on the third floor", MAIN12, "eq-main12-elevator"),
+        ("en", "The buzzer for the front door doesn't work", MAIN12, "eq-main12-intercom"),
+        # A place next to the equipment is not the equipment
+        ("en", "There's a big puddle right in front of the elevator", MAIN12, None),
+        # "door" alone is too generic to be the garage door
+        ("en", "The front door won't lock", ELM5, None),
+        ("en", "The automatic garage door is stuck halfway", ELM5, "eq-elm5-garage"),
+        ("en", "Sparks are coming out of the outlet", MAIN12, None),
+        ("es", "El telefonillo no funciona", [("eq-1", "portero automático Fermax (portal)")], "eq-1"),
+    ],
+)
+def test_equipment_named_in_the_sentence(
+    code: str, text: str, equipment: list[tuple[str, str]], expected: str | None
+) -> None:
+    assert i18n.parser_for(code).equipment_in(text, equipment) == expected

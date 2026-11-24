@@ -379,6 +379,39 @@ class Parser:
         )
         return d["sentence"].format(parts=", ".join(parts))
 
+    # ------------------------------------------------------------------ equipment
+
+    def equipment_in(self, text: str, equipment: list[tuple[str, str]]) -> str | None:
+        """The one piece of the building's equipment the sentence names ("the elevator is
+        stuck" -> the elevator's id), or None. Used when the model leaves `equipment` out.
+
+        A description word (not the brand: brands are rarely said) or a synonym must appear,
+        and not right after a place word ("a puddle in front of the elevator" is not about
+        the elevator). Two candidates, or none: None, the model's silence stands."""
+        lx = self.language.lexicon
+        words = self.normalize(text).split()
+        synonyms = {self.normalize(k): self.normalize(v) for k, v in lx.equipment_synonyms.items()}
+        words = [synonyms.get(w, w) for w in words]
+        places = [self.normalize(p).split() for p in lx.place_words]
+        found: set[str] = set()
+        for eq_id, description in equipment:
+            generic = {self.normalize(g) for g in lx.equipment_generic_words}
+            names = {
+                w
+                for w in self.normalize(description.split("(")[0]).split()
+                if len(w) >= 4 and w not in generic
+            }
+            for i, w in enumerate(words):
+                if w not in names:
+                    continue
+                before = words[max(0, i - 4) : i]
+                if any(
+                    before[j : j + len(p)] == p for p in places for j in range(len(before))
+                ):
+                    continue
+                found.add(eq_id)
+        return found.pop() if len(found) == 1 else None
+
     # ------------------------------------------------------------------ set phrases
 
     def only_set_phrase(self, text: str, phrases: tuple[str, ...]) -> bool:

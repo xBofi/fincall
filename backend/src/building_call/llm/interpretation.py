@@ -320,4 +320,11 @@ async def interpret(
         format_instruction="",
     )
     ms = int((perf_counter() - start) * 1000)
-    return normalize_interpretation(data, ms)
+    result = normalize_interpretation(data, ms)
+    if equipment_list and result.problem and not result.equipment:
+        # The model often leaves `equipment` out even when the sentence names it ("the
+        # elevator got stuck"): the building's own equipment names decide then (eval 2026-11)
+        found = i18n.parser_for(code).equipment_in(utterance, equipment_list)
+        if found:
+            result = result.model_copy(update={"equipment": found})
+    return result

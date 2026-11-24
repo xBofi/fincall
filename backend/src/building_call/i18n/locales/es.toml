@@ -55,10 +55,17 @@ number_joiner_required = true
 gas = ["gas", "butano", "propano"]
 fire = ["fuego", "humo", "humareda", "incendio", "incendiando", "incendiado", "llamas", "ardiendo", "quemando", "quemado"]
 turn_fillers = ["ah", "eh", "oh", "ay", "uy", "pues", "mire", "mira", "oiga", "oye", "perdon", "perdone", "perdona", "disculpe", "hola", "buenas", "bueno", "vale", "a ver", "entonces", "este", "esto", "y", "o sea"]
+place_words = ["delante del", "delante de", "al lado del", "junto al", "cerca del", "frente al", "enfrente del"]
+equipment_generic_words = ["puerta", "automatica", "automatico", "sistema"]
 loose_answers = ["vale", "bueno"]
 stt_terms = ["portal", "piso", "puerta", "ático", "bajo", "sí", "no"]
 names = ["espanol", "castellano", "spanish", "espanyol", "اسباني", "ہسپانوی", "स्पेनिश"]
 detection = ["el", "la", "los", "las", "de", "del", "que", "y", "en", "un", "una", "es", "no", "se", "por", "con", "para", "mi", "hay", "esta", "pero", "muy", "si", "hola", "gracias", "calle", "piso", "puerta", "ascensor", "luz", "agua"]
+
+[lexicon.equipment_synonyms]
+portero = "portero"
+telefonillo = "portero"
+elevador = "ascensor"
 
 [lexicon.numbers]
 cero = 0

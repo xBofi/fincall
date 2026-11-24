@@ -48,10 +48,17 @@ address_filler = ["i", "im", "live", "living", "at", "in", "on", "the", "its", "
 gas = ["gas", "propane", "butane"]
 fire = ["fire", "smoke", "smoky", "smoking", "flames", "burning", "burnt", "burned", "blaze", "on fire"]
 turn_fillers = ["ah", "eh", "oh", "uh", "um", "umm", "uhm", "er", "erm", "hmm", "mm", "so", "well", "okay", "ok", "sorry", "excuse me", "hi", "hello", "hey", "let me see", "i mean", "like", "and"]
+place_words = ["front of", "next to", "near", "beside", "outside", "by the", "opposite"]
+equipment_generic_words = ["door", "doors", "automatic", "system", "main", "panel"]
 loose_answers = ["okay", "ok", "well"]
 stt_terms = ["entrance", "floor", "apartment", "unit", "ground floor", "yes", "no"]
 names = ["english", "ingles", "angles", "انجليزي", "انگریزی", "अंग्रेजी", "अंग्रेज़ी"]
 detection = ["the", "a", "an", "is", "are", "i", "im", "you", "it", "its", "there", "and", "of", "to", "in", "on", "my", "this", "that", "not", "isnt", "doesnt", "with", "hello", "hi", "yes", "thanks", "street", "floor", "apartment", "elevator", "light", "water", "broken", "working"]
+
+[lexicon.equipment_synonyms]
+buzzer = "intercom"
+lift = "elevator"
+elevators = "elevator"
 
 [lexicon.numbers]
 zero = 0
