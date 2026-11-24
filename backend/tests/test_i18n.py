@@ -161,6 +161,19 @@ def test_explicit_refusal(code: str, text: str, refusal: bool) -> None:
         ("en", "apartment 3A", (None, "3", "A")),
         ("en", "entrance 2, third floor, B", ("2", "3", "B")),
         ("en", "unit 4 b", (None, "4", "B")),
+        # The number after the apartment word is the apartment, not the floor
+        ("en", "apartment 5", (None, None, "5")),
+        # Devanagari ordinals end in a vowel sign: `` never matched after them
+        ("hi", "तीसरी मंजिल", (None, "3", None)),
+        ("hi", "तीसरी मंजिल, फ्लैट B", (None, "3", "B")),
+        ("hi", "फ्लैट 5", (None, None, "5")),
+        ("hi", "फ्लैट 3B", (None, "3", "B")),
+        ("ar", "الطابق الثالث", (None, "3", None)),
+        ("ar", "الطابق الثالث شقة 5", (None, "3", "5")),
+        ("ar", "شقة 5", (None, None, "5")),
+        ("ur", "تیسری منزل", (None, "3", None)),
+        ("ur", "تیسری منزل، فلیٹ 5", (None, "3", "5")),
+        ("ur", "فلیٹ 5", (None, None, "5")),
     ],
 )
 def test_apartment_by_format(code: str, text: str, expected: tuple[str | None, ...]) -> None:

@@ -72,7 +72,7 @@ class Parser:
         self.floors = {n(k): v for k, v in home.floors.items()}
         self.doors = {n(k): v for k, v in home.doors.items()}
         stop = _alternation(n(w) for w in lx.address_stopwords)
-        self._address_stop = re.compile(rf"\b(?:{stop})\b") if stop else None
+        self._address_stop = re.compile(rf"(?<!\S)(?:{stop})(?!\S)") if stop else None
         self._entrance = _alternation(n(w) for w in home.entrance_markers)
         self._floor_markers = _alternation(n(w) for w in home.floor_markers)
         self._door_markers = _alternation(n(w) for w in home.door_markers)
@@ -223,7 +223,7 @@ class Parser:
             return None
         v = self.numbers_to_digits(self.normalize(str(value)))
         if self._entrance:
-            v = re.sub(rf"\b(?:{self._entrance})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{self._entrance})(?!\S)", "", v).strip()
         # An entrance is a number (1-2 digits) or a single letter; "the", "el"... are noise
         if not v or not re.fullmatch(rf"\d{{1,2}}|{_LETTER}", v):
             return None
@@ -238,7 +238,7 @@ class Parser:
              *(self.normalize(w) for w in self.language.home.floor_noise)]
         )  # fmt: skip
         if strip:
-            v = re.sub(rf"\b(?:{strip})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{strip})(?!\S)", "", v).strip()
         v = self.floors.get(v, v)
         v = self.numbers_to_digits(v)
         m = re.match(r"(\d+)", v)
@@ -253,7 +253,7 @@ class Parser:
              *(self.normalize(w) for w in self.language.home.door_noise)]
         )  # fmt: skip
         if strip:
-            v = re.sub(rf"\b(?:{strip})\b", "", v).strip()
+            v = re.sub(rf"(?<!\S)(?:{strip})(?!\S)", "", v).strip()
         v = self.doors.get(v, v)
         return v.upper() or None
 
@@ -264,13 +264,13 @@ class Parser:
         entrance = None
         remainder = t
         if self._entrance:
-            m_entrance = re.search(rf"\b(?:{self._entrance})\s+(\w+)", t)
+            m_entrance = re.search(rf"(?<!\S)(?:{self._entrance})\s+(\S+)", t)
             entrance = self.normalize_entrance(m_entrance.group(1)) if m_entrance else None
-            remainder = re.sub(rf"\b(?:{self._entrance})\s+\w+", " ", t)
+            remainder = re.sub(rf"(?<!\S)(?:{self._entrance})\s+\S+", " ", t)
         door_words = rf"(?:{self._door_markers})" if self._door_markers else None
         # "3a", "3 a": floor and apartment letter together
-        prefix = rf"(?:\b{door_words}\s+)?" if door_words else ""
-        m_compact = re.search(rf"{prefix}\b(\d{{1,2}})\s?({_LETTER})\b", remainder)
+        prefix = rf"(?:(?<!\S){door_words}\s+)?" if door_words else ""
+        m_compact = re.search(rf"{prefix}(?<!\S)(\d{{1,2}})\s?({_LETTER})(?!\S)", remainder)
         # "on 3 a leak..." is not apartment 3A: a spaced one-letter word only counts at the end
         spaced_word = (
             m_compact is not None
@@ -286,22 +286,26 @@ class Parser:
             )
         floor_alt = rf"\d{{1,2}}|{self._floor_words}" if self._floor_words else r"\d{1,2}"
         marker_after = rf"(?:\s+(?:{self._floor_markers}))?" if self._floor_markers else ""
-        m_floor: Any = re.search(rf"\b({floor_alt})\b{marker_after}", remainder)
+        m_floor: Any = re.search(rf"(?<!\S)({floor_alt})(?!\S){marker_after}", remainder)
         if self._floor_markers:
-            m_floor_word = re.search(rf"\b(?:{self._floor_markers})\s+(\d{{1,2}})\b", remainder)
+            m_floor_word = re.search(rf"(?<!\S)(?:{self._floor_markers})\s+(\d{{1,2}})(?!\S)", remainder)
             if m_floor_word:
                 m_floor = m_floor_word
         floor = self.normalize_floor(m_floor.group(1)) if m_floor else None
         door = None
         m_explicit = (
-            re.search(rf"\b{door_words}\s+({_LETTER}|\d{{1,2}})\b", remainder)
+            re.search(rf"(?<!\S){door_words}\s+({_LETTER}|\d{{1,2}})(?!\S)", remainder)
             if door_words
             else None
         )
         if m_explicit and (m_floor is None or m_explicit.start(1) != m_floor.start(1)):
             door = self.normalize_door(m_explicit.group(1))
+        elif m_explicit and m_explicit.group(1).isdigit():
+            # "apartment 5", "फ्लैट 5", "شقة 5": the number after the apartment word is the
+            # apartment, not the floor; the floor is asked for next
+            floor, door = None, self.normalize_door(m_explicit.group(1))
         else:
-            m_door = re.search(rf"\b({_LETTER})\b\s*$", remainder.strip())
+            m_door = re.search(rf"(?<!\S)({_LETTER})(?!\S)\s*$", remainder.strip())
             if m_door and m_floor is not None and m_door.start() > m_floor.start():
                 door = self.normalize_door(m_door.group(1))
         return entrance, floor, door
