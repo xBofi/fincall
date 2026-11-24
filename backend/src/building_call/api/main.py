@@ -217,6 +217,25 @@ def create_llm() -> Any:
             credentials_path=settings.vertex_credentials,
             timeout_s=settings.vertex_timeout_s,
         )
+    if mode == "openai":
+        from building_call.llm.openai import OpenAIModel
+
+        return OpenAIModel(
+            settings.openai_api_key,
+            settings.openai_model,
+            base_url=settings.openai_url,
+            reasoning_effort=settings.openai_reasoning_effort or None,
+            timeout_s=settings.openai_timeout_s,
+        )
+    if mode == "bedrock":
+        from building_call.llm.bedrock import BedrockModel
+
+        return BedrockModel(
+            settings.bedrock_api_key,
+            settings.bedrock_model,
+            region=settings.bedrock_region,
+            timeout_s=settings.bedrock_timeout_s,
+        )
     cloud = WorkersAIModel(
         settings.cloudflare_account_id,
         settings.cloudflare_api_token,
