@@ -49,6 +49,7 @@ from building_call.llm.prompts import (
     classification_system_prompt,
     classification_version,
 )
+from building_call.nlp.hybrid import HybridRouter
 from building_call.repos.base import Repository
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,8 @@ class Dependencies:
     speculations: dict[str, dict[str, asyncio.Future[Interpretation]]] = field(
         default_factory=dict
     )
+    # Hybrid routing (BC_NLP_HYBRID): the turn classifier answers before the LLM when it is sure
+    router: HybridRouter | None = None
 
     def discard_speculations(self, call_id: str) -> None:
         for future in self.speculations.pop(call_id, {}).values():
@@ -504,6 +507,15 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
             if r is not None and len(words) <= 4 and (r or _p().explicit_no(utterance)):
                 interp = Interpretation(confirms=r, origin="deterministic")
                 return interp, _timings(state, interpretation_origin="deterministic")
+        if deps.router is not None:
+            # With equipment in the estate the LLM must choose the affected one: no problem shape
+            catalog = None if equipment_for(state) else _catalog(state)
+            routed = await asyncio.to_thread(deps.router.interpret, utterance, node, catalog)
+            if routed is not None:
+                deps.discard_speculations(state["call_id"])
+                return routed, _timings(
+                    state, interpretation_ms=routed.llm_ms, interpretation_origin="classifier"
+                )
         # ¿Ya se lanzó esta interpretación sobre el transcript parcial? Se reutiliza (o se espera
         # a que termine): solapa el LLM con la detección de fin de turno del STT.
         key = speculation_key(utterance)
@@ -1528,7 +1540,20 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         signals = dict(state.get("confidence_signals") or {})
         work_type, equipment_id = state.get("work_type"), state.get("equipment_id")
         equipment_list = equipment_for(state)
-        if not category or (equipment_list and not state.get("equipment_evaluated")):
+        routed = (
+            await asyncio.to_thread(deps.router.classify, state.get("request") or "", catalog)
+            if deps.router is not None and not category and not equipment_list
+            else None
+        )
+        if routed is not None:
+            category, urgency, work_type = routed.category, routed.urgency, routed.work_type
+            timings = _timings(state, classification_ms=routed.ms)
+            signals = {
+                "model": deps.router.name if deps.router else "",
+                "prompt_version": None,
+                "valid_urgency": urgency in URGENCIES,
+            }
+        elif not category or (equipment_list and not state.get("equipment_evaluated")):
             t0 = perf_counter()
             extracted = wire.read(
                 await deps.llm.extract(

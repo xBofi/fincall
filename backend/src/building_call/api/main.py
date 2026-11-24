@@ -252,6 +252,15 @@ def create_llm() -> Any:
     raise ValueError(f"BC_LLM desconocido: {settings.llm}")
 
 
+def create_router() -> Any:
+    """Hybrid router (BC_NLP_HYBRID), or None: off, or the classifier is not available."""
+    if not settings.nlp_hybrid:
+        return None
+    from building_call.nlp.hybrid import build_router
+
+    return build_router(settings.nlp_model_dir, settings.nlp_threshold)
+
+
 def create_phraser() -> OllamaModel | None:
     """Redacción con el modelo local y salida corta (la carrera con el 27B tardaba 1,5 s).
 
@@ -345,7 +354,7 @@ def create_app(
             repo: Any = PostgresRepository(settings.database_url)
         else:
             repo = MemoryRepository()
-        deps = Dependencies(repo=repo, llm=create_llm())
+        deps = Dependencies(repo=repo, llm=create_llm(), router=create_router())
     if stt is None:
         stt = (
             WhisperRecognizer(

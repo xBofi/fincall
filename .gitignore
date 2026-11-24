@@ -22,3 +22,6 @@ backend/gcp-*.json
 .claude/worktrees/
 # Último commit de develop ya reflejado en la bóveda y la web (hook de documentación)
 .claude/estado/
+
+# Turn classifier weights: rebuilt by backend/nlp/train_classifier.py
+backend/nlp/models/

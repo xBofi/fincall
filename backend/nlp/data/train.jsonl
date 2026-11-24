@@ -1,0 +1,660 @@
+{"text": "Mire, hay cristales rotos en el suelo del portal, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "La persiana de mi dormitorio no sube", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "private_unit"}
+{"text": "Quiero cambiar la cuenta bancaria donde me pasan el recibo", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "No, gracias, nada más que eso", "lang": "es", "intent": "continue"}
+{"text": "Hola, la barandilla de la escalera necesita pintura, está oxidada, desde ayer", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Se están levantando las baldosas del patio", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, la fuente del jardín comunitario pierde agua por la tubería, es urgente", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Se ha roto una tubería en el garaje y sale mucha agua", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Well, the lift makes a grinding noise, please", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "The emergency lights in the car park don't work", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "El botón de llamada del ascensor en el bajo está roto", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, el cuarto de basuras huele a podrido", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "¿Me recomienda un fontanero para mi casa?", "lang": "es", "intent": "out_of_scope"}
+{"text": "Aquesta trucada s'enregistra?", "lang": "ca", "intent": "question"}
+{"text": "Espere, la puerta es la C, no la B", "lang": "es", "intent": "correct"}
+{"text": "Pues verá, necesito una copia de la llave del trastero comunitario", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, se cae el yeso de la pared del trastero", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Hay olor a quemado en el garaje y sale humo, desde ayer", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hola, la calefacción central no calienta, es urgente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "Han hecho grafitis en la puerta del garaje", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "There's broken glass all over the lobby floor, since yesterday", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, hace un ruido muy raro", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "A pipe burst in the garage and water is pouring out", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, hace un ruido muy raro", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, someone left rubbish bags on the landing, please", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the bins in the trash room are overflowing, can someone come?", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "The central heating isn't working", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "The stair light timer goes off too fast", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, el sensor de movimiento del rellano no enciende la luz, desde ayer", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "The lift is stuck on the sixth floor, since yesterday", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, la fuente del jardín comunitario pierde agua por la tubería, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Me tengo que ir, otro día llamo", "lang": "es", "intent": "hang_up"}
+{"text": "Quería pedir un certificado de deuda de la comunidad", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque las ramas del pino tapan la farola del patio, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, hay una persona mayor atrapada en el ascensor y no responde, desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Mire, el sumidero de la terraza comunitaria está atascado, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "El ascensor chirría mucho cuando sube", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque quería pedir un certificado de deuda de la comunidad, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Are you a robot?", "lang": "en", "intent": "question"}
+{"text": "Buenos días, el perro del vecino ladra todo el día, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Hola, el muelle de la puerta del portal está roto y da portazos", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "Someone broke the lock of the main entrance last night, since yesterday", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Buenos días, hay fuego en un contenedor del portal, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Well, the paint in the stairwell is peeling", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Look, it doesn't work", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "A socket inside my apartment doesn't work", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Un coche ha golpeado la pared del garaje y la ha agrietado", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "Truco perquè ha caigut un tros de sostre al replà, si us plau", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "La fuente del jardín comunitario pierde agua por la tubería", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, la caldera comunitaria hace ruidos y no da agua caliente, es urgente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "Mire, el vecino de arriba pone la música altísima todas las noches", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Mire, no me funciona un enchufe dentro de mi piso, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Buenas, está fundido el fluorescente del trastero comunitario", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, el ascensor está fuera de servicio desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Hay un agujero en el suelo de la rampa del garaje", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay excrementos de perro en la entrada del edificio", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, el botón de llamada del ascensor en el bajo está roto", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Look, my neighbour is trapped inside the elevator, please", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "The paint in the stairwell is peeling, can someone come?", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "¿Quién me va a llamar?", "lang": "es", "intent": "question"}
+{"text": "The lift is stuck on the sixth floor", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "The kitchen tap in my flat is broken, since yesterday", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "Buenas, hay cristales rotos en el suelo del portal, es urgente", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Actually it's the fifth floor, not the fourth", "lang": "en", "intent": "correct"}
+{"text": "Un enchufe del cuarto de bicicletas echa chispas", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Necesito el acta de la junta extraordinaria, desde ayer", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because there's a big crack spreading across the stairwell wall, since yesterday", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "No puedo abrir la puerta del cuarto de bicis, la llave no entra", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "Hace un ruido muy raro", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, someone sprayed graffiti on the garage door, since yesterday", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "I'm calling because the central heating isn't working", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "A piece of the ceiling fell in the hallway", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Oiga, el cuarto de basuras huele a podrido", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "La caldera comunitaria hace ruidos y no da agua caliente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "El pulsador de la luz del tercero está suelto y se ven los cables", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "I can smell gas on the stairs", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Llamo porque los contenedores del cuarto de basuras están desbordados, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, habría que cambiar todas las bajantes, son de fibrocemento", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "replacement"}
+{"text": "Déjelo, ya llamaré mañana", "lang": "es", "intent": "hang_up"}
+{"text": "Llamo porque hay muchas hojas y barro en la rampa del garaje, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Se ha roto, es urgente", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Un vecino aparca en mi plaza de garaje", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "The tap in the communal laundry won't stop running", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Se ha roto la llave dentro de la cerradura del cuarto de contadores", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Well, the lift is stuck on the sixth floor, please", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "No me funciona un enchufe dentro de mi piso", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Hola, el ascensor tiene el espejo roto", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, hay una grieta en la pared de la escalera que cada vez es más grande, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Miri, fa olor de gas a l'escala", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "There's a big crack spreading across the stairwell wall", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, hay fuego en un contenedor del portal", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Sigue igual que la semana pasada", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "S'ha trencat una canonada al garatge i surt molta aigua", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Mire, hay un escalón roto en la escalera del portal", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "There's damp on the garage wall, please", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Look, the front door lock is jammed, since yesterday", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "The lawn in the garden needs mowing", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because the elevator call button on the ground floor is broken", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "I need a certificate saying I'm up to date with the fees, please", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "La puerta de la azotea no cierra y entra cualquiera", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "The bins in the trash room are overflowing", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Rectifico, la calle es Alcalá, no Atocha", "lang": "es", "intent": "correct"}
+{"text": "Hola, tenemos una plaga de chinches en el edificio, desde ayer", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Están saliendo desconchones en las paredes del rellano", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "I want to rent out my parking space", "lang": "en", "intent": "out_of_scope"}
+{"text": "Mire, el falso techo del portal tiene una mancha de agua", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Quant pago de comunitat cada mes?", "lang": "ca", "intent": "out_of_scope"}
+{"text": "Hay una pintada ofensiva en la entrada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "No, perdone, me he equivocado de piso", "lang": "es", "intent": "correct"}
+{"text": "Mire, se están levantando las baldosas del patio, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "¿Me lo puede volver a decir?", "lang": "es", "intent": "repeat"}
+{"text": "Pues verá, la ventilación del garaje no funciona y huele a humo de coches, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "Tenemos una plaga de chinches en el edificio", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, un coche ha golpeado la pared del garaje y la ha agrietado, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "Oiga, la barrera del aparcamiento no sube, desde ayer", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "The paint in the stairwell is peeling", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, tenemos un atasco en el desagüe del patio y el agua no baja, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, el perro del vecino ladra todo el día, desde ayer", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Well, someone broke the lock of the main entrance last night, please", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Mire, me han cobrado dos veces el recibo de la comunidad", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, se cae el yeso de la pared del trastero", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque se ha roto la llave dentro de la cerradura del cuarto de contadores, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, un enchufe del cuarto de bicicletas echa chispas, es urgente", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Hay una gotera que viene de la bajante de la escalera", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "L'ascensor fa un soroll estrany, des d'ahir", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "M'he equivocat de porta, és la A", "lang": "ca", "intent": "correct"}
+{"text": "El ascensor no baja de la quinta planta", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Buenas, habría que cambiar el ascensor entero, es muy antiguo", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "replacement"}
+{"text": "No me ha llegado la convocatoria de la junta", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "I didn't get the notice for the owners' meeting, since yesterday", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Carrer Gran número deu", "lang": "ca", "intent": "continue"}
+{"text": "Are there any flats for sale in the building?", "lang": "en", "intent": "out_of_scope"}
+{"text": "Well, the storm ripped tiles off the roof", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Quiero votar en contra de la obra del tejado", "lang": "es", "intent": "out_of_scope"}
+{"text": "Well, someone keeps parking in my garage space, can someone come?", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Miri, hi ha una esquerda a la paret de l'escala, des d'ahir", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Who is going to call me?", "lang": "en", "intent": "question"}
+{"text": "Hola, se ha caído un trozo de techo en el rellano del cuarto, es urgente", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Me he confundido, el portal es el uno", "lang": "es", "intent": "correct"}
+{"text": "Buenos días, no funciona la luz de dentro del ascensor, es urgente", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "El pany del portal està encallat", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "¿Cuánto tardarán en venir?", "lang": "es", "intent": "question"}
+{"text": "Buenos días, la pintura de la escalera está muy desconchada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque hay un agujero en el suelo de la rampa del garaje, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Mire, se ha roto la llave dentro de la cerradura del cuarto de contadores", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, el ascensor no para en el segundo piso, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "I'm calling because a balcony piece came off the facade", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hola, han vomitado en el ascensor y huele muy mal, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Hi, the stair light timer goes off too fast, since yesterday", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, han pintado la pared del ascensor con spray", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Hello, the neighbour upstairs plays loud music every night, please", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Ha caigut un tros de sostre al replà", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, hi ha una esquerda a la paret de l'escala, des d'ahir", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Truco perquè cal podar els arbres del pati", "lang": "ca", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, huele a alcantarilla en el sótano, creo que es el desagüe, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "El timbre del portal no funciona", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Los del cuarto tienden la ropa y me gotea en mi terraza", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "I'm calling because i can smell gas on the stairs, please", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Buenas, la escalera está muy sucia, no la han limpiado esta semana", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, se está inundando el cuarto de contadores del agua", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Buenas, mi gato se ha subido al tejado", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "Yes, that's right", "lang": "en", "intent": "continue"}
+{"text": "Se cae el yeso de la pared del trastero", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, el cuadro eléctrico de la comunidad hace un zumbido fuerte, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, la puerta de emergencia del garaje no abre desde dentro, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "repair"}
+{"text": "¿Cómo dice?", "lang": "es", "intent": "repeat"}
+{"text": "How long will it take them to come?", "lang": "en", "intent": "question"}
+{"text": "Oiga, han pintado la pared del ascensor con spray", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Buenos días, hay poca presión de agua en todo el bloque, es urgente", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Miri, necessito un certificat de la comunitat", "lang": "ca", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because the drain in the courtyard is blocked", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, me han cobrado dos veces el recibo de la comunidad, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Un endoll del traster fa espurnes", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Truco perquè l'ascensor fa un soroll estrany, des d'ahir", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, sigue igual que la semana pasada, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, no puedo abrir la puerta del cuarto de bicis, la llave no entra, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "Hi ha rates al soterrani", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Truco perquè no funciona el llum de l'escala", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "La escalera está muy sucia, no la han limpiado esta semana", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Truco perquè s'ha trencat una canonada al garatge i surt molta aigua", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Wait, it's door C, not B", "lang": "en", "intent": "correct"}
+{"text": "La pintura de la escalera está muy desconchada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, hay humedades en la pared del garaje, desde ayer", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Hi, the drain in the courtyard is blocked, can someone come?", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Llamo porque se ha quedado mi vecino encerrado en el ascensor, desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hola, un enchufe del cuarto de bicicletas echa chispas, es urgente", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Me llamo Luis", "lang": "es", "intent": "continue"}
+{"text": "Someone keeps parking in my garage space", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Buenas, está fundido el fluorescente del trastero comunitario, es urgente", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "A tree in the courtyard is leaning and might fall", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, las ramas del pino tapan la farola del patio, desde ayer", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, el cuadro eléctrico de la comunidad hace un zumbido fuerte, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "I'm calling because there are rats in the bin room", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, el ascensor no para en el segundo piso, desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay que podar los árboles que tocan las ventanas", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, la puerta del ascensor se cierra de golpe y casi me pilla", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "El sensor de movimiento del rellano no enciende la luz", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Someone sprayed graffiti on the garage door, since yesterday", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Hello, the tap in the communal laundry won't stop running", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because there's damp on the garage wall, since yesterday", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "La puerta del ascensor se cierra de golpe y casi me pilla", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Can you give me my neighbour's phone number?", "lang": "en", "intent": "out_of_scope"}
+{"text": "L'ascensor fa un soroll estrany", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "It's 12 Elm Street", "lang": "en", "intent": "continue"}
+{"text": "Llamo porque pierde agua la llave de paso general del portal, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "I didn't get the notice for the owners' meeting", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "¿Me puede atender un humano?", "lang": "es", "intent": "human"}
+{"text": "Hay humedades en la pared del garaje", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, el vecino de arriba pone la música altísima todas las noches, es urgente", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Hi, a pipe burst in the garage and water is pouring out, can someone come?", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Se ha agrietado el muro del jardín y parece que se va a caer", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "¿Es usted una máquina?", "lang": "es", "intent": "question"}
+{"text": "I made a mistake, the street is Oak Avenue", "lang": "en", "intent": "correct"}
+{"text": "Han reventado la cerradura del portal esta noche", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "El perro del vecino ladra todo el día", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Llamo porque queremos poner luces led en toda la escalera", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "replacement"}
+{"text": "Llamo porque los cristales del portal están muy sucios", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Hasta luego, gracias", "lang": "es", "intent": "hang_up"}
+{"text": "Hola, no hi ha aigua a tot l'edifici, des d'ahir", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, el ascensor tiene el espejo roto, desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, se ha desprendido parte del balcón de la fachada, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "There are rats in the bin room", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Correcto", "lang": "es", "intent": "continue"}
+{"text": "Mi gato se ha subido al tejado", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, al vecino de abajo le cae agua de mi baño", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "private_unit"}
+{"text": "El portón del garaje se ha quedado a medio abrir", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Llamo porque hay raíces levantando el suelo del jardín", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, un árbol del patio está inclinado y puede caerse", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "Vull parlar amb una persona", "lang": "ca", "intent": "human"}
+{"text": "Hello, the elevator call button on the ground floor is broken", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Necesito los estatutos de la comunidad para vender el piso", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "¿Puede repetirlo más despacio?", "lang": "es", "intent": "repeat"}
+{"text": "Mire, el suelo del garaje está lleno de aceite y resbala", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, hay excrementos de perro en la entrada del edificio, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, se están levantando las baldosas del patio", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Look, a socket in the bike room is sparking, since yesterday", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Look, it doesn't work, since yesterday", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "A balcony piece came off the facade, since yesterday", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "No hi ha aigua a tot l'edifici", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Okay, that's all, bye", "lang": "en", "intent": "hang_up"}
+{"text": "Hola, la puerta del garaje no se abre con el mando", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay una persona mayor atrapada en el ascensor y no responde", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Quiero que me llame una persona", "lang": "es", "intent": "human"}
+{"text": "Buenas, el ascensor se para entre plantas a veces", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "¿Para qué quiere mis datos?", "lang": "es", "intent": "question"}
+{"text": "Buenas, han hecho grafitis en la puerta del garaje", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "L'ascensor s'ha aturat i hi ha una persona tancada", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "¿Lo paga la comunidad o lo pago yo?", "lang": "es", "intent": "question"}
+{"text": "El pany del portal està encallat, des d'ahir", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, hay un escape de gas en la escalera, huele muchísimo", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hello, a socket inside my apartment doesn't work", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Hola, la barandilla de la escalera necesita pintura, está oxidada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, ha caigut un tros de sostre al replà", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "My name is Sarah", "lang": "en", "intent": "continue"}
+{"text": "Hay raíces levantando el suelo del jardín", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Sorry, can you say that again?", "lang": "en", "intent": "repeat"}
+{"text": "Pues verá, la farola del patio parpadea toda la noche, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "¿Cuándo pasan el recibo este mes?", "lang": "es", "intent": "out_of_scope"}
+{"text": "There's smoke coming out of the basement", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Oiga, lo de siempre, que no funciona", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "No le he entendido, ¿me lo repite?", "lang": "es", "intent": "repeat"}
+{"text": "Oiga, hay poca presión de agua en todo el bloque, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Al vecino de abajo le cae agua de mi baño", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "private_unit"}
+{"text": "Llamo porque hay malas hierbas por toda la zona verde, desde ayer", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Hay un escape de gas en la escalera, huele muchísimo", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "There's damp on the garage wall", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, al vecino de abajo le cae agua de mi baño, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "private_unit"}
+{"text": "I'm calling because water is leaking from the ceiling of the stairwell, since yesterday", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, hay raíces levantando el suelo del jardín, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "The storm ripped tiles off the roof", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Mire, necesito los estatutos de la comunidad para vender el piso", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, tenemos un atasco en el desagüe del patio y el agua no baja, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Someone broke the lock of the main entrance last night", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Hola, se ha roto una tubería en el garaje y sale mucha agua, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Miri, el pany del portal està encallat, des d'ahir", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay malas hierbas por toda la zona verde", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Los buzones están descolgados de la pared, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Están saliendo desconchones en las paredes del rellano, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Never mind, I'll call back later", "lang": "en", "intent": "hang_up"}
+{"text": "Se ha ido la luz de todas las zonas comunes", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Oiga, han reventado la cerradura del portal esta noche, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Hay un cable pelado colgando en la escalera", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Quería alquilar mi plaza de garaje", "lang": "es", "intent": "out_of_scope"}
+{"text": "Hay un nido de avispas en la terraza", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, hay un cable pelado colgando en la escalera", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Mire, queremos poner luces led en toda la escalera", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "replacement"}
+{"text": "No quiero seguir, cuelgo", "lang": "es", "intent": "hang_up"}
+{"text": "No l'he entès", "lang": "ca", "intent": "repeat"}
+{"text": "There's an exposed wire hanging in the corridor, since yesterday", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "The garden sprinklers aren't working", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Passi'm amb l'administrador", "lang": "ca", "intent": "human"}
+{"text": "I was charged the community fee twice", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "El ascensor tiene el espejo roto", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "I can smell gas on the stairs, since yesterday", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hola, se ha agrietado el muro del jardín y parece que se va a caer, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Quiero presentarme a presidente de la comunidad", "lang": "es", "intent": "out_of_scope"}
+{"text": "La porta del garatge no s'obre amb el comandament", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, un coche ha golpeado la pared del garaje y la ha agrietado, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "Llamo porque no puedo abrir la puerta del cuarto de bicis, la llave no entra, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "El suelo del garaje está lleno de aceite y resbala", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Perdón, quería decir el ático", "lang": "es", "intent": "correct"}
+{"text": "Necesito hablar con alguien de la oficina", "lang": "es", "intent": "human"}
+{"text": "Se ha quedado mi vecino encerrado en el ascensor, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Prefiero hablar con una persona de verdad", "lang": "es", "intent": "human"}
+{"text": "Miri, els contenidors del quarto d'escombraries estan plens", "lang": "ca", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Lo de siempre, que no funciona", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "There's broken glass all over the lobby floor", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "How much is my monthly fee?", "lang": "en", "intent": "out_of_scope"}
+{"text": "Flat 4B", "lang": "en", "intent": "continue"}
+{"text": "Querría ver el presupuesto anual de la comunidad", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, hay ratas en el cuarto de basuras", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, alguien ha dejado bolsas de basura en el rellano, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "No es el segundo, es el primero", "lang": "es", "intent": "correct"}
+{"text": "Mire, el césped del jardín está muy alto", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, a pipe burst in the garage and water is pouring out", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Pues verá, el césped del jardín está muy alto", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Em dic Jordi", "lang": "ca", "intent": "continue"}
+{"text": "Buenas, habría que cambiar todas las bajantes, son de fibrocemento", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "replacement"}
+{"text": "Pierde agua la llave de paso general del portal", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Mire, el temporizador de la escalera apaga la luz enseguida, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Soy Marta, del cuarto A", "lang": "es", "intent": "continue"}
+{"text": "I need a certificate saying I'm up to date with the fees", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "El césped del jardín está muy alto", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Truco perquè cal podar els arbres del pati, si us plau", "lang": "ca", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because the elevator doors close too fast", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, no funciona la luz de dentro del ascensor, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "La calefacción central no calienta", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "Thanks, goodbye", "lang": "en", "intent": "hang_up"}
+{"text": "No funciona el llum de l'escala", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "El ascensor está fuera de servicio desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Quiero hablar con el administrador", "lang": "es", "intent": "human"}
+{"text": "The neighbour upstairs plays loud music every night", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Buenas, el buzón tiene la cerradura forzada, desde ayer", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "El buzón tiene la cerradura forzada", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Habría que cambiar el ascensor entero, es muy antiguo", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "replacement"}
+{"text": "Quería pedir un certificado de deuda de la comunidad, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "El cuarto de basuras huele a podrido", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "A socket in the bike room is sparking", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Oiga, habría que cambiar el ascensor entero, es muy antiguo, desde ayer", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "replacement"}
+{"text": "Ya está, muchas gracias, hasta luego", "lang": "es", "intent": "hang_up"}
+{"text": "Hola, hay un escalón roto en la escalera del portal, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, tenemos una plaga de chinches en el edificio, desde ayer", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "No va", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "No, no, el número es el catorce", "lang": "es", "intent": "correct"}
+{"text": "Necesito una copia de la llave del trastero comunitario", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "No le oigo bien, repita por favor", "lang": "es", "intent": "repeat"}
+{"text": "La puerta del ascensor se cierra de golpe y casi me pilla, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Han vomitado en el ascensor y huele muy mal", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, se está inundando el cuarto de contadores del agua, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Eso no está bien, mi piso es el sexto", "lang": "es", "intent": "correct"}
+{"text": "Toca revisar los extintores de la escalera", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Los buzones están descolgados de la pared", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, el portón del garaje se ha quedado a medio abrir", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Mire, hay un señor desconocido durmiendo en el portal", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "El sumidero de la terraza comunitaria está atascado", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Se ha ido la luz de todas las zonas comunes, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "No me funciona un enchufe dentro de mi piso, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Necessito un certificat de la comunitat", "lang": "ca", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, la cabina del ascensor no queda a nivel del suelo, es urgente", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Bueno, pues nada, adiós", "lang": "es", "intent": "hang_up"}
+{"text": "Miri, no hi ha aigua a tot l'edifici", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Llamo porque no va, es urgente", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, han vomitado en el ascensor y huele muy mal", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, hay que podar los árboles que tocan las ventanas, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Póngame con un operador", "lang": "es", "intent": "human"}
+{"text": "The garden sprinklers aren't working, can someone come?", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "I didn't catch that", "lang": "en", "intent": "repeat"}
+{"text": "El falso techo del portal tiene una mancha de agua", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Ground floor, door 1", "lang": "en", "intent": "continue"}
+{"text": "Está fundido el fluorescente del trastero comunitario", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, hay que pintar el portal, está muy estropeado", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "replacement"}
+{"text": "Llamo porque un vecino aparca en mi plaza de garaje", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "I was charged the community fee twice, please", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, los del cuarto tienden la ropa y me gotea en mi terraza, es urgente", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Buenos días, quiero cambiar la cuenta bancaria donde me pasan el recibo", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Cal podar els arbres del pati", "lang": "ca", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the tap in the communal laundry won't stop running, since yesterday", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, la cerradura del portal está atascada y no gira la llave, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, la cerradura del portal está atascada y no gira la llave", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Mire, el pulsador de la luz del tercero está suelto y se ven los cables, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Hello, the bins in the trash room are overflowing", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, sale agua sucia por la arqueta de la entrada, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "¿Me avisarán cuando lo arreglen?", "lang": "es", "intent": "question"}
+{"text": "La farola del patio parpadea toda la noche, desde ayer", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, el grifo del cuarto de limpieza no cierra del todo, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, se ha roto una tubería en el garaje y sale mucha agua", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "The emergency lights in the car park don't work, please", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, el riego automático del jardín no funciona, es urgente", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "La barandilla de la escalera necesita pintura, está oxidada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, el pulsador de la luz del tercero está suelto y se ven los cables, desde ayer", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "No hay agua en ningún piso del edificio desde esta mañana", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Quant trigaran a venir?", "lang": "ca", "intent": "question"}
+{"text": "Mire, la barrera del aparcamiento no sube", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "The shared TV aerial has no signal", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "No, sorry, I got the floor wrong", "lang": "en", "intent": "correct"}
+{"text": "Los del cuarto tienden la ropa y me gotea en mi terraza, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Hay un señor desconocido durmiendo en el portal, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, los contenedores del cuarto de basuras están desbordados, desde ayer", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "There's no water in the whole building", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "The elevator doors close too fast", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "I'm calling because there's smoke coming out of the basement, can someone come?", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Let me talk to a real person", "lang": "en", "intent": "human"}
+{"text": "No hay luz en el garaje y no se ve nada", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Tercer segona", "lang": "ca", "intent": "continue"}
+{"text": "Oiga, hay ratas en el cuarto de basuras, es urgente", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, no hay luz en el garaje y no se ve nada", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, la puerta de la azotea no cierra y entra cualquiera", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, hay muchas hojas y barro en la rampa del garaje", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the neighbour upstairs plays loud music every night", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Buenos días, la persiana de mi dormitorio no sube", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "private_unit"}
+{"text": "Well, the hallway lights are out on the fourth floor", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Tenemos un atasco en el desagüe del patio y el agua no baja", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Hi ha rates al soterrani, des d'ahir", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Las ramas del pino tapan la farola del patio", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, se ha agrietado el muro del jardín y parece que se va a caer, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "The shared TV aerial has no signal, since yesterday", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "L'ascensor s'ha aturat i hi ha una persona tancada, si us plau", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hay poca presión de agua en todo el bloque", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, lo de siempre, que no funciona", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "I want to speak to someone from the office", "lang": "en", "intent": "human"}
+{"text": "Buenos días, el falso techo del portal tiene una mancha de agua", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "The central heating isn't working, since yesterday", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "Hay ratas en el cuarto de basuras", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "¿Qué? No me he enterado", "lang": "es", "intent": "repeat"}
+{"text": "El portón del garaje se ha quedado a medio abrir, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Llamo porque la puerta del garaje no se abre con el mando, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "There's smoke coming out of the basement, since yesterday", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "The kitchen tap in my flat is broken", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "The stairs haven't been cleaned in weeks", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, la caldera comunitaria hace ruidos y no da agua caliente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "Fa olor de gas a l'escala", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Well, there's broken glass all over the lobby floor, can someone come?", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, queremos rehacer toda la fachada, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "replacement"}
+{"text": "¿Saben de algún piso en venta en el edificio?", "lang": "es", "intent": "out_of_scope"}
+{"text": "No quiero hablar con un robot, póngame con alguien", "lang": "es", "intent": "human"}
+{"text": "El riego automático del jardín no funciona", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "El temporizador de la escalera apaga la luz enseguida", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, el sumidero de la terraza comunitaria está atascado", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "La barrera del aparcamiento no sube", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenos días, no va", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, el buzón tiene la cerradura forzada", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Buenos días, el ascensor no baja de la quinta planta", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Oiga, se ha desprendido parte del balcón de la fachada, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "Mire, los cristales del portal están muy sucios, es urgente", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "A piece of the ceiling fell in the hallway, since yesterday", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Mire, necesito una copia de la llave del trastero comunitario, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "A tree in the courtyard is leaning and might fall, please", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "I'm calling because a socket inside my apartment doesn't work", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "private_unit"}
+{"text": "Buenos días, la calefacción central no calienta", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "high", "work_type": "repair"}
+{"text": "The garden sprinklers aren't working, since yesterday", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "A balcony piece came off the facade", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "Buenos días, hay excrementos de perro en la entrada del edificio, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "The shared TV aerial has no signal, please", "lang": "en", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque el ascensor chirría mucho cuando sube", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the front door lock is jammed, please", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "The front door lock is jammed", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "There's an exposed wire hanging in the corridor", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "En la plaza España número cinco", "lang": "es", "intent": "continue"}
+{"text": "Hay una grieta en la pared de la escalera que cada vez es más grande", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "El ascensor no para en el segundo piso", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay que pintar el portal, está muy estropeado, es urgente", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "replacement"}
+{"text": "Se ha roto", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "¿Esto lo graban?", "lang": "es", "intent": "question"}
+{"text": "Hello, i was charged the community fee twice, please", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, a piece of the ceiling fell in the hallway, please", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Oiga, sale agua sucia por la arqueta de la entrada", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Hay una pintada ofensiva en la entrada, desde ayer", "lang": "es", "intent": "continue", "category": "painting", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "Habría que cambiar todas las bajantes, son de fibrocemento", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "replacement"}
+{"text": "Hola, hay olor a quemado en el garaje y sale humo", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Un árbol del patio está inclinado y puede caerse", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "Calle Mayor número veinte", "lang": "es", "intent": "continue"}
+{"text": "Well, a tree in the courtyard is leaning and might fall", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "Well, the kitchen tap in my flat is broken", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "El suelo del garaje está lleno de aceite y resbala, desde ayer", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, el muelle de la puerta del portal está roto y da portazos, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, han fet pintades a la façana, des d'ahir", "lang": "ca", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "El bajo, puerta dos", "lang": "es", "intent": "continue"}
+{"text": "I'm calling because the lawn in the garden needs mowing, since yesterday", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, huele a alcantarilla en el sótano, creo que es el desagüe, es urgente", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Gràcies, adéu", "lang": "ca", "intent": "hang_up"}
+{"text": "¿Me puede dar el teléfono del vecino del quinto?", "lang": "es", "intent": "out_of_scope"}
+{"text": "Buenos días, están saliendo desconchones en las paredes del rellano, desde ayer", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque pierde agua la llave de paso general del portal, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Hello, my neighbour is trapped inside the elevator", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Truco perquè un endoll del traster fa espurnes, si us plau", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Buenas, hay un agujero en el suelo de la rampa del garaje", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, necessito un certificat de la comunitat", "lang": "ca", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, hay un escape de gas en la escalera, huele muchísimo, desde ayer", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Mire, quiero cambiar la cuenta bancaria donde me pasan el recibo, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, queremos rehacer toda la fachada, desde ayer", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "replacement"}
+{"text": "Mire, el sensor de movimiento del rellano no enciende la luz", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, no hay luz en el garaje y no se ve nada", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Hi ha una esquerda a la paret de l'escala", "lang": "ca", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Han hecho grafitis en la puerta del garaje, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Miri, hi ha rates al soterrani, des d'ahir", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "La ventilación del garaje no funciona y huele a humo de coches", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "Han fet pintades a la façana", "lang": "ca", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "La puerta de emergencia del garaje no abre desde dentro", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "repair"}
+{"text": "La cisterna de mi baño pierde agua", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "It doesn't work", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, la cabina del ascensor no queda a nivel del suelo", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "It's broken again", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Water is leaking from the ceiling of the stairwell, please", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Well, a socket in the bike room is sparking", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Can you put me through to the property manager?", "lang": "en", "intent": "human"}
+{"text": "No funciona la luz de dentro del ascensor", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Miri, fa olor de gas a l'escala, des d'ahir", "lang": "ca", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hay cristales rotos en el suelo del portal", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Una tormenta ha arrancado tejas del tejado", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "La farola del patio parpadea toda la noche", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Hola, el grifo del cuarto de limpieza no cierra del todo", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "Buenas, no hay agua en ningún piso del edificio desde esta mañana, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, el timbre del portal no funciona, desde ayer", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque un árbol del patio está inclinado y puede caerse, es urgente", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "high", "work_type": "repair"}
+{"text": "Truco perquè l'ascensor s'ha aturat i hi ha una persona tancada", "lang": "ca", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Mire, la antena colectiva no da señal y no se ve la tele, es urgente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Sale agua sucia por la arqueta de la entrada", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, el ascensor chirría mucho cuando sube, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the garage door won't open with the remote", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, la cisterna de mi baño pierde agua, desde ayer", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "I don't want a bot, get me a human", "lang": "en", "intent": "human"}
+{"text": "Well, i need a certificate saying I'm up to date with the fees", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the stair light timer goes off too fast, since yesterday", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Oiga, se ha caído un trozo de techo en el rellano del cuarto", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "El ascensor está fuera de servicio desde ayer, es urgente", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Look, there are rats in the bin room, please", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Huele a alcantarilla en el sótano, creo que es el desagüe", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "I'm calling because there's no water in the whole building", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Buenos días, querría ver el presupuesto anual de la comunidad", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "La antena colectiva no da señal y no se ve la tele", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, hay una pintada ofensiva en la entrada, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "painting", "urgency": "medium", "work_type": "insurance_claim"}
+{"text": "La cerradura del portal está atascada y no gira la llave", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Se ha quedado mi vecino encerrado en el ascensor", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "I have to go now, bye", "lang": "en", "intent": "hang_up"}
+{"text": "Pues verá, el temporizador de la escalera apaga la luz enseguida", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, hay una grieta en la pared de la escalera que cada vez es más grande, desde ayer", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, toca revisar los extintores de la escalera, es urgente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "El vecino de arriba pone la música altísima todas las noches", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Me han cobrado dos veces el recibo de la comunidad", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Look, the hallway lights are out on the fourth floor", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Mire, hay humedades en la pared del garaje", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "repair"}
+{"text": "Pues verá, los buzones están descolgados de la pared, es urgente", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Miri, s'ha trencat una canonada al garatge i surt molta aigua", "lang": "ca", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Necesito el acta de la junta extraordinaria", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "No, perdoni, és el tercer pis, no el segon", "lang": "ca", "intent": "correct"}
+{"text": "Gracias, eso era todo", "lang": "es", "intent": "hang_up"}
+{"text": "El grifo del cuarto de limpieza no cierra del todo", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because the storm ripped tiles off the roof, please", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Look, the lawn in the garden needs mowing", "lang": "en", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, la ventilación del garaje no funciona y huele a humo de coches, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay un cable pelado colgando en la escalera, es urgente", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "The elevator call button on the ground floor is broken", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, una tormenta ha arrancado tejas del tejado", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Truco perquè la porta del garatge no s'obre amb el comandament, des d'ahir", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Hi, someone keeps parking in my garage space, since yesterday", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "Hello, the stairs haven't been cleaned in weeks, please", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "I'm calling because the elevator doors close too fast, since yesterday", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Alguien ha dejado bolsas de basura en el rellano, es urgente", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "What was that?", "lang": "en", "intent": "repeat"}
+{"text": "Is this call recorded?", "lang": "en", "intent": "question"}
+{"text": "Miri, no funciona el llum de l'escala", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "The lift makes a grinding noise", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Queremos rehacer toda la fachada", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "low", "work_type": "replacement"}
+{"text": "Hay una persona mayor atrapada en el ascensor y no responde, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "El muelle de la puerta del portal está roto y da portazos", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "low", "work_type": "repair"}
+{"text": "¿Cuánto me toca pagar de derrama?", "lang": "es", "intent": "out_of_scope"}
+{"text": "Els contenidors del quarto d'escombraries estan plens, si us plau", "lang": "ca", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Well, someone left rubbish bags on the landing", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "The garage door won't open with the remote", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Vull llogar la meva plaça de pàrquing", "lang": "ca", "intent": "out_of_scope"}
+{"text": "Mire, mi gato se ha subido al tejado", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "repair"}
+{"text": "Mire, hay una gotera que viene de la bajante de la escalera", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "La cisterna de mi baño pierde agua, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "low", "work_type": "private_unit"}
+{"text": "Perdoni, m'ho pot repetir?", "lang": "ca", "intent": "repeat"}
+{"text": "La puerta del garaje no se abre con el mando", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Miri, han fet pintades a la façana, des d'ahir", "lang": "ca", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Buenas, el timbre del portal no funciona, desde ayer", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "repair"}
+{"text": "Perdone, se ha cortado, ¿qué me decía?", "lang": "es", "intent": "repeat"}
+{"text": "Portal tres", "lang": "es", "intent": "continue"}
+{"text": "The hallway lights are out on the fourth floor", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, necesito los estatutos de la comunidad para vender el piso, desde ayer", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, toca revisar los extintores de la escalera, desde ayer", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Se ha caído un trozo de techo en el rellano del cuarto", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "repair"}
+{"text": "Un endoll del traster fa espurnes, si us plau", "lang": "ca", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Someone left rubbish bags on the landing", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Vale, nada más, adiós", "lang": "es", "intent": "hang_up"}
+{"text": "Look, there's no water in the whole building", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Queremos poner luces led en toda la escalera", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "low", "work_type": "replacement"}
+{"text": "¿Por qué me pide el piso?", "lang": "es", "intent": "question"}
+{"text": "There's an exposed wire hanging in the corridor, please", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "Hello, the roof door doesn't lock and anyone can get in, since yesterday", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Look, i didn't get the notice for the owners' meeting", "lang": "en", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "The stairs haven't been cleaned in weeks, since yesterday", "lang": "en", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, sigue igual que la semana pasada, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, el ascensor no baja de la quinta planta, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Alguien ha dejado bolsas de basura en el rellano", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Buenos días, se ha roto, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Sí, de acuerdo", "lang": "es", "intent": "continue"}
+{"text": "Se ha desprendido parte del balcón de la fachada", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "emergency", "work_type": "repair"}
+{"text": "Las plantas de la entrada se están secando", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Ja trucaré demà, adéu", "lang": "ca", "intent": "hang_up"}
+{"text": "Pues verá, un vecino aparca en mi plaza de garaje", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "low", "work_type": "neighbour_dispute"}
+{"text": "La cabina del ascensor no queda a nivel del suelo", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "medium", "work_type": "repair"}
+{"text": "Tercero B", "lang": "es", "intent": "continue"}
+{"text": "Hola, la pintura de la escalera está muy desconchada", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "repair"}
+{"text": "Hay un señor desconocido durmiendo en el portal", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, la escalera está muy sucia, no la han limpiado esta semana, es urgente", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Avenida de América cuarenta y dos", "lang": "es", "intent": "continue"}
+{"text": "Llamo porque las luces de emergencia del garaje no se encienden, es urgente", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, el ascensor se para entre plantas a veces", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "El riego automático del jardín no funciona, es urgente", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Well, it's broken again, please", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Los contenedores del cuarto de basuras están desbordados", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Look, there's a big crack spreading across the stairwell wall, please", "lang": "en", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Han pintado la pared del ascensor con spray", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "Pues verá, no me ha llegado la convocatoria de la junta, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "The roof door doesn't lock and anyone can get in", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Las luces de emergencia del garaje no se encienden", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Buenas, hay malas hierbas por toda la zona verde, desde ayer", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Páseme con alguien de la administración", "lang": "es", "intent": "human"}
+{"text": "Pues verá, hay un nido de avispas en la terraza, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, querría ver el presupuesto anual de la comunidad, es urgente", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Someone sprayed graffiti on the garage door", "lang": "en", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "insurance_claim"}
+{"text": "My neighbour is trapped inside the elevator", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "emergency", "work_type": "repair"}
+{"text": "Hello, the garage door won't open with the remote, since yesterday", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "El ascensor se para entre plantas a veces", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "high", "work_type": "repair"}
+{"text": "Hay muchas hojas y barro en la rampa del garaje", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
+{"text": "Llamo porque hay que podar los árboles que tocan las ventanas, desde ayer", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Otra vez, por favor", "lang": "es", "intent": "repeat"}
+{"text": "Llamo porque las luces de emergencia del garaje no se encienden", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Hola, la antena colectiva no da señal y no se ve la tele", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "repair"}
+{"text": "Hay un escalón roto en la escalera del portal", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "medium", "work_type": "repair"}
+{"text": "Oiga, hay una gotera que viene de la bajante de la escalera", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "No hay agua en ningún piso del edificio desde esta mañana, es urgente", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Pues verá, necesito el acta de la junta extraordinaria, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Miri, la porta del garatge no s'obre amb el comandament", "lang": "ca", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "The lift makes a grinding noise, please", "lang": "en", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Could you repeat it more slowly?", "lang": "en", "intent": "repeat"}
+{"text": "La persiana de mi dormitorio no sube, desde ayer", "lang": "es", "intent": "continue", "category": "general_maintenance", "urgency": "low", "work_type": "private_unit"}
+{"text": "Mire, no me ha llegado la convocatoria de la junta, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "administrative", "urgency": "low", "work_type": "repair"}
+{"text": "Hay que pintar el portal, está muy estropeado", "lang": "es", "intent": "continue", "category": "painting", "urgency": "low", "work_type": "replacement"}
+{"text": "Buenos días, las plantas de la entrada se están secando, desde ayer", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "El cuadro eléctrico de la comunidad hace un zumbido fuerte", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "Han reventado la cerradura del portal esta noche, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "Hay un nido de avispas en la terraza, ¿pueden venir?", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "El botón de llamada del ascensor en el bajo está roto, a ver si lo pueden mirar", "lang": "es", "intent": "continue", "category": "elevator", "urgency": "low", "work_type": "repair"}
+{"text": "Se está inundando el cuarto de contadores del agua", "lang": "es", "intent": "continue", "category": "plumbing", "urgency": "high", "work_type": "repair"}
+{"text": "Pues verá, una tormenta ha arrancado tejas del tejado, es urgente", "lang": "es", "intent": "continue", "category": "masonry", "urgency": "high", "work_type": "insurance_claim"}
+{"text": "I'm calling because it's broken again", "lang": "en", "intent": "continue", "category": "unclassifiable", "urgency": "medium", "work_type": "repair"}
+{"text": "Els contenidors del quarto d'escombraries estan plens", "lang": "ca", "intent": "continue", "category": "cleaning", "urgency": "medium", "work_type": "repair"}
+{"text": "Hay olor a quemado en el garaje y sale humo", "lang": "es", "intent": "continue", "category": "unclassifiable", "urgency": "emergency", "work_type": "repair"}
+{"text": "Oiga, las plantas de la entrada se están secando", "lang": "es", "intent": "continue", "category": "gardening", "urgency": "low", "work_type": "repair"}
+{"text": "Hello, the emergency lights in the car park don't work, can someone come?", "lang": "en", "intent": "continue", "category": "electrical", "urgency": "medium", "work_type": "repair"}
+{"text": "The drain in the courtyard is blocked", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Pues verá, la puerta de emergencia del garaje no abre desde dentro", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "high", "work_type": "repair"}
+{"text": "Hola, la puerta de la azotea no cierra y entra cualquiera, es urgente", "lang": "es", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Water is leaking from the ceiling of the stairwell", "lang": "en", "intent": "continue", "category": "plumbing", "urgency": "medium", "work_type": "repair"}
+{"text": "Llamo porque se ha ido la luz de todas las zonas comunes", "lang": "es", "intent": "continue", "category": "electrical", "urgency": "high", "work_type": "repair"}
+{"text": "I'm calling because the roof door doesn't lock and anyone can get in, please", "lang": "en", "intent": "continue", "category": "locksmith", "urgency": "medium", "work_type": "repair"}
+{"text": "Los cristales del portal están muy sucios", "lang": "es", "intent": "continue", "category": "cleaning", "urgency": "low", "work_type": "repair"}
