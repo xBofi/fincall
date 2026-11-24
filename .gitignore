@@ -25,3 +25,4 @@ backend/gcp-*.json
 
 # Turn classifier weights: rebuilt by backend/nlp/train_classifier.py
 backend/nlp/models/
+backend/checkpoints/
