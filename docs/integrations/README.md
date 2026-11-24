@@ -22,6 +22,10 @@ Measured in that run:
 - The caller heard: "Se lo comunico ahora a Fontanería Pérez. Según su agenda puede pasar el
   miércoles 25 entre las 9:00 y las 11:00; se lo dejo reservado y le llamará a este mismo número
   para confirmarlo."
+- The same run in English (`evals/e2e_n8n.py --language en`, US demo building, after the
+  rebase on the English port): "I'm passing it to Smith Plumbing now. Their calendar has an
+  opening on Wednesday, November 25, between 9 and 11 AM; I've held it for you and they will call
+  you back at this number to confirm it." (`backend/evals/last_e2e_n8n_en.json`).
 - `book_visit` round trip from the backend: ~510 ms (twice), of which ~40 ms is the workflow
   itself; the rest is n8n's webhook and task-runner overhead. It is spent inside the caller's
   last turn, so the 1.5 s timeout stays.

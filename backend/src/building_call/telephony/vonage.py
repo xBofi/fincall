@@ -37,6 +37,7 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
+from building_call import i18n
 from building_call.telephony.bridge import CallBridge
 from building_call.telephony.carrier import LINEAR16_16K
 
@@ -50,11 +51,6 @@ HEALTH_PATH = "/api/telephony/vonage/health"
 CONTENT_TYPE = f"audio/l16;rate={LINEAR16_16K.rate}"
 #: A signed webhook older than this is refused (replay protection on top of the signature)
 MAX_WEBHOOK_AGE_S = 300
-
-#: Spoken when telephony is not ready (NCCO `talk`, then the call ends with no more actions)
-UNAVAILABLE_TEXT = (
-    "Lo sentimos, el servicio no está disponible en este momento. Inténtelo más tarde."
-)
 
 
 def verify_signed_webhook(
@@ -125,8 +121,17 @@ def ncco_connect_websocket(
     return [connect]
 
 
-def ncco_unavailable() -> list[dict[str, Any]]:
-    return [{"action": "talk", "text": UNAVAILABLE_TEXT, "language": "es-ES"}]
+def call_language(params: dict[str, str]) -> str:
+    """The call's language. Vonage's answer webhook does not carry one, so it comes from the
+    Answer URL configured for the number (`.../answer?language=en`); otherwise the default.
+    An unknown code falls back to the default instead of failing the call."""
+    return i18n.normalize_code(params.get("language")) or i18n.default_code()
+
+
+def ncco_unavailable(language: str | None = None) -> list[dict[str, Any]]:
+    """Spoken when telephony is not ready (NCCO `talk`; with no more actions the call ends)."""
+    spec = i18n.get(language)
+    return [{"action": "talk", "text": spec.phrases.service_unavailable, "language": spec.locale}]
 
 
 class VonageChannel:
@@ -159,7 +164,8 @@ class VonageChannel:
             pass
 
 
-BridgeFactory = Callable[[VonageChannel, str | None], Awaitable[CallBridge]]
+#: (channel, caller phone, call already opened or None, language or None)
+BridgeFactory = Callable[[VonageChannel, str | None, str | None, str | None], Awaitable[CallBridge]]
 
 
 def not_ready_reason(settings: Any, tts_available: bool, stt_available: bool) -> str | None:
@@ -202,7 +208,7 @@ def create_vonage_router(
         reason = ready()
         if reason is not None:
             logger.error("Llamada de Vonage con la telefonía sin preparar: %s", reason)
-            return ncco_unavailable()
+            return ncco_unavailable(call_language(params))
         call_uuid = params.get("uuid", "")
         if not call_uuid:
             raise HTTPException(400, "Falta uuid")
@@ -210,6 +216,7 @@ def create_vonage_router(
             "call_uuid": call_uuid,
             "phone": params.get("from", ""),
             "token": stream_token(settings.vonage_signature_secret, call_uuid),
+            "language": call_language(params),
         }
         return ncco_connect_websocket(
             ws_url_from_public(settings.public_url),
@@ -280,7 +287,12 @@ def create_vonage_router(
                         logger.warning("WebSocket de Vonage rechazado: sin token válido")
                         await ws.close(code=1008)
                         return
-                    bridge = await bridge_factory(VonageChannel(ws), m.get("phone") or None)
+                    bridge = await bridge_factory(
+                        VonageChannel(ws),
+                        m.get("phone") or None,
+                        None,
+                        i18n.normalize_code(m.get("language")),
+                    )
                     await bridge.begin()
                 elif event_name == "websocket:notify" and bridge is not None:
                     await bridge.mark_played(str((m.get("payload") or {}).get("mark", "")))

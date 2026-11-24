@@ -141,13 +141,16 @@ def derive(previous: CallState | None, fresh: CallState) -> list[tuple[str, dict
     return out
 
 
-def envelope(call_id: str, event_type: str, data: dict[str, Any]) -> dict[str, Any]:
+def envelope(
+    call_id: str, event_type: str, data: dict[str, Any], language: str | None = None
+) -> dict[str, Any]:
     discriminator = str(data.get("incident_id") or "")
     return {
         "id": event_id(call_id, event_type, discriminator),
         "type": event_type,
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "call_id": call_id,
+        "language": language,
         "data": data,
     }
 
@@ -159,7 +162,7 @@ def publish(sink: EventSink | None, previous: CallState | None, fresh: CallState
     count = 0
     for event_type, data in derive(previous, fresh):
         try:
-            sink.emit(envelope(fresh["call_id"], event_type, data))
+            sink.emit(envelope(fresh["call_id"], event_type, data, fresh.get("language")))
             count += 1
         except Exception:  # noqa: BLE001 - a broken sink never breaks a call
             logger.exception("No se pudo emitir %s", event_type)

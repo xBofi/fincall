@@ -263,5 +263,6 @@ private_unit = "It seems to be inside a private apartment, not in a common area.
 "notify_channel.coordinator_notice" = "Because it's urgent, I'm alerting the coordinator and {specialist} right now. {specialist_capitalized} {contact} as soon as possible to tell you when they can come; I can't confirm a time yet."
 "notify_channel.administrator_notice" = "I'm passing it to the property manager, who will review it today and {contact} to explain how it will be handled."
 "notify_channel.specialist_notice" = "I'm passing it to {specialist} now, who {contact} to set up a visit. I can't give you a time yet because it depends on their availability; the next step is their call."
+"notify_channel.visit_notice" = "I'm passing it to {specialist} now. Their calendar has an opening {slot}; I've held it for you and they {contact} to confirm it."
 "notify_channel.phone_contact" = "will call you back at this number"
 "notify_channel.generic_contact" = "will get in touch with you"

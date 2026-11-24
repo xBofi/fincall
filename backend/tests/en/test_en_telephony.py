@@ -107,7 +107,7 @@ class FakeChannel:
     async def mark(self, name: str) -> None:
         self.marks.append(name)
 
-    async def clean_up(self) -> None:
+    async def clear(self) -> None:
         self.cleanups += 1
 
     async def hang_up(self) -> None:

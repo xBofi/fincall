@@ -147,7 +147,7 @@ def vonage_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_answer_webhook_refuses_bad_signature_and_apologises_if_not_ready(
     deps: Dependencies, vonage_env: None
 ) -> None:
-    app = create_app(deps, streaming_factory=lambda _t, _v: FakeStt())
+    app = create_app(deps, streaming_factory=lambda *_a: FakeStt())
     with TestClient(app) as c:
         params = {"to": "+34911", "from": "+34600", "uuid": "u1", "conversation_uuid": "CON-1"}
         assert c.get(ANSWER_PATH, params=params).status_code == 403
@@ -161,7 +161,7 @@ def test_answer_webhook_returns_the_ncco_when_ready(
     deps: Dependencies, vonage_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("building_call.api.main.vonage_not_ready", lambda *_a, **_k: None)
-    app = create_app(deps, streaming_factory=lambda _t, _v: FakeStt())
+    app = create_app(deps, streaming_factory=lambda *_a: FakeStt())
     with TestClient(app) as c:
         params = {"to": "+34911", "from": "+34600", "uuid": "u1", "conversation_uuid": "CON-1"}
         ncco = c.get(ANSWER_PATH, params=params, headers={"Authorization": _signed()}).json()
@@ -172,6 +172,7 @@ def test_answer_webhook_returns_the_ncco_when_ready(
             "call_uuid": "u1",
             "phone": "+34600",
             "token": stream_token(SECRET, "u1"),
+            "language": "es",
         }
         assert ncco[0]["eventUrl"] == ["https://bot.example" + EVENT_PATH]
         # POST variant (answer_method=POST): JSON body, signed with its hash
@@ -193,7 +194,7 @@ def test_the_websocket_requires_the_token_of_its_call(
     deps: Dependencies, vonage_env: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("building_call.api.main.vonage_not_ready", lambda *_a, **_k: None)
-    app = create_app(deps, streaming_factory=lambda _t, _v: FakeStt())
+    app = create_app(deps, streaming_factory=lambda *_a: FakeStt())
     with TestClient(app) as c:
         for connected in (
             {"event": "websocket:connected", "content-type": CONTENT_TYPE},
@@ -242,7 +243,9 @@ async def test_a_whole_call_over_vonage_frames(deps: Dependencies) -> None:
     manager = CallManager(deps)
     stt, tts, sock = FakeStt(), FakeTts(), FakeVonageSocket()
     channel = VonageChannel(sock)  # type: ignore[arg-type]
-    bridge = CallBridge(manager, lambda _r, _v: stt, tts, channel, vocabulary=[], phone="+34600")
+    bridge = CallBridge(
+        manager, lambda _r, _v, _lang: stt, tts, channel, vocabulary=[], phone="+34600"
+    )
     call_id = await bridge.begin()
 
     # Greeting: linear16 16 kHz binary frames of 640 bytes, then a notify marker
@@ -279,3 +282,59 @@ async def test_a_whole_call_over_vonage_frames(deps: Dependencies) -> None:
     await bridge.mark_played(sock.text[-1]["payload"]["mark"])
     assert sock.closed_with == 1000  # intentional close: Vonage ends the call
     await bridge.close()
+
+
+def test_the_answer_url_chooses_the_call_language(
+    deps: Dependencies, vonage_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vonage does not send a language: the number's Answer URL carries it (?language=en)."""
+    from building_call.telephony.vonage import call_language, ncco_unavailable
+
+    assert call_language({"language": "en-US"}) == "en"
+    assert call_language({"language": "xx"}) == call_language({})  # unknown: the default
+    apology = ncco_unavailable("en")[0]
+    assert apology["language"] == "en-US" and "Sorry" in apology["text"]
+    assert ncco_unavailable("es")[0]["language"] == "es-ES"
+
+    monkeypatch.setattr("building_call.api.main.vonage_not_ready", lambda *_a, **_k: None)
+    app = create_app(deps, streaming_factory=lambda *_a: FakeStt())
+    with TestClient(app) as c:
+        params = {"from": "+15550000000", "uuid": "u2", "language": "en"}
+        ncco = c.get(ANSWER_PATH, params=params, headers={"Authorization": _signed()}).json()
+        assert ncco[0]["endpoint"][0]["headers"]["language"] == "en"
+
+
+async def test_the_bridge_gets_the_language_from_the_websocket(deps: Dependencies) -> None:
+    """The language in the NCCO headers comes back in websocket:connected and reaches the
+    bridge, so STT, TTS and the graph run in that language."""
+    seen: list[tuple[Any, ...]] = []
+
+    async def factory(channel: Any, phone: Any, existing: Any, language: Any) -> Any:
+        seen.append((phone, existing, language))
+        raise RuntimeError("stop here")
+
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+
+    from building_call.telephony.vonage import create_vonage_router
+
+    app = FastAPI()
+    s = SimpleNamespace(vonage_signature_secret=SECRET, public_url="https://bot.example")
+    app.include_router(create_vonage_router(s, factory, lambda: None))
+    with TestClient(app) as c, c.websocket_connect(MEDIA_PATH) as ws:
+        ws.send_text(
+            json.dumps(
+                {
+                    "event": "websocket:connected",
+                    "content-type": CONTENT_TYPE,
+                    "call_uuid": "u3",
+                    "token": stream_token(SECRET, "u3"),
+                    "phone": "+15550000000",
+                    "language": "en",
+                }
+            )
+        )
+        with pytest.raises(WebSocketDisconnect):
+            ws.receive_bytes()
+    assert seen == [("+15550000000", None, "en")]

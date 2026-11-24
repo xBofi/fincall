@@ -1,87 +1,93 @@
 {
+  "language": "es",
   "finished": true,
   "result": "incident_created",
   "visit": {
     "status": "booked",
-    "slot": "el miércoles 25 entre las 9:00 y las 11:00",
-    "booking_id": "demo-inc-885eec5bc947",
+    "slot": "el miércoles, 25 de noviembre, entre las 9:00 y las 11:00",
+    "booking_id": "demo-inc-b16bd4dde75e",
     "reason": null,
-    "ms": 508
+    "ms": 483
   },
   "closing": [
-    "He registrado su incidencia. Se lo comunico ahora a Fontanería Pérez. Según su agenda puede pasar el miércoles 25 entre las 9:00 y las 11:00; se lo dejo reservado y le llamará a este mismo número para confirmarlo. Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, hasta luego."
+    "He registrado su incidencia. Se lo comunico ahora a Fontanería Pérez. Según su agenda puede pasar el miércoles, 25 de noviembre, entre las 9:00 y las 11:00; se lo dejo reservado y le llamará a este mismo número para confirmarlo. Si en veinticuatro horas nadie le ha contactado, vuelva a llamarnos. Gracias por su llamada, hasta luego."
   ],
   "turns": [
     {
       "caller": "Vivo en la calle Mayor número 12",
-      "ms": 418,
+      "ms": 367,
       "node": "identify_estate"
     },
     {
       "caller": "sí",
-      "ms": 42,
+      "ms": 4,
       "node": "identify_home"
     },
     {
       "caller": "tercero B",
-      "ms": 3,
-      "node": "collect_request"
+      "ms": 16,
+      "node": "confirm_home"
     },
     {
       "caller": "Hay una fuga de agua en el baño y está inundando el suelo",
-      "ms": 1219,
+      "ms": 2083,
+      "node": "confirm_home"
+    },
+    {
+      "caller": "sí, correcto",
+      "ms": 7,
       "node": "ask_detail"
     },
     {
       "caller": "sí, correcto",
-      "ms": 559,
+      "ms": 707,
       "node": "confirm_summary"
     },
     {
       "caller": "sí, correcto",
-      "ms": 515,
+      "ms": 488,
       "node": "end"
     }
   ],
   "deliveries": [
     {
       "type": "call.started",
-      "event_id": "evt_220ed713ea37947174fdfc98",
+      "event_id": "evt_fb405773fe7c3936be32d5c9",
       "delivered": true,
       "attempts": 1,
       "status": 200
     },
     {
       "type": "call.started",
-      "event_id": "evt_220ed713ea37947174fdfc98",
+      "event_id": "evt_fb405773fe7c3936be32d5c9",
       "delivered": true,
       "attempts": 1,
       "status": 200
     },
     {
       "type": "ticket.created",
-      "event_id": "evt_fae35a98a31f2ce3a2ec94e8",
+      "event_id": "evt_9f41dc85baa198ab61d5916d",
       "delivered": true,
       "attempts": 1,
       "status": 200
     },
     {
       "type": "ticket.created",
-      "event_id": "evt_fae35a98a31f2ce3a2ec94e8",
+      "event_id": "evt_9f41dc85baa198ab61d5916d",
       "delivered": true,
       "attempts": 1,
       "status": 200
     },
     {
       "type": "call.ended",
-      "event_id": "evt_c47abe495410643249970e80",
+      "event_id": "evt_517f5b628767e8b1628272eb",
       "delivered": true,
       "attempts": 1,
       "status": 200
     },
     {
       "type": "call.ended",
-      "event_id": "evt_c47abe495410643249970e80",
+      "event_id": "evt_517f5b628767e8b1628272eb",
       "delivered": true,
       "attempts": 1,
       "status": 200

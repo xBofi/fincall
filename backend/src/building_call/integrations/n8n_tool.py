@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
@@ -30,8 +31,10 @@ from building_call.integrations.webhooks import canonical_json, signed_headers
 logger = logging.getLogger(__name__)
 
 MAX_SLOT_CHARS = 80
-# Letters (any language), digits, spaces and the punctuation a spoken time needs
-_SAFE_SLOT = re.compile(r"^[\w áéíóúüñÁÉÍÓÚÜÑ,.:/\-']+$")
+#: Unicode categories a spoken time may use in any language and script: letters, combining
+#: marks (Devanagari vowel signs, Arabic harakat), digits, spaces and plain punctuation
+_SLOT_CATEGORIES = ("L", "M", "N", "Zs")
+_SLOT_PUNCTUATION = frozenset(",.:/-'’()،؛")
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,12 @@ def _clean_slot(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     text = " ".join(value.split())
-    if not 3 <= len(text) <= MAX_SLOT_CHARS or not _SAFE_SLOT.match(text):
+    if not 3 <= len(text) <= MAX_SLOT_CHARS:
+        return None
+    # No markup, quotes, braces, control or format characters: it is spoken, not rendered
+    if not all(
+        c in _SLOT_PUNCTUATION or unicodedata.category(c).startswith(_SLOT_CATEGORIES) for c in text
+    ):
         return None
     return text
 

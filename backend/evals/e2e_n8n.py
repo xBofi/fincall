@@ -3,7 +3,7 @@ tool, with the real graph and the configured LLM (Ollama locally).
 
     docker compose --profile n8n up -d n8n          # workflows imported and active
     cd backend
-    sb run -- uv run python evals/e2e_n8n.py --verbose
+    sb run -- uv run python evals/e2e_n8n.py --verbose [--language en]
 
 Reads BC_N8N_WEBHOOK_URL, BC_N8N_TOOL_URL and BC_N8N_WEBHOOK_SECRET from the environment (the
 secret through SecretBroker, never printed). Writes the result to evals/last_e2e_n8n.json.
@@ -25,13 +25,28 @@ from building_call.repos.memory import MemoryRepository
 from building_call.services import CallManager
 from building_call.settings import settings
 
-CALLER = [
-    "Vivo en la calle Mayor número 12",
-    "sí",
-    "tercero B",
-    "Hay una fuga de agua en el baño y está inundando el suelo",
-]
-FALLBACK_ANSWER = "sí, correcto"
+#: What the simulated caller says, per language (demo buildings of `repos.demo_data`). Adding a
+#: language = one entry here with its demo building's address.
+CALLERS: dict[str, tuple[list[str], str]] = {
+    "es": (
+        [
+            "Vivo en la calle Mayor número 12",
+            "sí",
+            "tercero B",
+            "Hay una fuga de agua en el baño y está inundando el suelo",
+        ],
+        "sí, correcto",
+    ),
+    "en": (
+        [
+            "I live at number 12 Main Street",
+            "yes",
+            "third floor, B",
+            "There's a water leak in the bathroom and it's flooding the floor",
+        ],
+        "yes, correct",
+    ),
+}
 
 
 class Recording:
@@ -46,18 +61,20 @@ class Recording:
             self.tasks.append((event["type"], task))
 
 
-async def run(verbose: bool) -> dict[str, Any]:
+async def run(verbose: bool, language: str) -> dict[str, Any]:
     fan = create_webhook_sender(settings)
     tools = create_n8n_tools(settings)
     if fan is None or tools is None:
         sys.exit("Set BC_N8N_WEBHOOK_URL, BC_N8N_TOOL_URL and BC_N8N_WEBHOOK_SECRET")
     sink = Recording(fan)
-    manager = CallManager(Dependencies(MemoryRepository(), create_llm(), tools=tools), events=sink)
-    state = await manager.begin("+34600000000")
-    turns = [*CALLER]
+    repo = MemoryRepository(language)
+    manager = CallManager(Dependencies(repo, create_llm(), tools=tools), events=sink)
+    state = await manager.begin("+34600000000", language)
+    script, fallback_answer = CALLERS[language]
+    turns = [*script]
     timings: list[dict[str, Any]] = []
     while not state.get("finished") and len(timings) < 12:
-        text = turns.pop(0) if turns else FALLBACK_ANSWER
+        text = turns.pop(0) if turns else fallback_answer
         t0 = perf_counter()
         state = await manager.message(state["call_id"], text)
         timings.append(
@@ -76,6 +93,7 @@ async def run(verbose: bool) -> dict[str, Any]:
         if task.done()
     ]
     result = {
+        "language": language,
         "finished": state.get("finished"),
         "result": state.get("result"),
         "visit": state.get("visit"),
@@ -89,8 +107,11 @@ async def run(verbose: bool) -> dict[str, Any]:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--verbose", action="store_true")
-    result = asyncio.run(run(p.parse_args().verbose))
-    out = Path(__file__).with_name("last_e2e_n8n.json")
+    p.add_argument("--language", choices=sorted(CALLERS), default="es")
+    args = p.parse_args()
+    result = asyncio.run(run(args.verbose, args.language))
+    suffix = "" if args.language == "es" else f"_{args.language}"
+    out = Path(__file__).with_name(f"last_e2e_n8n{suffix}.json")
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False))
 

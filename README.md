@@ -274,14 +274,16 @@ flowchart LR
 
 | Integration | What it does | Status | Code / docs |
 |---|---|---|---|
-| **Twilio** | Inbound calls over Media Streams: signed TwiML webhook, μ-law WebSocket, marks, `clear` barge-in, DTMF | Tested with a fake carrier; no live number yet | `telephony/twilio.py`, `docs/TELEFONIA.md` |
+| **Twilio** | Inbound calls over Media Streams: signed TwiML webhook, μ-law WebSocket, marks, `clear` barge-in, DTMF; also the browser call (Voice JS SDK) above | Tested with a fake carrier; no live number yet | `telephony/twilio.py`, `docs/TELEFONIA.md` |
 | **Vonage** | Answer webhook → NCCO `connect` to a linear16 16 kHz WebSocket; signed JWT webhooks, `notify` marks, `clear`, `websocket:dtmf` | **Mocks only, never tested live** (no account) | `telephony/vonage.py`, «Twilio vs Vonage» in `docs/TELEFONIA.md` |
 | **SIP** | `livekit-sip` answers INVITEs from a trunk or a local softphone, one LiveKit room per call, REFER to a person | Local pilot with a softphone and an automated SIP bench; no real trunk yet | `telephony/sip.py`, «SIP: decisión y diseño» in `docs/TELEFONIA.md` |
 | **n8n** | Signed call events (`call.started`, `ticket.created`, `emergency.detected`, `handoff.requested`, `call.ended`) and the `book_visit` tool node the agent calls during the call | Unit-tested; run end to end against a local n8n (see below) | `integrations/`, `integrations/n8n/README.md` |
 
 All carriers implement one interface (`CarrierChannel`: `audio_format`, `send_audio`, `mark`,
 `clear`, `hang_up`), so the speech pipeline, the graph and the metrics are the same whoever
-carries the call. Integrations are best-effort: if n8n is down, the call goes on exactly as it
+carries the call. Language follows the call everywhere: carriers pass it to the bridge (Twilio
+stream parameter, Vonage Answer URL), and n8n events and tool requests carry `language`, so
+workflows answer and notify in it. Integrations are best-effort: if n8n is down, the call goes on exactly as it
 would without it.
 
 Local n8n: `sb run -- docker compose --profile n8n up -d n8n`, import the workflows from

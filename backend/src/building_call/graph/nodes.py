@@ -2072,6 +2072,8 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         node = "book_visit"
         request = {
             "call_id": state["call_id"],
+            # n8n writes slot_text in the caller's language: it is spoken as is
+            "language": state.get("language") or i18n.active_code(),
             "incident_id": state.get("incident_id"),
             "category": state.get("category"),
             "urgency": state.get("urgency"),

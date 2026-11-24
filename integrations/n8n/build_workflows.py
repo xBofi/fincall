@@ -137,17 +137,27 @@ def workflow(name: str, nodes: list[dict[str, Any]], connections: dict[str, Any]
 def ticket_to_maintainer() -> dict[str, Any]:
     w = "ticket-to-maintainer"
     message_js = r"""
-// One plain-text message for e-mail and Slack. Spanish: it goes to the building's maintainer.
+// One plain-text message for e-mail and Slack, in the call's language (`language` in the
+// event: the building's market). Adding a language = one entry in L; unknown -> English.
+const L = {
+  es: { title: 'Nueva incidencia', urgency: 'urgencia', building: 'Finca', home: 'Vivienda',
+        summary: 'Resumen', pending: 'Pendiente del administrador', noPro: 'sin profesional',
+        assigned: 'Asignada a', call: 'Llamada' },
+  en: { title: 'New maintenance request', urgency: 'urgency', building: 'Building', home: 'Unit',
+        summary: 'Summary', pending: 'Waiting for the property manager', noPro: 'no contractor',
+        assigned: 'Assigned to', call: 'Call' },
+};
 return $input.all().map(({ json: e }) => {
+  const t = L[e.language] || L.en;
   const d = e.data || {};
   const lines = [
-    `Nueva incidencia ${d.incident_id} (${d.category}, urgencia ${d.urgency})`,
-    `Finca: ${d.building || d.estate_id || '-'} · Vivienda: ${d.apartment || '-'}`,
-    `Resumen: ${d.summary || '-'}`,
+    `${t.title} ${d.incident_id} (${d.category}, ${t.urgency} ${d.urgency})`,
+    `${t.building}: ${d.building || d.estate_id || '-'} · ${t.home}: ${d.apartment || '-'}`,
+    `${t.summary}: ${d.summary || '-'}`,
     d.needs_administrator
-      ? `Pendiente del administrador (${d.review_reason || 'sin profesional'})`
-      : `Asignada a: ${d.specialist_name}`,
-    `Llamada: ${e.call_id} · ${e.created_at}`,
+      ? `${t.pending} (${d.review_reason || t.noPro})`
+      : `${t.assigned}: ${d.specialist_name}`,
+    `${t.call}: ${e.call_id} · ${e.created_at}`,
   ];
   return { json: { ...e, subject: `[Fincall] ${d.category} · ${d.urgency} · ${d.building || ''}`, text: lines.join('\n') } };
 });
@@ -216,17 +226,22 @@ def urgent_escalation() -> dict[str, Any]:
     w = "urgent-escalation"
     urgent_js = r"""
 // Escalate what cannot wait for the morning: emergencies, high-urgency tickets, and calls the
-// assistant handed to a person.
+// assistant handed to a person. SMS text in the call's language; unknown -> English.
+const L = {
+  es: { emergency: 'EMERGENCIA', person: 'Vecino pide una persona', urgency: 'Urgencia' },
+  en: { emergency: 'EMERGENCY', person: 'Caller asked for a person', urgency: 'Urgency' },
+};
 const urgent = (e) =>
   e.type === 'emergency.detected' ||
   e.type === 'handoff.requested' ||
   (e.type === 'ticket.created' && ['high', 'emergency'].includes(e.data?.urgency));
 return $input.all().filter((i) => urgent(i.json)).map(({ json: e }) => {
+  const t = L[e.language] || L.en;
   const d = e.data || {};
   const what = {
-    'emergency.detected': 'EMERGENCIA',
-    'handoff.requested': 'Vecino pide una persona',
-    'ticket.created': `Urgencia ${d.urgency}`,
+    'emergency.detected': t.emergency,
+    'handoff.requested': t.person,
+    'ticket.created': `${t.urgency} ${d.urgency}`,
   }[e.type];
   // SMS: short, no personal data beyond the building and the apartment
   const sms = `[Fincall] ${what}: ${d.building || d.estate_id || '-'} ${d.apartment || ''}. ${d.summary || d.reason || d.request || ''}`.slice(0, 300);
@@ -268,18 +283,24 @@ return $input.all().filter((i) => urgent(i.json)).map(({ json: e }) => {
 def book_visit() -> dict[str, Any]:
     w = "book-visit"
     propose_js = r"""
-// Proposes the next working day, 9:00–11:00 (Europe/Madrid), and the sentence the assistant will
-// say. Fincall validates slot_text before speaking it (short, plain text).
+// Proposes the next working day, 9:00-11:00, and the sentence the assistant will say, in the
+// call's language (`language` in the request). Fincall validates slot_text before speaking it
+// (one short line of plain text). Adding a language = one entry in LANGS; unknown -> English.
+const LANGS = {
+  es: { locale: 'es-ES', say: (day) => `el ${day}, entre las 9:00 y las 11:00` },
+  en: { locale: 'en-US', say: (day) => `on ${day}, between 9 and 11 AM` },
+};
 const req = $input.first().json;
-const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const lang = LANGS[req.language] || LANGS.en;
 const d = new Date();
 do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
 const ymd = d.toISOString().slice(0, 10);
+const day = new Intl.DateTimeFormat(lang.locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
 return [{ json: {
   ...req,
   start: `${ymd}T09:00:00`,
   end: `${ymd}T11:00:00`,
-  slot_text: `el ${days[d.getDay()]} ${d.getDate()} entre las 9:00 y las 11:00`,
+  slot_text: lang.say(day),
   demo: $env.FINCALL_CALENDAR_DEMO === 'true',
 } }];
 """
