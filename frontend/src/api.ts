@@ -95,6 +95,8 @@ export interface Health {
   stt_streaming: string | null
   /** Hay servidor de LiveKit configurado: la consola puede hablar por WebRTC con el agente. */
   livekit: boolean
+  /** La consola puede llamar al agente por Twilio (la red telefónica) desde el navegador. */
+  twilio_browser?: boolean
   /** Voz del servidor (la del teléfono); null si no hay y la consola usa la del navegador. */
   server_tts: string | null
   graphs: string[]
@@ -204,6 +206,9 @@ export interface TelephonyStatus {
 
 export const telephony = {
   state: () => ask<TelephonyStatus>('/api/telephony/state'),
+  /** Access Token para que este navegador llame al agente por Twilio */
+  browserToken: () =>
+    ask<{ token: string; identity: string }>('/api/telephony/twilio/browser-token', { method: 'POST' }),
 }
 
 export const users = {

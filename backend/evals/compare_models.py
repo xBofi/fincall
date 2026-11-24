@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
+import os
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -18,6 +20,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from building_call import i18n  # noqa: E402
 from building_call.domain.config import (  # noqa: E402
     DEFAULTS,
     UNCLASSIFIABLE_CATEGORY,
@@ -69,9 +72,10 @@ def _matches(key: str, expected: Any, actual: Any) -> bool:
     if actual in (None, ""):
         return False
     if key == "address":
-        return _normalize(str(expected)) in _normalize(str(actual)) or _normalize(
-            str(actual)
-        ) in _normalize(str(expected))
+        # "Elm Avenue 5" is the same address as "5 Elm Avenue": every word of it must be there
+        return set(_normalize(str(expected)).split()) <= set(_normalize(str(actual)).split()) or (
+            _normalize(str(actual)) in _normalize(str(expected))
+        )
     if key == "floor":
         return _normalize_floor(str(actual)) == str(expected)
     if key == "door":
@@ -106,6 +110,8 @@ async def evaluate_interpretation(
                     catalog=catalog,
                     heard_text=case.get("heard_text"),  # el vecino cortó el mensaje (ledger de entrega)
                     equipment_list=[tuple(e) for e in case["equipment_list"]] if case.get("equipment_list") else None,
+                    # What the call already knows (building, apartment), as the graph passes it
+                    known=case.get("known") if not os.environ.get("EVAL_NO_KNOWN") else None,
                 )
             except Exception as e:  # noqa: BLE001
                 failures.append(f"ERROR {case['utterance'][:40]!r}: {e}")
@@ -226,9 +232,18 @@ async def main() -> None:
     ap.add_argument("--repetitions", type=int, default=1)
     ap.add_argument("--url", default="http://localhost:11434")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument(
+        "--language",
+        default="es",
+        help="es: gold_*.jsonl with the Spanish prompts; en: gold_*_en.jsonl with the English ones",
+    )
     args = ap.parse_args()
-    cases_i = _read("gold_interpretation.jsonl")
-    cases_c = _read("gold_classification.jsonl")
+    suffix = "" if args.language == "es" else f"_{args.language}"
+    cases_i = _read(f"gold_interpretation{suffix}.jsonl")
+    cases_c = _read(f"gold_classification{suffix}.jsonl")
+    # Prompts, parsing and the floor/door comparison in the gold set's language
+    stack = contextlib.ExitStack()
+    stack.enter_context(i18n.use(args.language))
     print(
         f"{'model':<18} {'interp.exact':>12} {'p50':>6} {'p95':>6} | {'clas.cat':>8} {'clas.urg':>8} {'p50':>6} {'p95':>6}"
     )

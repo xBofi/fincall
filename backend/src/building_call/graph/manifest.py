@@ -81,6 +81,7 @@ MANIFEST: dict[str, ManifestNode] = {
             Edge("estate_not_identified", "agotados los intentos de identificar la finca"),
             Edge("identify_home", "hay finca pero no vivienda, o falta un dato de ella"),
             Edge("home_not_identified", "agotados los intentos de identificar la vivienda"),
+            Edge("confirm_home", "hay finca y vivienda pero aún no se han leído juntas"),
             Edge("collect_request", "falta saber qué le ocurre"),
             Edge("classify_problem", "hay solicitud pero no categoría"),
             Edge("determine_urgency", "hay categoría pero no urgencia"),
@@ -165,6 +166,25 @@ MANIFEST: dict[str, ManifestNode] = {
         targets=(
             Edge("home_not_identified", "primera pasada: pide la solicitud igualmente"),
             Edge(FINISH, "recogida la solicitud, se cierra la llamada"),
+        ),
+    ),
+    "confirm_home": ManifestNode(
+        id="confirm_home",
+        stage=2,
+        title="Confirmar vivienda",
+        summary=(
+            "Lee juntas la finca y la vivienda (\"Entonces es Calle Mayor 12, tercero B. ¿Es "
+            "correcto?\") antes de preguntar qué ocurre. Una corrección se vuelve a buscar y a "
+            "leer; pasar directamente al problema cuenta como un sí. En una emergencia se salta."
+        ),
+        kind="question",
+        uses_llm=True,
+        deterministic_paths=("sí / no", *_TURN_DETERMINISTIC),
+        targets=(
+            Edge("confirm_home", "repregunta: la respuesta no fue un sí, un no ni una corrección"),
+            Edge("next_step", "confirmada, o corregida (se busca y se vuelve a leer)"),
+            Edge("identify_home", "el vecino dice que no es la suya sin dar la buena"),
+            *_GLOBAL_INTENTS,
         ),
     ),
     "collect_request": ManifestNode(

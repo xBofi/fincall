@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from building_call.i18n import registry
+
 #: Longitud máxima de un mensaje: esto se dice por teléfono, y la redacción compara longitudes
 #: (`len(texto) > 2.5 * len(plantilla) + 80` descarta la paráfrasis).
 MAX_CHARACTERS = 320
@@ -227,6 +229,30 @@ CATALOG: dict[str, Template] = dict(
             "¿Cuál es su piso y su puerta?",
             question=True,
         ),
+        # ---------------------------------------------------------------- confirmar vivienda
+        _p(
+            "confirm_home.ask",
+            "confirm_home",
+            "Se leen juntas la finca y la vivienda antes de preguntar qué ocurre: un piso o una "
+            "letra mal oídos se corrigen aquí y no tras todo el relato. {address} es la finca, "
+            "{home} la vivienda.",
+            "Entonces es {address}, {home}. ¿Es correcto?",
+            question=True,
+        ),
+        _p(
+            "confirm_home.yes_no",
+            "confirm_home",
+            "La respuesta a la lectura no ha sido ni sí, ni no, ni una corrección.",
+            "Perdone, solo para comprobarlo: {address}, {home}. ¿Es correcto?",
+            question=True,
+        ),
+        _p(
+            "confirm_home.wrong",
+            "confirm_home",
+            "El vecino dice que la vivienda leída no es la suya, sin dar la buena.",
+            "Disculpe. ¿Cuál es su piso y su puerta?",
+            question=True,
+        ),
         # ------------------------------------------------------------- vivienda no identificada
         _p(
             "home_not_identified.collect",
@@ -234,6 +260,16 @@ CATALOG: dict[str, Template] = dict(
             "No se ha podido identificar la vivienda: se recoge la solicitud igualmente.",
             "No he podido identificar correctamente la vivienda. Cuénteme igualmente su "
             "solicitud; enviaré un resumen al administrador con su número de teléfono.",
+        ),
+        _p(
+            "home_not_identified.noted",
+            "home_not_identified",
+            "No se ha podido identificar la vivienda pero el vecino ya había contado el problema: "
+            "no se le vuelve a pedir.",
+            "No he podido identificar su vivienda, pero he tomado nota de su incidencia. Enviaré "
+            "un resumen al administrador con su número de teléfono para que se ponga en contacto "
+            "con usted. Hasta luego.",
+            notice=True,
         ),
         _p(
             "home_not_identified.farewell",
@@ -249,6 +285,14 @@ CATALOG: dict[str, Template] = dict(
             "collect_request",
             "Se pregunta qué ocurre. {greeting} es el prefijo de cortesía.",
             "{greeting}Cuénteme, ¿qué ocurre?",
+            question=True,
+        ),
+        _p(
+            "collect_request.retry",
+            "collect_request",
+            "Se vuelve a preguntar cuando la respuesta no contaba ningún problema (un sí suelto, "
+            "muletillas).",
+            "Perdone, no he entendido el problema. ¿Qué ocurre?",
             question=True,
         ),
         _p(
@@ -406,31 +450,59 @@ CATALOG: dict[str, Template] = dict(
 )
 
 
-#: Texto efectivo por id. Arranca con el del código y se actualiza con las sobrescrituras.
-_EFFECTIVE: dict[str, str] = {id_: p.text for id_, p in CATALOG.items()}
-#: Versión efectiva por id. 0 = el texto del código, sin sobrescribir.
-_VERSION: dict[str, int] = dict.fromkeys(CATALOG, 0)
+#: Sobrescrituras publicadas desde la consola: (idioma, id) -> (texto, versión). Lo que no está
+#: aquí sale de la traducción del idioma (`i18n/locales/<idioma>.toml`) o, en español, del código.
+_OVERRIDES: dict[tuple[str, str], tuple[str, int]] = {}
+
+
+def storage_key(id_: str, language: str) -> str:
+    """Clave con la que se guarda una sobrescritura: el id en el idioma fuente (compatibilidad
+    con lo ya publicado) y `id@idioma` en el resto."""
+    return id_ if language == registry.SOURCE_LANGUAGE else f"{id_}@{language}"
+
+
+def _from_storage_key(key: str) -> tuple[str, str]:
+    id_, _, language = key.partition("@")
+    return id_, language or registry.SOURCE_LANGUAGE
+
+
+def base_text(id_: str, language: str | None = None) -> str:
+    """El texto sin sobrescribir: la traducción del idioma o, si falta, el texto fuente."""
+    code = language or registry.active_code()
+    if code == registry.SOURCE_LANGUAGE:
+        return CATALOG[id_].text
+    return registry.get(code).templates.get(id_, CATALOG[id_].text)
 
 
 def render(id_: str, **values: object) -> RenderedText:
-    """Renderiza una plantilla. Solo diccionario y `str.format`: no toca la base de datos."""
-    return RenderedText(_EFFECTIVE[id_].format(**values), id_, _VERSION[id_])
+    """Renderiza una plantilla en el idioma activo de la llamada. Solo diccionarios y
+    `str.format`: no toca la base de datos."""
+    code = registry.active_code()
+    text, version = _OVERRIDES.get((code, id_)) or (base_text(id_, code), 0)
+    return RenderedText(text.format(**values), id_, version)
 
 
-def effective_text(id_: str) -> str:
-    return _EFFECTIVE[id_]
+def effective_text(id_: str, language: str | None = None) -> str:
+    code = language or registry.active_code()
+    override = _OVERRIDES.get((code, id_))
+    return override[0] if override else base_text(id_, code)
 
 
-def effective_version(id_: str) -> int:
-    return _VERSION[id_]
+def effective_version(id_: str, language: str | None = None) -> int:
+    override = _OVERRIDES.get((language or registry.active_code(), id_))
+    return override[1] if override else 0
 
 
-def is_overridden(id_: str) -> bool:
-    return _VERSION[id_] > 0
+def is_overridden(id_: str, language: str | None = None) -> bool:
+    return (language or registry.active_code(), id_) in _OVERRIDES
 
 
 class InvalidTemplate(ValueError):
     """El texto propuesto rompe el contrato de la plantilla."""
+
+
+def _is_question(text: str) -> bool:
+    return "?" in text or "؟" in text
 
 
 def validate(id_: str, text: str) -> list[str]:
@@ -457,7 +529,7 @@ def validate(id_: str, text: str) -> list[str]:
             + ", ".join("{" + v + "}" for v in sorted(extra))
         )
     # El interrogante puede venir en el texto o en la variable que lo aporta
-    is_question = "?" in text or (
+    is_question = _is_question(text) or (
         template.question_in is not None and "{" + template.question_in + "}" in text
     )
     if template.question and not is_question:
@@ -475,26 +547,25 @@ def validate(id_: str, text: str) -> list[str]:
     return problems
 
 
-def apply(id_: str, text: str, version: int) -> None:
-    """Publica una sobrescritura ya validada, en memoria."""
+def apply(id_: str, text: str, version: int, language: str | None = None) -> None:
+    """Publica una sobrescritura ya validada, en memoria. `language`: None = el idioma por
+    defecto (`BC_LANGUAGE`), el que edita la consola."""
     problems = validate(id_, text)
     if problems:
         raise InvalidTemplate("; ".join(problems))
-    _EFFECTIVE[id_] = text.strip()
-    _VERSION[id_] = version
+    _OVERRIDES[(language or registry.default_code(), id_)] = (text.strip(), version)
 
 
-def restore(id_: str) -> None:
-    """Vuelve al texto del código."""
-    _EFFECTIVE[id_] = CATALOG[id_].text
-    _VERSION[id_] = 0
+def restore(id_: str, language: str | None = None) -> None:
+    """Vuelve al texto del código (o de la traducción)."""
+    _OVERRIDES.pop((language or registry.default_code(), id_), None)
 
 
 def load(overrides: dict[str, tuple[str, int]]) -> None:
-    """Carga el estado publicado. Se llama al arrancar y después de cada guardado."""
-    for id_ in CATALOG:
-        restore(id_)
-    for id_, (text, version) in overrides.items():
-        if id_ in CATALOG:
-            _EFFECTIVE[id_] = text
-            _VERSION[id_] = version
+    """Carga el estado publicado (claves de `storage_key`). Se llama al arrancar y después de
+    cada guardado."""
+    _OVERRIDES.clear()
+    for key, (text, version) in overrides.items():
+        id_, language = _from_storage_key(key)
+        if id_ in CATALOG and language in registry.languages():
+            _OVERRIDES[(language, id_)] = (text, version)

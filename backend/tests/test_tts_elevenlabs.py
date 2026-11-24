@@ -75,14 +75,14 @@ class _FakeVoice:
     def available(self) -> bool:
         return True
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
         if self.fails:
             raise RuntimeError("caído")
         return b"\x00\x01" * 4
 
 
 async def _client_with_voice(deps: Any, voice: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
-    from conftest import make_session
+    from session_helpers import make_session
 
     from building_call.api import main
 

@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import make_session
 from httpx import ASGITransport, AsyncClient
+from session_helpers import make_session
 
 from building_call.access import SESSION_MAX_DAYS, Access
 from building_call.api.main import create_app

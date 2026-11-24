@@ -26,7 +26,13 @@ async def test_everything_in_one_sentence_skips_already_answered_questions(
             "sí",
         ],
     )
-    # Tras confirmar la finca ya sabe vivienda, nombre y problema: va directo al resumen
+    # Tras confirmar la finca ya sabe la vivienda: lee las dos juntas una vez
+    assert state["current_node"] == "confirm_home"
+    assert state["bot_messages"][-1] == (
+        "Entonces es Avenida de la Alameda 5, portal 2, 3º A. ¿Es correcto?"
+    )
+    state = await manager.message(state["call_id"], "sí")
+    # El problema ya estaba dicho: directo al resumen
     assert state["current_node"] == "confirm_summary"
     assert state["home_id"] == "finca-alameda-5-2-3A"
     assert "declared_name" not in state and "name" not in state["interpretation"]
@@ -41,7 +47,8 @@ async def test_everything_in_one_sentence_skips_already_answered_questions(
 
 async def test_loose_data_accumulates_and_is_used_later(manager: CallManager) -> None:
     state = await _converse(
-        manager, ["Calle Mayor 12", "sí", "Cuarto A. Me llamo Pedro y no hay luz en la escalera"]
+        manager,
+        ["Calle Mayor 12", "sí", "Cuarto A. Me llamo Pedro y no hay luz en la escalera", "sí"],
     )
     assert state["home_id"] == "finca-mayor-12-u-4A"
     assert "declared_name" not in state and "name" not in state["interpretation"]
@@ -66,7 +73,7 @@ async def test_caller_question_is_answered_and_resumed(manager: CallManager) -> 
 
 async def test_out_of_scope_explains_and_resumes(manager: CallManager) -> None:
     state = await _converse(
-        manager, ["Calle Mayor 12", "sí", "2 B", "¿Cuánto pago de cuota al mes?"]
+        manager, ["Calle Mayor 12", "sí", "2 B", "sí", "¿Cuánto pago de cuota al mes?"]
     )
     assert state["current_node"] == "collect_request"
     assert "solo puedo gestionar incidencias" in state["bot_messages"][-1].lower()
@@ -115,6 +122,11 @@ async def test_home_correction_in_the_summary(manager: CallManager) -> None:
     state = await _converse(manager, ["Calle Mayor 12", "sí", "3 B", "No hay luz en la escalera"])
     state = await manager.message(state["call_id"], "No, antes le he dicho 3 B pero es 3 A")
     assert state["home_id"] == "finca-mayor-12-u-3A"
+    # La vivienda corregida se vuelve a leer antes del resumen
+    assert state["current_node"] == "confirm_home"
+    assert "3º A" in state["bot_messages"][-1]
+    state = await manager.message(state["call_id"], "sí")
+    assert state["home_confirmed"] is True
     assert state["current_node"] == "confirm_summary"
 
 
@@ -342,7 +354,7 @@ async def test_repeat_returns_the_full_message_and_hello_after_unheard_message(
 
 
 async def test_the_name_is_not_asked(manager: CallManager) -> None:
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "sí"])
     assert state["current_node"] == "collect_request"
     assert not any("nombre" in m for m in state["bot_messages"])
     state = await manager.message(state["call_id"], "¿Para qué necesita mi nombre?")
@@ -351,7 +363,7 @@ async def test_the_name_is_not_asked(manager: CallManager) -> None:
 
 
 async def test_name_said_unprompted_is_not_kept(manager: CallManager) -> None:
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A, soy Ana"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A, soy Ana", "sí"])
     assert "Ana" not in str({k: v for k, v in state.items() if k != "history"})
     assert state["bot_messages"][-1].startswith("Perfecto. Cuénteme")
 
@@ -370,6 +382,7 @@ async def test_cut_phrase_when_giving_home_is_not_taken_as_fault(
     llm._interpret = original  # type: ignore[method-assign]
     state = await manager.message(state["call_id"], "Piso 1, puerta A.")
     assert state["home_id"] == "finca-mayor-12-u-1A"
+    state = await manager.message(state["call_id"], "sí")
     assert state["current_node"] == "collect_request"
     assert not state.get("request")
 
@@ -475,7 +488,7 @@ async def test_fault_without_element_asks_what_fails_and_reclassifies(
     detail_manager: CallManager,
 ) -> None:
     manager = detail_manager
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "Está parado"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "sí", "Está parado"])
     assert state["category"] == "unclassifiable"
     assert state["current_node"] == "ask_detail"
     assert "qué es lo que" in state["bot_messages"][-1].lower()
@@ -495,6 +508,7 @@ async def test_cut_phrase_without_category_is_not_taken_as_fault_either(
     state = await _converse(manager, ["Calle Mayor 12", "sí", "Primero abre la"])
     llm._interpret = original  # type: ignore[method-assign]
     state = await manager.message(state["call_id"], "Piso 1, puerta A.")
+    state = await manager.message(state["call_id"], "sí")
     assert state["current_node"] == "collect_request"
     assert not state.get("request")
 

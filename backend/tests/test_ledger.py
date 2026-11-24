@@ -107,7 +107,7 @@ async def test_unheard_notice_is_said_before_the_answer(manager: CallManager) ->
 
 
 async def test_unheard_courtesy_changes_nothing(manager: CallManager) -> None:
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "sí"])
     text = state["last_bot_message"]
     assert text.startswith("Perfecto. ")
     await manager.record_delivery(state["call_id"], state["turn"], "completed", 1.0, text)
@@ -116,14 +116,14 @@ async def test_unheard_courtesy_changes_nothing(manager: CallManager) -> None:
 
 
 async def test_the_model_knows_what_the_caller_heard(manager: CallManager, llm: Any) -> None:
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "sí"])
     await manager.record_delivery(
         state["call_id"], state["turn"], "completed", 1.0, state["last_bot_message"]
     )
     await manager.message(state["call_id"], "Gotea el grifo del patio")
     assert "solo llegó a oír" not in _last_interpretation(llm)
 
-    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A"])
+    state = await _converse(manager, ["Calle Mayor 12", "sí", "1 A", "sí"])
     await _cut(manager, state, "Perfecto. Cuéntem")
     await manager.message(state["call_id"], "Gotea el grifo del patio")
     assert 'solo llegó a oír: "Perfecto. Cuéntem"' in _last_interpretation(llm)

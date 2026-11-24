@@ -36,6 +36,7 @@ import { StatePanel } from './components/StatePanel'
 import type { MeasuredTurn } from './components/LatencyPanel'
 import { useCatalog } from './catalog'
 import type { LiveKitSession } from './livekit'
+import type { TwilioSession } from './twilioCall'
 import { openStreaming, type StreamingSession } from './streaming'
 import { ROLES, errorMessage } from './texts'
 import {
@@ -58,7 +59,7 @@ const FlowPanel = lazy(() => import('./components/FlowPanel').then((m) => ({ def
 const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.Inbox })))
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
 
-type SttMode = 'browser' | 'server' | 'streaming' | 'livekit'
+type SttMode = 'browser' | 'server' | 'streaming' | 'livekit' | 'twilio'
 type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | 'users' | 'requests'
 
 /** Lo que se enseña al cliente antes de la primera llamada. Hechos del grafo, no promesas. */
@@ -154,6 +155,7 @@ export default function App() {
   const cancelSpeakingRef = useRef<() => void>(() => undefined)
   const streamingRef = useRef<StreamingSession | null>(null)
   const livekitRef = useRef<LiveKitSession | null>(null)
+  const twilioRef = useRef<TwilioSession | null>(null)
   const loopActiveRef = useRef(false)
   // Cada llamada (o colgar) invalida lo que siga en vuelo de la anterior: micrófono, WebSocket
   const generationRef = useRef(0)
@@ -219,7 +221,7 @@ export default function App() {
       const t: MeasuredTurn = {
         turn: v.turn,
         mode: voiceEndAt === null ? 'text' : 'voice',
-        stt: voiceEndAt === null ? null : mode === 'streaming' || mode === 'livekit' ? 'server' : mode,
+        stt: voiceEndAt === null ? null : mode === 'streaming' || mode === 'livekit' || mode === 'twilio' ? 'server' : mode,
         server_ms: v.timings.server_ms,
         interpretation_ms: v.timings.interpretation_ms,
         llm_calls: v.timings.llm_calls,
@@ -394,6 +396,8 @@ export default function App() {
     streamingRef.current = null
     livekitRef.current?.close()
     livekitRef.current = null
+    twilioRef.current?.close()
+    twilioRef.current = null
     mute()
   }
 
@@ -432,6 +436,39 @@ export default function App() {
     else livekitRef.current = session
   }
 
+  /** Por Twilio: el navegador llama a Twilio y la llamada llega al agente como una de teléfono. */
+  const startTwilio = async () => {
+    const v = await api.begin()
+    viewRef.current = v
+    setView(v)
+    const generation = generationRef.current
+    const { openTwilio } = await import('./twilioCall')
+    const session = await openTwilio(v.call_id, {
+      onView: (updated) => {
+        viewRef.current = updated
+        setView(updated)
+      },
+      onTimings: (ts) =>
+        setTurns(
+          ts.map((t) => ({
+            turn: t.turn,
+            mode: 'voice',
+            stt: 'server',
+            stt_ms: t.stt_ms ?? undefined,
+            server_ms: t.server_ms,
+            interpretation_ms: t.interpretation_ms ?? undefined,
+            llm_calls: t.llm_calls,
+            response_ms: t.response_ms ?? undefined,
+          })),
+        ),
+      onSpeaking: (who) =>
+        setVoiceState(who === 'bot' ? 'respondiendo' : who === 'caller' ? 'speaking' : 'awaiting_voice'),
+      onEnded: () => setVoiceState('idle'),
+    })
+    if (generation !== generationRef.current) session.close()
+    else twilioRef.current = session
+  }
+
   const begin = async () => {
     setError(null)
     setBusy(true)
@@ -441,6 +478,10 @@ export default function App() {
     try {
       if (optionsRef.current.sttMode === 'livekit') {
         await startLiveKit()
+        return
+      }
+      if (optionsRef.current.sttMode === 'twilio') {
+        await startTwilio()
         return
       }
       const v = await api.begin()
@@ -551,6 +592,7 @@ export default function App() {
           value={sttMode}
           onChange={(value) => setSttMode(value as SttMode)}
           options={[
+            { label: 'Twilio', value: 'twilio', disabled: !health?.twilio_browser },
             { label: 'LiveKit', value: 'livekit', disabled: !health?.livekit },
             { label: 'Servidor', value: 'streaming', disabled: !sttStreamingOk },
             { label: 'Navegador', value: 'browser', disabled: !sttNavegadorOk },

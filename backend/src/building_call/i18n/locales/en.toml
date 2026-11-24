@@ -1,0 +1,259 @@
+# English (United States): the main clients are in the US, so US voice, wording and formats.
+code = "en"
+locale = "en-US"
+name = "English"
+native_name = "English (US)"
+rtl = false
+parser = "english"
+prompts = "en"
+
+[stt]
+provider = "assemblyai"
+language_code = "en"
+fallback = "browser"
+
+[tts]
+elevenlabs_language = "en"
+piper_voice = "en_US-lessac-medium"
+melotts_lang = "en"
+twilio_say_language = "en-US"
+twilio_say_voice = "Polly.Joanna-Neural"
+browser_lang = "en-US"
+
+[formats]
+currency = "USD"
+emergency_number = "911"
+list_or = "or"
+list_and = "and"
+
+[lexicon]
+yes = ["yes", "yeah", "yep", "yup", "ya", "correct", "exactly", "right", "sure", "ok", "okay", "affirmative", "absolutely", "indeed", "perfect", "thats right", "thats it", "thats correct", "uh huh", "it is"]
+no = ["no", "nope", "nah", "incorrect", "negative", "wrong", "not really", "not quite", "not right", "thats not", "its not", "isnt"]
+no_start = ["no", "nope", "nah", "not"]
+refusal_words = ["wrong"]
+short_yes = ["yes yes", "yeah yeah"]
+short_no = ["no no"]
+not_heard = ["are you there", "you there", "still there", "say that again", "say again", "repeat that", "repeat", "i didnt hear", "didnt hear you", "i cant hear you", "cant hear you", "what did you say", "come again", "pardon", "what"]
+hello = ["hello", "hi", "hey", "hello hello"]
+filler = ["hold on", "hang on", "wait", "one moment", "just a moment", "a moment", "one second", "just a second", "a second", "one sec", "let me see", "let me check", "give me a second", "dont hang up"]
+greetings = ["hello", "hi", "hey", "hi there", "hello there", "good morning", "good afternoon", "good evening", "how are you"]
+# Words that can come with a set phrase without changing its meaning. Everything else is
+# content: "the noise repeats" or "wait, the elevator isn't working" are not set phrases.
+verbal_tics = ["ah oh uh um eh er hmm well so okay ok sorry excuse me pardon hi hello hey please sir maam yes no you it that the can could would just what i"]
+person = ["person", "human", "operator", "someone", "somebody", "speak to", "talk to", "speak with", "talk with", "representative", "agent", "machine", "robot", "manager"]
+farewell = ["goodbye", "bye", "see you", "thats all", "nothing else", "ill call back", "forget it", "never mind", "nevermind", "i dont want to continue", "im hanging up", "thanks bye"]
+meta_bot = ["classif", "urgency", "summary", "you said", "youre saying", "you understood", "assistant", "machine", "robot"]
+address_stopwords = ["street", "st", "avenue", "ave", "av", "road", "rd", "boulevard", "blvd", "lane", "ln", "drive", "dr", "place", "pl", "number", "no", "the", "of", "at", "on", "in", "i", "im", "live", "calling", "from", "its", "is", "it"]
+address_filler = ["i", "im", "live", "living", "at", "in", "on", "the", "its", "is", "it", "calling", "from", "about", "of", "number", "street", "avenue", "building", "my", "hi", "hello", "hey", "well", "so", "yes", "thats"]
+gas = ["gas", "propane", "butane"]
+fire = ["fire", "smoke", "smoky", "smoking", "flames", "burning", "burnt", "burned", "blaze", "on fire"]
+turn_fillers = ["ah", "eh", "oh", "uh", "um", "umm", "uhm", "er", "erm", "hmm", "mm", "so", "well", "okay", "ok", "sorry", "excuse me", "hi", "hello", "hey", "let me see", "i mean", "like", "and"]
+loose_answers = ["okay", "ok", "well"]
+stt_terms = ["entrance", "floor", "apartment", "unit", "ground floor", "yes", "no"]
+names = ["english", "ingles", "angles", "انجليزي", "انگریزی", "अंग्रेजी", "अंग्रेज़ी"]
+detection = ["the", "a", "an", "is", "are", "i", "im", "you", "it", "its", "there", "and", "of", "to", "in", "on", "my", "this", "that", "not", "isnt", "doesnt", "with", "hello", "hi", "yes", "thanks", "street", "floor", "apartment", "elevator", "light", "water", "broken", "working"]
+
+[lexicon.numbers]
+zero = 0
+one = 1
+two = 2
+three = 3
+four = 4
+five = 5
+six = 6
+seven = 7
+eight = 8
+nine = 9
+ten = 10
+eleven = 11
+twelve = 12
+thirteen = 13
+fourteen = 14
+fifteen = 15
+sixteen = 16
+seventeen = 17
+eighteen = 18
+nineteen = 19
+twenty = 20
+thirty = 30
+forty = 40
+fifty = 50
+sixty = 60
+seventy = 70
+eighty = 80
+ninety = 90
+hundred = 100
+
+[home]
+entrance_markers = ["entrance", "building", "block"]
+floor_markers = ["floor"]
+floor_noise = ["level", "story", "storey", "the"]
+door_markers = ["apartment", "apt", "unit", "flat", "door", "letter"]
+door_noise = ["number"]
+floor_words_not_in_text = ["penthouse", "basement"]
+one_letter_words = ["a", "i"]
+label = "Apt {floor}{door}"
+label_with_entrance = "Entrance {entrance}, Apt {floor}{door}"
+spoken = "apartment {floor}{door}"
+spoken_with_entrance = "entrance {entrance}, apartment {floor}{door}"
+stt_entrance = "entrance {entrance}"
+stt_home = "apartment {floor}{door}"
+
+[home.floors]
+ground = "0"
+first = "1"
+1st = "1"
+second = "2"
+2nd = "2"
+third = "3"
+3rd = "3"
+fourth = "4"
+4th = "4"
+fifth = "5"
+5th = "5"
+sixth = "6"
+6th = "6"
+seventh = "7"
+7th = "7"
+eighth = "8"
+8th = "8"
+ninth = "9"
+9th = "9"
+tenth = "10"
+10th = "10"
+penthouse = "penthouse"
+basement = "basement"
+
+[home.missing]
+door = "the apartment letter"
+floor = "the floor"
+both = "the floor and apartment letter"
+
+[home.part_names]
+entrance = "entrance"
+floor = "floor"
+door = "apartment"
+
+[home.describe]
+entrances = "entrances {list}"
+floors = "floors {first} to {last}"
+floor = "floor {floor}"
+doors = "apartments {list}"
+door = "apartment {door}"
+sentence = "That building has {parts}. "
+
+[home.ordinal_suffixes]
+one = "st"
+two = "nd"
+few = "rd"
+other = "th"
+
+[phrases]
+default_question = "How can I help you?"
+your_building = "your building"
+detail_prefix = "Detail:"
+objection = "The caller disagrees: \"{objection}\"."
+equipment = "Equipment: {description}"
+maintainer = "maintained by {name} ({target})"
+contract = "contract {contract}"
+warranty = "warranty until {date}"
+proposed = "Contractor who would have been notified: {name}."
+emergency_note = "EMERGENCY: call the building's official phone and alert the coordinator. Simulated alerts: the assistant does not call or send anything yet."
+equipment_detail = "What exactly is happening with the {kind}?"
+faq_default = "I can only help with maintenance issues and requests for your building. "
+turn_failed = "Sorry, I didn't quite catch that. Could you say it again?"
+technical_failure = "Sorry, I'm having a technical problem. I'll let the property manager know so they can get back to you. Thanks for calling."
+service_unavailable = "Sorry, the service isn't available right now. Please try again later."
+lowercase_summary = true
+
+[[faq]]
+keys = ["record", "recorded", "recording", "recordings"]
+answer = "Yes, the call is recorded to handle your issue and for quality control. "
+
+[[faq]]
+keys = ["how long", "when", "how soon", "how quickly"]
+answer = "That depends on the contractor; the property manager will keep you updated. "
+
+[[faq]]
+keys = ["my name", "need a name", "want a name"]
+answer = "I don't need your name: the address and the apartment are enough. "
+
+[[faq]]
+keys = ["who is this", "who are you", "machine", "robot", "are you a person", "are you human", "are you real", "is this a bot"]
+answer = "I'm FinCall, the automated assistant for your building's property manager. "
+
+[[faq]]
+keys = ["cost", "costs", "charge", "charged", "pay", "price", "fee", "fees"]
+answer = "This call doesn't cost you anything extra. "
+
+[categories]
+general_maintenance = "general maintenance"
+administrative = "paperwork"
+
+[detail_questions]
+electrical = "So the electrician knows what to expect: what exactly isn't working, and where is it?"
+plumbing = "So the plumber knows what to expect: is it dripping or gushing, and do you know where it's coming from?"
+elevator = "Is the elevator completely stopped or working on and off? Is anyone inside?"
+locksmith = "Does the door not close, not open, or is it the lock? Since when?"
+cleaning = "Where exactly, and since when?"
+masonry = "Where exactly is the damage, and roughly how big is it?"
+painting = "Which area needs painting, and what's wrong with it: damp, peeling, graffiti?"
+_ = "Could you give me a bit more detail: where exactly, and since when?"
+# Without knowing what is broken ("it stopped") the category is not guessed: we ask
+unclassifiable = "What exactly isn't working, and where is it?"
+
+[work_type_reasons]
+replacement = "It needs replacing or construction work: it needs a quote and approval."
+insurance_claim = "Vandalism or third-party damage: consider a claim on the building's insurance."
+neighbour_dispute = "This is a dispute between neighbors, not a breakdown."
+private_unit = "It seems to be inside a private apartment, not in a common area."
+
+[templates]
+"global.repeat" = "Sure, let me repeat that. {message}"
+"global.not_heard" = "Sorry, let me say that again. {message}"
+"global.filler" = "Sure, take your time. Go ahead whenever you're ready."
+"global.out_of_scope" = "Sorry, I can only help with maintenance issues and requests for the building. {question}"
+"identify_estate.greeting" = "Hi, you've reached FinCall, your building's AI assistant. This call may be recorded to improve our service. Which building are you calling about? Please tell me the street and number."
+"identify_estate.greeting_reply" = "Hi there. Which building are you calling about? Please tell me the street and number."
+"identify_estate.candidate" = "I have {address}. Is that right?"
+"identify_estate.confirm_yes_no" = "Sorry, is that the right building? Please say yes or no."
+"identify_estate.retry" = "{reason} Could you tell me the street and number again?"
+"identify_estate.reason_not_found" = "I couldn't find that address among the buildings we manage."
+"identify_estate.reason_not_understood" = "I didn't catch the building's address."
+"identify_estate.reason_not_that_one" = "Okay, not that one."
+"estate_not_identified.collect" = "Sorry, I can't find your building; it may not be managed by this office. If you like, tell me briefly what you wanted to report and I'll make a note of it."
+"estate_not_identified.farewell" = "Thank you. I've logged your call so our team can review it. Goodbye."
+"identify_home.ask" = "Thanks. Which apartment are you in? Tell me the entrance if there is one, the floor and the apartment letter."
+"identify_home.partial" = "Got it: {has}. And {falta}?"
+"identify_home.several_entrances" = "There's an apartment {floor}{door} at more than one entrance. Which entrance is yours, {entrances}?"
+"identify_home.retry" = "I can't find that apartment. {hint}What's your floor and apartment letter?"
+"identify_home.floor_door" = "On the {floor} floor the apartments are {doors}. Which one is yours?"
+"identify_home.reask" = "What's your floor and apartment letter?"
+"confirm_home.ask" = "So that's {address}, {home}. Is that right?"
+"confirm_home.yes_no" = "Sorry, just to check: {address}, {home}. Is that right?"
+"confirm_home.wrong" = "Sorry about that. What's your floor and apartment letter?"
+"home_not_identified.collect" = "I wasn't able to identify your apartment. Please tell me about your request anyway; I'll send a summary to the property manager with your phone number."
+"home_not_identified.noted" = "I wasn't able to identify your apartment, but I've noted your issue. I'll send a summary to the property manager with your phone number so they can get back to you. Goodbye."
+"home_not_identified.farewell" = "Thank you. I've sent the summary to the property manager, who will get back to you. Goodbye."
+"collect_request.ask" = "{greeting}So, what's the problem?"
+"collect_request.retry" = "Sorry, I didn't catch the problem. What's going on?"
+"collect_request.greeting" = "Perfect. "
+"confirm_summary.summary" = "Let me check I've got this right: {summary}. Is that correct?"
+"confirm_summary.confirm_yes_no" = "Sorry, I didn't catch that. Is the summary correct? Please say yes or no."
+"confirm_summary.correcting" = "Okay, I'll correct that."
+"confirm_summary.repeat_request" = "Okay. Please tell me again what's going on, in a bit more detail if you can."
+"handle_emergency.notice" = "{seguridad} Just to confirm: there's an emergency at {address}. Is that right?"
+"handle_emergency.gas_safety" = "If you smell gas, don't switch on lights or appliances or light anything; get out and, if it's safe, open the windows. If anyone is in danger, call 911."
+"handle_emergency.fire_safety" = "If there's fire or smoke, leave by the stairs, don't use the elevator, and call 911."
+"handle_emergency.general_safety" = "If anyone is in danger, call 911 right now and don't put yourself at risk."
+"unclassifiable.farewell" = "This request is beyond what I can handle automatically. I've sent a summary to the property manager so a person can review it. Thanks for calling."
+"handoff_to_human.farewell" = "Okay. I'm sending a summary of your call to the property manager now so someone can get back to you as soon as possible. Thanks, goodbye."
+"farewell.farewell" = "Okay. Thanks for calling; feel free to call back anytime. Goodbye."
+"notify_channel.closing" = "I've logged your issue. {notice} If no one has contacted you within twenty-four hours, please call us again. Thanks for calling, goodbye."
+"notify_channel.emergency_close" = "I've logged the emergency and I'm passing it to your property manager as a priority. If anyone is in danger, call 911. Thanks for calling."
+"notify_channel.no_specialist_notice" = "The property manager will review it today, assign the right contractor, and {contact} to set up a visit."
+"notify_channel.coordinator_notice" = "Because it's urgent, I'm alerting the coordinator and {specialist} right now. {specialist_capitalized} {contact} as soon as possible to tell you when they can come; I can't confirm a time yet."
+"notify_channel.administrator_notice" = "I'm passing it to the property manager, who will review it today and {contact} to explain how it will be handled."
+"notify_channel.specialist_notice" = "I'm passing it to {specialist} now, who {contact} to set up a visit. I can't give you a time yet because it depends on their availability; the next step is their call."
+"notify_channel.phone_contact" = "will call you back at this number"
+"notify_channel.generic_contact" = "will get in touch with you"

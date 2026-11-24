@@ -11,18 +11,22 @@ sistema es constante por tarea para aprovechar la caché KV de Ollama.
 
 from __future__ import annotations
 
+import re
 from time import perf_counter
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from building_call import i18n
 from building_call.domain.config import URGENCIES
 from building_call.domain.entities import WORK_TYPES
-from building_call.llm import wire
+from building_call.llm import prompts_en, wire
 from building_call.llm.base import LanguageModel
 from building_call.llm.prompts import described_catalog
 
-INTERPRETATION_VERSION = "interpretacion-v7"
+#: Spanish prompt version. The English one (also used by languages without their own prompt)
+#: is `prompts_en.INTERPRETATION_VERSION`
+INTERPRETATION_VERSION = "interpretacion-v8"
 
 Intent = Literal[
     "continue",  # responde a lo preguntado o aporta datos
@@ -50,6 +54,8 @@ _EMPTY_MARKERS = {
     "no especificado", "no especificada", "desconocido", "desconocida", "ninguno", "ninguna",
     "null", "none", "n/a", "na", "sin especificar", "no indicado", "no dice", "no menciona",
     "vacio", "vacío", "-", "?", "no aplica",
+    "unknown", "unspecified", "not specified", "not mentioned", "not given", "not provided",
+    "nothing", "empty", "not applicable", "no", "n a",
 }  # fmt: skip
 
 # Claves del JSON del modelo -> nombres del dominio, en `wire` (medido: las claves
@@ -79,6 +85,17 @@ class Interpretation(BaseModel):
     llm_ms: int = Field(default=0, exclude=True)
     origin: Literal["llm", "deterministic"] = Field(default="llm", exclude=True)
 
+    @model_validator(mode="after")
+    def _split_apartment(self) -> Interpretation:
+        # "apartment 3A" / "el 3B" sometimes comes back as door "3A": in this numbering it means
+        # floor 3, door A, so the bot doesn't ask for a floor it was already told. It also wins
+        # over a floor taken from the problem ("the light is out on the second floor, I'm in 1A")
+        if self.door:
+            m = re.fullmatch(r"\s*(\d{1,2})\s*([A-Za-z])\s*", self.door)
+            if m:
+                self.floor, self.door = m.group(1), m.group(2).upper()
+        return self
+
     def present_fields(self) -> list[str]:
         return [c for c in DATA_FIELDS if getattr(self, c) not in (None, "")]
 
@@ -89,7 +106,9 @@ Claves:
 - intencion: continuar (responde o aporta datos; es el valor por defecto, puedes omitirla) | repetir (pide repetir, no ha entendido) | corregir (rectifica un dato anterior: "no, era el cuarto", "me he equivocado") | humano (quiere hablar con una persona) | colgar (se despide o quiere terminar) | fuera_ambito (pide algo ajeno a incidencias de la finca: cuotas, juntas, otros vecinos) | pregunta (pregunta al asistente sin aportar datos: "¿esto se graba?", "¿cuánto tardan?").
 - confirma: true/false solo si responde a una pregunta de sí/no ("eso es", "correcto" = true; "no", "no es..." = false).
 - direccion: calle y número de la finca, tal cual los dice.
-- portal, piso, puerta: si menciona la vivienda. Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número. Si corrige la vivienda, da siempre el piso y la puerta buenos completos, aunque solo cambie uno.
+- portal, piso, puerta: solo la vivienda del propio vecino, nunca dónde está el problema ("no hay luz en el rellano del segundo, yo vivo en el 1º A" = piso 1, puerta A). Piso: número o palabra (tercero, bajo, ático). Puerta: letra o número. Si corrige la vivienda, da siempre el piso y la puerta buenos completos, aunque solo cambie uno.
+- confirma es solo sobre la pregunta de sí/no: responderla con el problema o con su vivienda, sin decir que no, nunca es false. Repetir lo que se le ha leído ("sí, Calle Mayor 12, sí") es true.
+- "Ya se sabe" (si aparece) es lo que la llamada ya ha establecido. Corregir parte de la vivienda ("era la B", "es el 3º B") se devuelve como piso Y puerta completos, tomando de ahí lo que no cambia. Repetir algo ya sabido no es una corrección: no lo devuelvas.
 - nombre: nombre con el que se presenta, sin frases.
 - problema: solo si cuenta qué pasa (una avería o una solicitud). Una frase cortada sin sentido, una dirección o una vivienda no son un problema. La incidencia o solicitud en máximo 12 palabras, con sus palabras y conservando SIEMPRE dónde ocurre si lo dice (planta, zona, portal): "luz del pasillo del segundo no funciona", no "luz no funciona".
 - pregunta: la pregunta que hace al asistente, si la hace.
@@ -105,7 +124,13 @@ _EQUIPMENT_SYSTEM = """
 
 FORMAT = """
 
-Formato: un objeto JSON en UNA sola línea, sin espacios ni saltos, incluyendo SOLO las claves con valor (nunca escribas null). Ejemplos: {"piso":"3","puerta":"B"}  {"intencion":"humano"}  {"confirma":false,"direccion":"Calle Mayor 12"}  {"nombre":"Ana","problema":"no hay luz en la escalera"}"""
+Formato: un objeto JSON en UNA sola línea, sin espacios ni saltos, incluyendo SOLO las claves con valor (nunca escribas null). Ejemplos: {"piso":"3","puerta":"B"}  {"intencion":"humano"}  {"confirma":false,"direccion":"Calle Mayor 12"}  {"nombre":"Ana","problema":"no hay luz en la escalera"}
+
+Casos difíciles:
+- Ya se sabe: vivienda piso 3, puerta A. "Perdone, era la B" -> {"intencion":"corregir","piso":"3","puerta":"B"}
+- "He identificado Calle Mayor 12. ¿Es correcto?" "Sí, la Calle Mayor 12, sí" -> {"confirma":true}
+- "Entonces es Calle Mayor 12, 3º A. ¿Es correcto?" "El portero automático no funciona" -> {"problema":"el portero automático no funciona"}
+- "Cuénteme, ¿qué ocurre?" "Perdone, no es el 3º A, es el 3º B" -> {"intencion":"corregir","piso":"3","puerta":"B"}"""
 
 
 def described_equipment(equipment_list: list[tuple[str, str]]) -> str:
@@ -113,20 +138,48 @@ def described_equipment(equipment_list: list[tuple[str, str]]) -> str:
     return "; ".join(f"{i} ({d})" for i, d in equipment_list)
 
 
+def _uses_spanish_prompts(language: str | None) -> bool:
+    return i18n.get(language).prompts == "es"
+
+
 def interpretation_system_prompt(
-    catalog: list[str] | None = None, equipment_list: list[tuple[str, str]] | None = None
+    catalog: list[str] | None = None,
+    equipment_list: list[tuple[str, str]] | None = None,
+    language: str | None = None,
 ) -> str:
+    """The system prompt in the call's language set: Spanish (tuned in Spanish) or English
+    (English and every language without prompts of its own, with a note on its language)."""
+    code = language or i18n.active_code()
+    if _uses_spanish_prompts(code):
+        base, classify, equipment, fmt = BASE_SYSTEM, _CLASSIFY_SYSTEM, _EQUIPMENT_SYSTEM, FORMAT
+        described = described_catalog
+        note = ""
+    else:
+        base, classify = prompts_en.BASE_SYSTEM, prompts_en._CLASSIFY_SYSTEM
+        equipment, fmt = prompts_en._EQUIPMENT_SYSTEM, prompts_en.FORMAT
+        described = prompts_en.described_catalog
+        note = prompts_en.language_note(i18n.get(code).name)
+    system = base
     if catalog:
-        system = BASE_SYSTEM + _CLASSIFY_SYSTEM.format(catalog=described_catalog(catalog))
+        system += classify.format(catalog=described(catalog))
         if equipment_list:
-            system += _EQUIPMENT_SYSTEM.format(equipment_list=described_equipment(equipment_list))
-        return system + FORMAT
-    return BASE_SYSTEM + FORMAT
+            system += equipment.format(equipment_list=described_equipment(equipment_list))
+    return system + fmt + note
+
+
+def interpretation_version(language: str | None = None) -> str:
+    if _uses_spanish_prompts(language or i18n.active_code()):
+        return INTERPRETATION_VERSION
+    return prompts_en.INTERPRETATION_VERSION
 
 
 def _schema(
-    catalog: list[str] | None, equipment_list: list[tuple[str, str]] | None = None
+    catalog: list[str] | None,
+    equipment_list: list[tuple[str, str]] | None = None,
+    language: str | None = None,
 ) -> dict[str, Any]:
+    if not _uses_spanish_prompts(language or i18n.active_code()):
+        return _schema_en(catalog, equipment_list)
     # Lo que ve el modelo: claves y códigos en español (`wire`)
     props: dict[str, Any] = {
         "intencion": {"type": "string", "enum": list(wire.INTENTS)},
@@ -152,6 +205,44 @@ def _schema(
         if equipment_list:
             props["equipo"] = {"type": "string", "enum": [i for i, _ in equipment_list]}
     return {"title": "interpretation", "type": "object", "properties": props, "required": []}
+
+
+def _schema_en(
+    catalog: list[str] | None, equipment_list: list[tuple[str, str]] | None = None
+) -> dict[str, Any]:
+    """English keys and the domain codes themselves."""
+    props: dict[str, Any] = {
+        "intent": {"type": "string", "enum": list(INTENTS)},
+        "confirms": {"type": ["boolean", "null"]},
+        **{
+            k: {"type": ["string", "null"]}
+            for k in (*DATA_FIELDS, "question", "objection")
+        },
+    }
+    if catalog:
+        props["category"] = {"type": "string", "enum": list(catalog)}
+        props["urgency"] = {"type": "string", "enum": list(URGENCIES)}
+        props["work_type"] = {"type": "string", "enum": list(WORK_TYPES)}
+        if equipment_list:
+            props["equipment"] = {"type": "string", "enum": [i for i, _ in equipment_list]}
+    return {"title": "interpretation", "type": "object", "properties": props, "required": []}
+
+
+def _known_text(known: dict[str, str], spanish: bool) -> str:
+    """'building 12 Main Street; apartment floor 3, door A' in the prompt's language."""
+    if spanish:
+        building, apartment = "finca", "vivienda"
+        names = {"entrance": "portal", "floor": "piso", "door": "puerta"}
+    else:
+        building, apartment = "building", "apartment"
+        names = {"entrance": "entrance", "floor": "floor", "door": "door"}
+    parts: list[str] = []
+    if known.get("address"):
+        parts.append(f"{building} {known['address']}")
+    home = [f"{names[k]} {known[k]}" for k in ("entrance", "floor", "door") if known.get(k)]
+    if home:
+        parts.append(f"{apartment} " + ", ".join(home))
+    return "; ".join(parts)
 
 
 def normalize_interpretation(data: dict[str, Any], llm_ms: int = 0) -> Interpretation:
@@ -195,19 +286,37 @@ async def interpret(
     catalog: list[str] | None = None,
     heard_text: str | None = None,
     equipment_list: list[tuple[str, str]] | None = None,
+    known: dict[str, str] | str | None = None,
+    language: str | None = None,
 ) -> Interpretation:
     """Una llamada al modelo. `catalog` añade la clasificación de la incidencia a la misma llamada.
     `heard_text`: lo que llegó a sonar del último mensaje, solo si el vecino lo cortó (ledger).
-    `equipment_list`: (id, descripción) de los equipos de la finca, para saber a cuál afecta."""
-    user = f'Pregunta del asistente: "{last_question or "(inicio)"}"\n'
-    if heard_text is not None:
-        user += f'El vecino interrumpió al asistente; solo llegó a oír: "{heard_text}"\n'
-    user += f'Respuesta del vecino: """{utterance}"""'
+    `equipment_list`: (id, descripción) de los equipos de la finca, para saber a cuál afecta.
+    `known`: lo que la llamada ya ha establecido (finca, vivienda), de `known_context`.
+    `language`: el de la llamada; None = el activo (lo fija `CallManager` en cada turno)."""
+    code = language or i18n.active_code()
+    spanish = _uses_spanish_prompts(code)
+    # A dict from `known_context`, or the text already written (the gold sets)
+    known_text = known if isinstance(known, str) else _known_text(known, spanish) if known else ""
+    if spanish:
+        user = f'Pregunta del asistente: "{last_question or "(inicio)"}"\n'
+        if known_text:
+            user += f"Ya se sabe: {known_text}\n"
+        if heard_text is not None:
+            user += f'El vecino interrumpió al asistente; solo llegó a oír: "{heard_text}"\n'
+        user += f'Respuesta del vecino: """{utterance}"""'
+    else:
+        user = f"Assistant's question: \"{last_question or '(start)'}\"\n"
+        if known_text:
+            user += f"Already known: {known_text}\n"
+        if heard_text is not None:
+            user += f'The caller interrupted the assistant; they only heard: "{heard_text}"\n'
+        user += f"Caller's answer: \"\"\"{utterance}\"\"\""
     start = perf_counter()
     data = await llm.extract(
-        interpretation_system_prompt(catalog, equipment_list),
+        interpretation_system_prompt(catalog, equipment_list, code),
         user,
-        _schema(catalog, equipment_list),
+        _schema(catalog, equipment_list, code),
         format_instruction="",
     )
     ms = int((perf_counter() - start) * 1000)

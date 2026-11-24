@@ -91,7 +91,14 @@ async def test_home_not_identified_respects_the_estate_attempts(
 async def test_home_with_entrance(manager: CallManager) -> None:
     state = await _converse(manager, ["Alameda 5", "sí", "portal 2, segundo C"])
     assert state["home_id"] == "finca-alameda-5-2-2C"
+    # La finca y la vivienda se leen juntas una vez, antes del problema
+    assert state["current_node"] == "confirm_home"
+    assert state["bot_messages"][-1] == (
+        "Entonces es Avenida de la Alameda 5, portal 2, 2º C. ¿Es correcto?"
+    )
+    state = await manager.message(state["call_id"], "sí")
     assert state["current_node"] == "collect_request"
+    assert state["home_confirmed"] is True
     # Sin preguntar el nombre ni repetir la vivienda (ya registrada): directo al problema
     assert state["bot_messages"][-1] == "Perfecto. Cuénteme, ¿qué ocurre?"
 
@@ -111,13 +118,13 @@ async def test_unclassifiable_creates_pending_incident(
     manager: CallManager, repo: MemoryRepository
 ) -> None:
     state = await _converse(
-        manager, ["Calle Mayor 12", "sí", "2 B", "He visto un ovni en la azotea", "sí"]
+        manager, ["Calle Mayor 12", "sí", "2 B", "sí", "He visto un ovni en la azotea", "sí"]
     )
     # Nosotros sustituimos al administrador: aunque no se clasifique, la incidencia se crea
     # y queda pendiente para él
     assert state["finished"] is True
     assert state["result"] == "incident_created"
-    assert "sin_categoria->pending_administrator" in state["validations"]
+    assert "no_category->pending_administrator" in state["validations"]
     assert state["specialist_id"] is None
     incidents = await repo.list_incidents()
     assert len(incidents) == 1 and incidents[0].state == "pending"
@@ -134,6 +141,7 @@ async def test_category_without_specialist_stays_pending_for_the_administrator(
             "Calle Mayor 12",
             "sí",
             "2 B",
+            "sí",
             "La basura del portal lleva días sin recogerse",
             "sí",
         ],

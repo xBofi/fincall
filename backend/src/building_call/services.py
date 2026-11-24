@@ -9,6 +9,7 @@ from time import perf_counter, time
 from typing import Any, cast
 from uuid import uuid4
 
+from building_call import i18n
 from building_call.domain.entities import Call, CallResult
 from building_call.graph.ledger import evaluate, split_pieces, unheard_notices
 from building_call.graph.nodes import Dependencies
@@ -208,7 +209,10 @@ class CallManager:
             "turn_notices": [],
         }
         t0 = perf_counter()
-        fresh: CallState = await self._graph(graph_name).ainvoke(prepared)
+        # Everything the graph says or reads in this turn is in the call's language
+        language = state.get("language") or i18n.default_code()
+        with i18n.use(language):
+            fresh: CallState = await self._graph(graph_name).ainvoke(prepared)
         timings = dict(fresh.get("turn_timings", {}))
         if (
             self.phraser is not None
@@ -216,9 +220,10 @@ class CallManager:
             and _deserves_phrasing(fresh, utterance)
         ):
             template = " ".join(fresh["bot_messages"])
-            text, metric = await phrase(
-                self.phraser, template, utterance, _phrasing_data(fresh)
-            )
+            with i18n.use(language):
+                text, metric = await phrase(
+                    self.phraser, template, utterance, _phrasing_data(fresh)
+                )
             timings.update(metric)
             if text != template:
                 fresh["bot_messages"] = [text]
@@ -303,9 +308,20 @@ class CallManager:
                 {"action": step["action"], "detail": step["detail"]},
             )
 
-    async def begin(self, caller_phone: str | None = None) -> CallState:
+    async def begin(
+        self, caller_phone: str | None = None, language: str | None = None
+    ) -> CallState:
+        """Opens a call. `language`: chosen for this call (number, stream parameter, console);
+        None = `BC_LANGUAGE`. An unknown language raises `i18n.UnknownLanguage`."""
         call_id = f"llam-{uuid4().hex[:12]}"
-        state = initial_state(call_id, datetime.now(UTC).isoformat(), self.default_graph)
+        code = i18n.get(language).code if language else i18n.default_code()
+        state = initial_state(
+            call_id,
+            datetime.now(UTC).isoformat(),
+            self.default_graph,
+            language=code,
+            locked=language is not None,
+        )
         state["caller_phone"] = caller_phone
         return await self._run(state, None)
 

@@ -87,7 +87,7 @@ async def test_the_equipment_is_recognised_even_if_the_fault_is_told_before_the_
     manager: CallManager, repo: MemoryRepository
 ) -> None:
     await _converse(
-        manager, ["Calle Mayor 12, el portero automático no funciona", "sí", "1 A", "sí"]
+        manager, ["Calle Mayor 12, el portero automático no funciona", "sí", "1 A", "sí", "sí"]
     )
     inc = await _incident(repo)
     assert inc.equipment_id == "eq-mayor12-portero" and inc.specialist_id == "esp-porteros"

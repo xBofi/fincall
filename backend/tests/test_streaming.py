@@ -6,8 +6,8 @@ import asyncio
 from typing import Any
 
 import pytest
-from conftest import make_session
 from fastapi.testclient import TestClient
+from session_helpers import make_session
 
 from building_call.api.main import create_app
 from building_call.graph.nodes import Dependencies
@@ -26,7 +26,9 @@ class FakeSession:
 
     texts = ["Calle Mayor 12", "sí"]
 
-    def __init__(self, sample_rate: int, keyterms: list[str] | None = None) -> None:
+    def __init__(
+        self, sample_rate: int, keyterms: list[str] | None = None, language: str | None = None
+    ) -> None:
         self.sample_rate = sample_rate
         self.keyterms = keyterms or []
         self.audio = bytearray()

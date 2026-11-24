@@ -79,9 +79,12 @@ class Home(BaseModel):
     floor: str
     door: str
 
-    def label(self) -> str:
-        parts = [f"portal {self.entrance}" if self.entrance else None, f"{self.floor}º", self.door]
-        return " ".join(p for p in parts if p)
+    def label(self, language: str | None = None) -> str:
+        """'3º B' / 'Apt 3B', as the language writes it; None = the active (or default) one."""
+        from building_call import i18n
+
+        code = language or i18n.active_code()
+        return i18n.parser_for(code).home_label(self.entrance, self.floor, self.door)
 
 
 class Call(BaseModel):

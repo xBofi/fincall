@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from conftest import make_session
 from httpx import ASGITransport, AsyncClient
+from session_helpers import make_session
 
 from building_call.api.main import create_app
 from building_call.graph.nodes import Dependencies

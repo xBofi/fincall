@@ -6,8 +6,8 @@ import struct
 from typing import Any
 
 import pytest
-from conftest import make_session
 from fastapi.testclient import TestClient
+from session_helpers import make_session
 from test_streaming import FakeSession
 
 from building_call.api.main import create_app
@@ -137,7 +137,7 @@ class ServerTts:
     def available(self) -> bool:
         return True
 
-    async def synthesize(self, text: str) -> bytes:
+    async def synthesize(self, text: str, language: str | None = None) -> bytes:
         self.phrases.append(text)
         return pcm(100)
 

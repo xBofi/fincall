@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from building_call import i18n
 from building_call.access import Access
 from building_call.audio_store import AudioStore
 from building_call.audit.access_log import AccessLog, MemoryAccessStore, PostgresAccessStore
@@ -41,6 +42,7 @@ from building_call.graph.nodes import (
     Dependencies,
     catalog_for,
     equipment_for,
+    known_context,
     speculation_key,
 )
 from building_call.graph.registry import REGISTRY
@@ -68,6 +70,11 @@ from building_call.settings import settings
 from building_call.stt import UnavailableRecognizer, VoiceRecognizer, WhisperRecognizer
 from building_call.stt_streaming import AssemblyAIStreamingSession, validate_eu_endpoint
 from building_call.telephony.bridge import CallBridge
+from building_call.telephony.browser import (
+    browser_ready_reason,
+    console_identity,
+    voice_access_token,
+)
 from building_call.telephony.configure import not_ready_reason
 from building_call.telephony.tts import create_tts, fragments
 from building_call.telephony.twilio import TwilioChannel, create_twilio_router
@@ -85,40 +92,33 @@ def _has_voice(pcm: bytes, threshold: int = 300) -> bool:
         return False
 
 
-# Fábrica de sesiones de streaming: (sample_rate, keyterms) -> sesión con
+# Fábrica de sesiones de streaming: (sample_rate, keyterms, language) -> sesión con
 # abrir/enviar_audio/eventos/cerrar
-StreamingFactory = Callable[[int, list[str]], Any]
-
-_VOICE_ORDINALS = {
-    "0": "bajo", "1": "primero", "2": "segundo", "3": "tercero", "4": "cuarto", "5": "quinto",
-    "6": "sexto", "7": "séptimo", "8": "octavo", "9": "noveno", "10": "décimo",
-}  # fmt: skip
+StreamingFactory = Callable[[int, list[str], str], Any]
 
 
-async def stt_vocabulary(repo: Any) -> list[str]:
-    """Términos que el STT debe reconocer bien: direcciones, portales, pisos y puertas reales."""
-    terms: list[str] = ["portal", "piso", "puerta", "ático", "bajo", "sí", "no"]
+async def stt_vocabulary(repo: Any, language: str | None = None) -> list[str]:
+    """Términos que el STT debe reconocer bien, en el idioma de la llamada: direcciones,
+    portales, pisos y puertas reales ("portal 2", "tercero B", "apartment 3A")."""
     estates = await repo.list_estates()
     doors: set[str] = set()
     floors: set[str] = set()
     entrances: set[str] = set()
     for f in estates:
-        terms.append(f.address)
         for v in await repo.homes_of(f.id):
             doors.add(v.door)
             floors.add(v.floor)
             if v.entrance:
                 entrances.add(v.entrance)
-    terms += [f"portal {p}" for p in sorted(entrances)]
-    terms += [f"puerta {p}" for p in sorted(doors)]
-    for floor in sorted(floors, key=lambda x: int(x) if x.isdigit() else 99):
-        ordinal = _VOICE_ORDINALS.get(floor, floor)
-        terms += [f"{ordinal} {p}" for p in sorted(doors)]
-    return list(dict.fromkeys(terms))[:100]
+    return i18n.parser_for(language or i18n.default_code()).stt_terms(
+        [f.address for f in estates], sorted(entrances), sorted(floors), sorted(doors)
+    )
 
 
 class NewCall(BaseModel):
     caller_phone: str | None = None
+    # ISO 639-1 (`GET /api/languages`); None = BC_LANGUAGE
+    language: str | None = Field(default=None, max_length=16)
 
 
 class Message(BaseModel):
@@ -132,6 +132,7 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 class BotVoice(BaseModel):
     text: str = Field(min_length=1, max_length=800)  # cada carácter se paga en una voz por API
+    language: str | None = Field(default=None, max_length=16)
 
 
 class Delivery(BaseModel):
@@ -155,7 +156,7 @@ class ClientMetrics(BaseModel):
 
 def _view(state: CallState) -> dict[str, Any]:
     fields = [
-        "estate_id", "estate_address", "home_id", "home_label",
+        "estate_id", "estate_address", "home_id", "home_label", "home_confirmed",
         "request", "category", "urgency", "declared_urgency", "summary", "confirmed",
         "specialist_id", "specialist_name", "notice_channel", "notice_target", "incident_id",
         "result", "review_reason", "config_id", "graph", "estate_attempts", "home_attempts",
@@ -164,6 +165,7 @@ def _view(state: CallState) -> dict[str, Any]:
     ]  # fmt: skip
     return {
         "call_id": state["call_id"],
+        "language": state.get("language"),
         "turn": state.get("turn", 0),
         "current_node": state.get("current_node"),
         "awaiting_user": state.get("awaiting_user", False),
@@ -240,7 +242,9 @@ def _default_streaming_factory() -> StreamingFactory | None:
     validate_eu_endpoint(settings.assemblyai_api_base)
     host = settings.assemblyai_streaming_host
 
-    def make(sample_rate: int, keyterms: list[str]) -> AssemblyAIStreamingSession:
+    def make(
+        sample_rate: int, keyterms: list[str], language: str | None = None
+    ) -> AssemblyAIStreamingSession:
         return AssemblyAIStreamingSession(
             settings.assemblyai_api_key,
             sample_rate,
@@ -249,6 +253,8 @@ def _default_streaming_factory() -> StreamingFactory | None:
             eot_silence_ms=settings.assemblyai_eot_silence_ms,
             max_silence_ms=settings.assemblyai_max_silence_ms,
             keyterms=keyterms,
+            language=i18n.get(language).stt.language_code if language else None,
+            speech_model=settings.assemblyai_model,
         )
 
     return make
@@ -374,18 +380,29 @@ def create_app(
     def telephony_ready() -> str | None:
         return not_ready_reason(settings, tts.available(), streaming_factory is not None)
 
-    async def bridge_factory(channel: TwilioChannel, phone: str | None) -> CallBridge:
+    async def bridge_factory(
+        channel: TwilioChannel,
+        phone: str | None,
+        existing_call_id: str | None = None,
+        language: str | None = None,
+    ) -> CallBridge:
         assert streaming_factory is not None
+        if existing_call_id:
+            # The console opened it, in the language it chose
+            language = (await manager.get(existing_call_id)).get("language") or language
+        code = i18n.normalize_code(language)
         return CallBridge(
             manager,
             streaming_factory,
             tts,
             channel,
-            vocabulary=await stt_vocabulary(deps.repo),
+            vocabulary=await stt_vocabulary(deps.repo, code),
             phone=phone,
             repo=deps.repo,
             audio_store=audio_store,
             bargein_words=settings.telephony_bargein_words,
+            existing_call_id=existing_call_id,
+            language=code,
         )
 
     app.include_router(create_twilio_router(settings, bridge_factory, telephony_ready))
@@ -396,6 +413,42 @@ def create_app(
     protected_call = [Depends(requires_user_or_agent(access))]
     app.include_router(create_livekit_router(access))
     app.include_router(create_audit_router(access))
+
+    @app.post("/api/telephony/twilio/browser-token")
+    async def twilio_browser_token(user: Any = Depends(access.requires())) -> dict[str, str]:
+        """Access Token so the console can call the agent through Twilio from the browser."""
+        reason = telephony_ready() or browser_ready_reason(settings)
+        if reason is not None:
+            raise HTTPException(503, reason)
+        identity = console_identity(user.username)
+        token = voice_access_token(
+            settings.twilio_account_sid,
+            settings.twilio_api_key_sid,
+            settings.twilio_api_key_secret,
+            settings.twilio_twiml_app_sid,
+            identity,
+        )
+        return {"token": token, "identity": identity}
+
+    @app.get("/api/languages")
+    async def languages() -> dict[str, Any]:
+        """The registry, for the console: what each language is and who speaks it."""
+        return {
+            "default": i18n.default_code(),
+            "languages": [
+                {
+                    "code": lang.code,
+                    "locale": lang.locale,
+                    "name": lang.name,
+                    "native_name": lang.native_name,
+                    "rtl": lang.rtl,
+                    "browser_lang": lang.tts.browser_lang,
+                    "stt": lang.stt.provider,
+                    "server_tts": bool(lang.tts.elevenlabs_language),
+                }
+                for lang in i18n.languages().values()
+            ],
+        }
 
     @app.get("/api/telephony/state")
     async def telephony_state(_: Any = Depends(access.requires())) -> dict[str, Any]:  # noqa: B008
@@ -452,6 +505,7 @@ def create_app(
             "livekit": livekit_configured(),
             "access": access.mode,
             "telephony": settings.telephony if telephony_ready() is None else None,
+            "twilio_browser": telephony_ready() is None and browser_ready_reason(settings) is None,
             "server_tts": tts.name if tts.available() else None,
             "graphs": sorted(REGISTRY),
             "thresholds_ms": {name: limit for limit, name in THRESHOLDS_MS},
@@ -491,13 +545,15 @@ def create_app(
                 catalog=catalog_for(current_state),
                 heard_text=heard_text_if_cut(current_state.get("last_delivery")),
                 equipment_list=equipment_for(current_state),
+                known=known_context(current_state),
+                language=current_state.get("language"),
             )
         )
 
     @app.get("/api/voice/vocabulary", dependencies=protected_call)
-    async def vocabulary() -> list[str]:
+    async def vocabulary(language: str | None = None) -> list[str]:
         """Términos de las fincas para el STT del agente de voz (calles, portales, puertas)."""
-        return await stt_vocabulary(deps.repo)
+        return await stt_vocabulary(deps.repo, i18n.normalize_code(language))
 
     @app.post("/api/calls/{call_id}/partial", status_code=202, dependencies=protected_call)
     async def partial(call_id: str, body: Message) -> dict[str, bool]:
@@ -507,7 +563,10 @@ def create_app(
 
     @app.post("/api/calls", status_code=201, dependencies=protected_call)
     async def begin(body: NewCall) -> dict[str, Any]:
-        return _view(await manager.begin(body.caller_phone))
+        try:
+            return _view(await manager.begin(body.caller_phone, body.language))
+        except i18n.UnknownLanguage as e:
+            raise HTTPException(422, f"Idioma no soportado: {body.language}") from e
 
     @app.post("/api/calls/{call_id}/messages", dependencies=protected_call)
     async def message(call_id: str, body: Message) -> dict[str, Any]:
@@ -600,7 +659,10 @@ def create_app(
             await ws.send_json({"type": "error", "message": "sample_rate fuera de rango"})
             await ws.close(code=1008)
             return
-        session = streaming_factory(sample_rate, await stt_vocabulary(deps.repo))
+        language = str(initial_state.get("language") or i18n.default_code())
+        session = streaming_factory(
+            sample_rate, await stt_vocabulary(deps.repo, language), language
+        )
         try:
             await session.open()
         except Exception as e:  # noqa: BLE001
@@ -635,7 +697,7 @@ def create_app(
             if not bot_turns or not tts.available():
                 return
             for brand, text in sorted(bot_turns):
-                pcm = await tts.synthesize(text)
+                pcm = await tts.synthesize(text, language)
                 recorder.write_assistant(pcm, int(tts.rate), since=brand)
 
         async def pump_events() -> None:
@@ -762,7 +824,7 @@ def create_app(
         """La consola habla con la misma voz que el teléfono: PCM16 mono por trozos (`X-Tasa`)."""
         if not tts.available():
             raise HTTPException(503, "No hay voz de servidor configurada")
-        chunks = fragments(tts, body.text)
+        chunks = fragments(tts, body.text, i18n.normalize_code(body.language))
         # El primer trozo se pide antes de responder: un fallo del proveedor es un 502 limpio
         # (la consola vuelve a la voz del navegador) y no un audio cortado a medias
         try:

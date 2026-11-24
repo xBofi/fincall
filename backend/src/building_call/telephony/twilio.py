@@ -21,7 +21,9 @@ from xml.sax.saxutils import escape, quoteattr
 
 from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 
+from building_call import i18n
 from building_call.telephony.bridge import CallBridge
+from building_call.telephony.browser import CLIENT_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +63,18 @@ def twiml_connect_stream(url_ws: str, parameters: dict[str, str]) -> str:
     )
 
 
-def twiml_say_and_hang_up(text: str) -> str:
+def twiml_say_and_hang_up(text: str, language: str | None = None) -> str:
+    """<Say> in the language's Twilio voice (Amazon Polly / Google, from the locale file). A
+    language with no Twilio voice (Urdu) falls back to the default language's message."""
+    spec = i18n.get(language)
+    if not spec.tts.twilio_say_language:
+        spec = i18n.get(None)
+        text = spec.phrases.service_unavailable
+    voice = f" voice={quoteattr(spec.tts.twilio_say_voice)}" if spec.tts.twilio_say_voice else ""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<Response><Say language="es-ES">{escape(text)}</Say><Hangup/></Response>'
+        f"<Response><Say language={quoteattr(spec.tts.twilio_say_language)}{voice}>"
+        f"{escape(text)}</Say><Hangup/></Response>"
     )
 
 
@@ -112,7 +122,10 @@ class TwilioChannel:
             pass
 
 
-BridgeFactory = Callable[[TwilioChannel, str | None], Awaitable[CallBridge]]
+#: (channel, caller phone, call already opened by the console or None, language or None)
+BridgeFactory = Callable[
+    [TwilioChannel, str | None, str | None, str | None], Awaitable[CallBridge]
+]
 
 
 def create_twilio_router(
@@ -139,17 +152,22 @@ def create_twilio_router(
         if reason is not None:
             logger.error("Llamada entrante con la telefonía sin preparar: %s", reason)
             return Response(
-                twiml_say_and_hang_up(
-                    "Lo sentimos, el servicio no está disponible en este momento. Inténtelo más tarde."
-                ),
+                twiml_say_and_hang_up(i18n.get(None).phrases.service_unavailable),
                 media_type="application/xml",
             )
         call_sid = form_data.get("CallSid", "")
+        caller = form_data.get("From", "")
         parameters = {
-            "phone": form_data.get("From", ""),
+            "phone": caller,
             "call_sid": call_sid,
             "token": token_stream(settings.twilio_auth_token, call_sid),
         }
+        if caller.startswith(f"client:{CLIENT_PREFIX}"):
+            # A console user calling from the browser (only they get Access Tokens): no phone
+            # number, and the call the console already opened carries on over Twilio
+            parameters["phone"] = ""
+            if form_data.get("call_id"):
+                parameters["call_id"] = form_data["call_id"]
         return Response(
             twiml_connect_stream(ws_url_from_public(settings.public_url), parameters),
             media_type="application/xml",
@@ -196,7 +214,12 @@ def create_twilio_router(
                         await ws.close(code=1008)
                         return
                     channel = TwilioChannel(ws, stream_sid)
-                    bridge = await bridge_factory(channel, parameters.get("phone") or None)
+                    bridge = await bridge_factory(
+                        channel,
+                        parameters.get("phone") or None,
+                        parameters.get("call_id") or None,
+                        parameters.get("language") or None,
+                    )
                     await bridge.begin()
                 elif event == "media" and bridge is not None:
                     midpoint = m.get("media") or {}
