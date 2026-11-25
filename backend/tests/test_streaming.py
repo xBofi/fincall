@@ -85,6 +85,7 @@ def test_streaming_turn(ws_client: TestClient) -> None:
         ws.send_json({"type": "pause"})
         ws.send_json({"type": "end_turn"})
         ws.receive_json()  # parcial
+        assert ws.receive_json() == {"type": "barge_in"}  # el vecino habla encima del bot
         ws.receive_json()  # final "sí"
         reply = ws.receive_json()
         assert reply["data"]["estate_id"] == "finca-mayor-12"
@@ -264,3 +265,102 @@ def test_metrics_do_not_grow_without_limit() -> None:
     assert len(registry._index) == 3
     assert registry.complete_client("l", 0, {}) is None
     assert registry.complete_client("l", 9, {}) is not None
+
+
+# ----------------------------------------------- barge-in por palabras, no por volumen (manos libres)
+
+
+class ScriptedSession(FakeSession):
+    """Cada fin de turno emite los eventos del guion de la clase, en orden."""
+
+    script: list[list[TurnEvent]] = []
+
+    async def force_end_of_turn(self) -> None:
+        for ev in self.script[self._i]:
+            await self._queue.put(ev)
+        self._i += 1
+
+
+def test_is_echo_recognises_the_bot_own_words() -> None:
+    from building_call.echo import is_echo
+
+    bot = "He identificado Calle Mayor 12. ¿Es correcto?"
+    assert is_echo("identificado calle mayor", bot)
+    assert is_echo("es correcto", bot)
+    assert not is_echo("no, es la calle mayor 14", bot)
+    assert not is_echo("oiga perdone", bot)
+    assert not is_echo("sí", bot)  # una respuesta corta encima de la pregunta no es eco
+    assert not is_echo("", bot)
+    # El reconocedor acumula: eco al principio y luego el vecino
+    assert not is_echo("he identificado calle mayor 12 no perdone es la 14", bot)
+
+
+@pytest.mark.parametrize(
+    ("bot", "echo", "caller"),
+    [
+        ("I found 12 Main Street. Is that right?", "found main street", "no it's 14 elm road"),
+        ("He identificat el carrer Major 12. És correcte?", "carrer major", "no perdoni és el 14"),
+        ("मैंने मेन स्ट्रीट 12 पाया। क्या यह सही है?", "मेन स्ट्रीट", "नहीं यह 14 एल्म रोड है"),
+        ("وجدت شارع الرئيسي 12. هل هذا صحيح؟", "شارع الرئيسي", "لا إنه 14 طريق إلم"),
+        ("میں نے مین اسٹریٹ 12 پایا۔ کیا یہ درست ہے؟", "مین اسٹریٹ", "نہیں یہ 14 ایلم روڈ ہے"),
+    ],
+)
+def test_echo_works_in_every_script(bot: str, echo: str, caller: str) -> None:
+    from building_call.echo import is_echo
+
+    assert is_echo(echo, bot)
+    assert not is_echo(caller, bot)
+
+
+def test_while_the_bot_speaks_audio_reaches_the_stt_and_words_cut_it(deps: Dependencies) -> None:
+    ScriptedSession.script = [
+        [TurnEvent("final", "Calle Mayor 12")],
+        # Mientras el bot pregunta "¿Es correcto?": primero su propio eco, luego el vecino
+        [
+            TurnEvent("partial", "identificado calle mayor"),
+            TurnEvent("final", "He identificado Calle Mayor 12."),
+            TurnEvent("partial", "no perdone"),
+            TurnEvent("final", "No, perdone, es la calle Mayor 14."),
+        ],
+    ]
+    sessions: list[ScriptedSession] = []
+
+    def factory(
+        rate: int, keyterms: list[str] | None = None, language: Any = None
+    ) -> ScriptedSession:
+        sessions.append(ScriptedSession(rate, keyterms))
+        return sessions[-1]
+
+    client = TestClient(create_app(deps, streaming_factory=factory))
+    client.cookies.set("bc_session", make_session(deps.repo))  # type: ignore[arg-type]
+    call_id = client.post("/api/calls", json={}).json()["call_id"]
+    with client.websocket_connect(f"/api/calls/{call_id}/voice?sample_rate=16000") as ws:
+        assert ws.receive_json()["type"] == "ready"
+        ws.send_json({"type": "end_turn"})
+        assert ws.receive_json()["type"] == "final"
+        assert ws.receive_json()["type"] == "reply"
+        ws.send_json({"type": "pause"})  # el bot empieza a hablar
+        voice = b"\x10\x27" * 1600
+        ws.send_bytes(voice)
+        ws.send_json({"type": "end_turn"})
+        # El eco no llega a la consola ni cuenta como turno; las palabras del vecino cortan al bot
+        assert ws.receive_json() == {"type": "partial", "text": "no perdone"}
+        assert ws.receive_json() == {"type": "barge_in"}
+        final = ws.receive_json()
+        assert final["type"] == "final" and "14" in final["text"]
+        assert ws.receive_json()["type"] == "reply"
+    # Con el bot hablando el audio real llega al reconocedor (antes se cambiaba por silencio)
+    assert voice in bytes(sessions[0].audio)
+
+
+def test_hanging_up_from_the_console_closes_the_call(ws_client: TestClient, repo: Any) -> None:
+    call_id = ws_client.post("/api/calls", json={}).json()["call_id"]
+    r = ws_client.post(f"/api/calls/{call_id}/hang_up")
+    assert r.status_code == 200
+    assert r.json()["finished"] is True
+    assert ws_client.post(f"/api/calls/{call_id}/messages", json={"text": "hola"}).json()[
+        "finished"
+    ]
+    call = asyncio.run(repo.get_call(call_id))
+    assert call is not None and call.result == "abandoned" and call.state == "finished"
+    assert ws_client.post("/api/calls/no-such-call/hang_up").status_code == 404
