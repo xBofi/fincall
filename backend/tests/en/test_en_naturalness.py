@@ -587,3 +587,29 @@ def test_spelled_out_numbers_become_digits() -> None:
 
     assert _numbers_to_digits("twelve main street") == "12 main street"
     assert _numbers_to_digits("thirty two elm") == "32 elm"
+
+
+async def test_asking_for_the_manager_hands_off_even_if_the_model_says_out_of_scope(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["12 Main Street", "yes", "2 B", "yes"], "Well, I wanted to speak to the manager"])
+    assert state["result"] == "handed_to_administrator"
+
+
+async def test_asking_to_be_put_in_touch_hands_off_even_if_the_model_says_question(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["12 Main Street", "yes", "2 B", "yes"], "Can't you put me in touch with the manager?"])
+    assert state["result"] == "handed_to_administrator"
+
+
+async def test_out_of_scope_twice_does_not_stack_the_previous_message(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["12 Main Street", "yes", "2 B", "yes"], "How much do I pay in fees each month?", "And the elevator fees?"])
+    last = state["bot_messages"][-1]
+    assert last.lower().count("i can only help") == 1
+    # The courtesy that led into the question is not carried over when it is taken up again
+    assert "Perfect" not in last
+    assert last.endswith("what's the problem?")
+

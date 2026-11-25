@@ -42,6 +42,7 @@ greetings = ["hola", "bon dia", "bona tarda", "bona nit", "que tal", "digui m"]
 verbal_tics = ["ah eh oh ai doncs vale bé miri escolti perdoni perdó disculpi hola com que si no em li el la vostè senyor senyora és"]
 person = ["persona", "huma", "operador", "operadora", "algu", "parlar amb", "que m atengui", "maquina", "robot", "administrador"]
 farewell = ["adeu", "fins ara", "fins despres", "res mes", "ja trucare", "deixi ho", "oblidi ho", "penjo", "gracies adeu"]
+contact = ["parlar amb", "posar en contacte", "posi en contacte", "posis en contacte", "posa en contacte", "que em truqui", "que em truquin", "passar amb", "passi m amb", "passa m amb", "posi m amb", "posa m amb"]
 person_farewell_substring = true
 meta_bot = ["classific", "urgencia", "resum", "entes", "has dit", "diras", "dius", "assistent", "maquina"]
 address_stopwords = ["carrer", "c", "avinguda", "av", "plaça", "pl", "passeig", "pg", "numero", "num", "n", "del", "de", "la", "el", "els", "les", "l", "d", "a", "visc", "truco", "des", "es"]

@@ -515,3 +515,34 @@ async def test_cut_phrase_without_category_is_not_taken_as_fault_either(
     assert state["current_node"] == "collect_request"
     assert not state.get("request")
 
+
+async def test_asking_for_the_manager_hands_off_even_if_the_model_says_out_of_scope(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["Calle Mayor 12", "sí", "2 B", "sí"], "Bueno, pues quería hablar con el administrador"])
+    assert state["result"] == "handed_to_administrator"
+
+
+async def test_asking_to_be_put_in_touch_hands_off_even_if_the_model_says_question(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["Calle Mayor 12", "sí", "2 B", "sí"], "¿No me puedes poner en contacto con un administrador?"])
+    assert state["result"] == "handed_to_administrator"
+
+
+async def test_out_of_scope_twice_does_not_stack_the_previous_message(
+    manager: CallManager,
+) -> None:
+    state = await _converse(manager, [*["Calle Mayor 12", "sí", "2 B", "sí"], "¿Cuánto pago de cuota al mes?", "¿Y la cuota del ascensor?"])
+    last = state["bot_messages"][-1]
+    assert last.lower().count("solo puedo gestionar") == 1
+    # The courtesy that led into the question is not carried over when it is taken up again
+    assert "Perfecto" not in last
+    assert last.endswith("¿qué ocurre?")
+
+
+async def test_asking_if_it_is_a_machine_is_answered_not_handed_off(manager: CallManager) -> None:
+    state = await _converse(manager, [*["Calle Mayor 12", "sí", "2 B", "sí"], "¿Eres una máquina?"])
+    assert not state.get("finished")
+    assert state["current_node"] == "collect_request"
+

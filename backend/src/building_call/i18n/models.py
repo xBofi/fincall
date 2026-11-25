@@ -123,6 +123,10 @@ class Lexicon(_Strict):
     verbal_tics: list[str] = Field(default_factory=list)
     person: list[str] = Field(default_factory=list)
     farewell: list[str] = Field(default_factory=list)
+    #: Asking to be put through to someone ("I'd like to speak to the manager"): it hands the
+    #: call off even when the model reads it as a question or as out of scope. Narrower than
+    #: `person`, which also holds "robot" or "machine" ("are you a machine?" is a question)
+    contact: list[str] = Field(default_factory=list)
     #: Substring match, as in the original Spanish rules; False = whole words
     person_farewell_substring: bool = False
     meta_bot: list[str] = Field(default_factory=list)

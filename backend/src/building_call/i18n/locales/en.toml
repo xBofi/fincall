@@ -43,6 +43,7 @@ greetings = ["hello", "hi", "hey", "hi there", "hello there", "good morning", "g
 verbal_tics = ["ah oh uh um eh er hmm well so okay ok sorry excuse me pardon hi hello hey please sir maam yes no you it that the can could would just what i"]
 person = ["person", "human", "operator", "someone", "somebody", "speak to", "talk to", "speak with", "talk with", "representative", "agent", "machine", "robot", "manager"]
 farewell = ["goodbye", "bye", "see you", "thats all", "nothing else", "ill call back", "forget it", "never mind", "nevermind", "i dont want to continue", "im hanging up", "thanks bye"]
+contact = ["speak to", "talk to", "speak with", "talk with", "put me through", "put me in touch", "transfer me", "connect me", "have someone call me", "have them call me", "have him call me", "have her call me"]
 meta_bot = ["classif", "urgency", "summary", "you said", "youre saying", "you understood", "assistant", "machine", "robot"]
 address_stopwords = ["street", "st", "avenue", "ave", "av", "road", "rd", "boulevard", "blvd", "lane", "ln", "drive", "dr", "place", "pl", "number", "no", "the", "of", "at", "on", "in", "i", "im", "live", "calling", "from", "its", "is", "it"]
 address_filler = ["i", "im", "live", "living", "at", "in", "on", "the", "its", "is", "it", "calling", "from", "about", "of", "number", "street", "avenue", "building", "my", "hi", "hello", "hey", "well", "so", "yes", "thats"]

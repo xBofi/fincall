@@ -106,6 +106,12 @@ class FakeLLM:
             return {"intent": "question", "question": text}
         if "how much do i pay" in u or "fees" in u:
             return {"intent": "out_of_scope"}
+        # What the real model did: asking for the manager read as out of scope, and asking to
+        # be put in touch, as a question
+        if "speak to the manager" in u:
+            return {"intent": "out_of_scope"}
+        if "put me in touch" in u:
+            return {"intent": "question", "question": text}
         if u.startswith(("yes", "yeah", "that's right", "correct")):
             output["confirms"] = True
         elif u.startswith("no"):

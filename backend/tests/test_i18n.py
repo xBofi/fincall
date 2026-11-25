@@ -246,3 +246,23 @@ def test_equipment_named_in_the_sentence(
     code: str, text: str, equipment: list[tuple[str, str]], expected: str | None
 ) -> None:
     assert i18n.parser_for(code).equipment_in(text, equipment) == expected
+
+
+@pytest.mark.parametrize(
+    ("code", "contact", "not_contact"),
+    [
+        ("es", "¿No me puedes poner en contacto con el administrador?", "¿Eres una máquina?"),
+        ("ca", "Vull parlar amb l'administrador", "Ets una màquina?"),
+        ("en", "Can you put me through to the manager?", "Are you a machine?"),
+        ("ar", "أريد التحدث مع المدير", "هل أنت آلة؟"),
+        ("hi", "मुझे मैनेजर से बात करनी है", "क्या आप मशीन हैं?"),
+        ("ur", "مجھے مینیجر سے بات کرنی ہے", "کیا آپ مشین ہیں؟"),
+    ],
+)
+def test_asking_to_be_put_through_is_told_from_a_question_about_the_bot(
+    code: str, contact: str, not_contact: str
+) -> None:
+    parser = i18n.parser_for(code)
+    assert parser.asks_for_contact(contact)
+    assert not parser.asks_for_contact(not_contact)
+

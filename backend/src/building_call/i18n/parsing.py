@@ -60,6 +60,7 @@ class Parser:
         self.verbal_tics = frozenset(w for p in lx.verbal_tics for w in n(p).split())
         self.person = tuple(n(w) for w in lx.person)
         self.farewell = tuple(n(w) for w in lx.farewell)
+        self.contact = tuple(n(w) for w in lx.contact)
         self.meta_bot = tuple(n(w) for w in lx.meta_bot)
         self.address_filler = frozenset(n(w) for w in lx.address_filler)
         self.numbers = {n(k): v for k, v in lx.numbers.items()}
@@ -459,6 +460,9 @@ class Parser:
 
     def asks_for_person(self, text: str) -> bool:
         return self._any(text, self.person, self.language.lexicon.person_farewell_substring)
+
+    def asks_for_contact(self, text: str) -> bool:
+        return self._any(text, self.contact, self.language.lexicon.person_farewell_substring)
 
     def says_goodbye(self, text: str) -> bool:
         return self._any(text, self.farewell, self.language.lexicon.person_farewell_substring)
