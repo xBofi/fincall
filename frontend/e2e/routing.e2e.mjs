@@ -75,6 +75,11 @@ test('Enter on a focused node selects it, like a click', async () => {
 for (const query of ['', '?theme=dark&lang=ar']) {
   test(`selected node: numbered route badges on top of every box, none overlapping ${query}`, async () => {
     const { page, errors } = await openDemo(query)
+    if (query.includes('lang=ar')) {
+      // RTL desde la primera visita (antes solo tras recargar): la entrada queda a la derecha
+      const x = async (id) => (await node(page, id).boundingBox()).x
+      assert.ok((await x('__start__')) > (await x('next_step')), 'the canvas is mirrored in RTL')
+    }
     await node(page, 'next_step').click()
     await page.waitForTimeout(300)
     const rows = await page.locator('.rv-exit').count()
