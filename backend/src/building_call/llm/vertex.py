@@ -10,6 +10,7 @@ Sin `responseSchema` (como con Ollama): el esquema se describe en el prompt y se
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -41,10 +42,15 @@ def generation_url(project: str, location: str, model: str) -> str:
 
 
 def load_credentials(json_path: str = "") -> Any:
-    """Cuenta de servicio desde `json_path`, o credenciales por defecto (ADC) si va vacía."""
+    """Cuenta de servicio desde `json_path` (ruta al JSON o el propio contenido, como lo inyecta
+    un gestor de secretos o un secreto de CI), o credenciales por defecto (ADC) si va vacía."""
     import google.auth
     from google.oauth2 import service_account
 
+    if json_path.lstrip().startswith("{"):
+        return service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
+            json.loads(json_path), scopes=[SCOPE]
+        )
     if json_path:
         # google-auth no tipa este constructor
         return service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
