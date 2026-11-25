@@ -12,20 +12,22 @@ import {
   MarkerType,
   useNodesInitialized,
   useReactFlow,
+  useStore,
   type Edge,
   type EdgeProps,
   type Node,
   type NodeProps,
-  type OnSelectionChangeParams,
   ReactFlowProvider,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { EdgeKind, GraphStructure, StructureNode } from './types'
 import type { ViewAt } from './trace'
-import { isTerminal, layOut, type Placed } from './layout'
+import { cachedLayout, isTerminal, layOut, type Placed } from './layout'
 import { t } from '../../i18n'
 import { roleKey } from './labels'
 import { ROLE_ICON } from './roleIcons'
+import { badgeAnchor, handlesFor, routeNumbers, type Side } from './routes'
+import { RoutingErrorBoundary } from './RoutingErrorBoundary'
 
 type EdgeState = 'idle' | 'taken' | 'turn' | 'current'
 
@@ -40,6 +42,8 @@ interface NodeData extends Record<string, unknown> {
   retried: boolean
   canRetry: boolean
   dim: boolean
+  /** Hay un nodo seleccionado y este no es ni él ni un vecino directo. */
+  faded: boolean
   rtl: boolean
 }
 
@@ -49,6 +53,11 @@ interface EdgeData extends Record<string, unknown> {
   width: number
   label: boolean
   loop: boolean
+  /** Número de la ruta cuando sale del nodo seleccionado (el mismo que en el panel). */
+  number: number | null
+  /** Relación con el nodo seleccionado. */
+  focus: 'out' | 'in' | 'faded' | null
+  hovered: boolean
 }
 
 const fmtMs = (ms: number) => (ms >= 100 ? Math.round(ms).toLocaleString() : ms.toFixed(ms < 1 ? 1 : 0))
@@ -66,6 +75,7 @@ const RoutingNode = memo(function RoutingNode({ data, selected }: NodeProps<Node
     data.waiting ? 'is-waiting' : '',
     data.visits > 0 ? 'is-visited' : '',
     data.dim ? 'is-dim' : '',
+    data.faded ? 'is-faded' : '',
     selected ? 'is-selected' : '',
   ].join(' ')
   return (
@@ -114,23 +124,43 @@ const RoutingEdge = memo(function RoutingEdge(props: EdgeProps<Edge<EdgeData>>) 
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, id } = props
   const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition })
   const state = data?.state ?? 'idle'
+  const focus = data?.focus ? `is-${data.focus}` : ''
+  const condition = data?.condition ?? ''
+  const badge = data?.number ? badgeAnchor(targetX, targetY, targetPosition as Side) : null
   return (
     <>
       <BaseEdge
         id={id}
         path={path}
         markerEnd={markerEnd}
-        className={`rv-edge is-${state} ${data?.loop ? 'is-loop' : ''}`}
-        style={{ strokeWidth: data?.width ?? 1.4 }}
+        className={`rv-edge is-${state} ${data?.loop ? 'is-loop' : ''} ${focus} ${data?.hovered ? 'is-hovered' : ''}`}
+        style={{ strokeWidth: (data?.width ?? 1.4) + (data?.hovered ? 1.2 : 0) }}
       />
+      {/* Las etiquetas van por encima de las cajas (zIndex) y nunca en mitad de la flecha: con el
+          nodo seleccionado, un número junto a la entrada de cada destino; la condición completa
+          está en el panel y aparece aquí al pasar el ratón (por el número o por su fila). */}
+      {badge && (
+        <EdgeLabelRenderer>
+          <div
+            className={`rv-edge-badge side-${targetPosition} ${data?.hovered ? 'is-hovered' : ''} nodrag nopan`}
+            style={{ transform: `translate(-50%, -50%) translate(${badge.x}px, ${badge.y}px)`, zIndex: data?.hovered ? 2200 : 2100 }}
+            data-edge={id}
+            aria-label={condition}
+          >
+            <span className="rv-edge-badge-n">{data?.number}</span>
+            <span className="rv-edge-badge-text" dir="auto">{condition}</span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
       {data?.label && (
         <EdgeLabelRenderer>
           <div
             className={`rv-edge-label is-${state} nodrag nopan`}
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-            title={data.condition}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, zIndex: 2000 }}
+            title={condition}
+            dir="auto"
           >
-            {data.condition.length > 56 ? `${data.condition.slice(0, 55)}…` : data.condition}
+            {condition.length > 56 ? `${condition.slice(0, 55)}…` : condition}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -138,15 +168,16 @@ const RoutingEdge = memo(function RoutingEdge(props: EdgeProps<Edge<EdgeData>>) 
   )
 })
 
-/** Qué asas usa una arista según su tipo y dónde quedaron sus extremos. */
-function handlesFor(kind: EdgeKind, from?: Placed, to?: Placed, rtl = false): { sourceHandle: string; targetHandle: string } {
-  if (kind === 'return') return { sourceHandle: 'back', targetHandle: 'loopin' }
-  if (from && to) {
-    const backwards = rtl ? to.x > from.x + from.width : to.x + to.width < from.x
-    // El destino quedó en una fila de abajo y por detrás: el grafo se plegó aquí
-    if (backwards && to.y > from.y + from.height) return { sourceHandle: 'down', targetHandle: 'up' }
-  }
-  return { sourceHandle: 'out', targetHandle: 'in' }
+/** El zoom del lienzo como variable CSS (`--rv-zoom`): las marcas y la condición al pasar el
+ * ratón se compensan para seguir legibles con el grafo entero encajado (zoom < 1). Escribe en el
+ * DOM sin volver a pintar el lienzo. */
+function ZoomVar() {
+  const zoom = useStore((st) => st.transform[2])
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    ref.current?.closest<HTMLElement>('.rv-canvas')?.style.setProperty('--rv-zoom', zoom.toFixed(3))
+  }, [zoom])
+  return <span ref={ref} hidden />
 }
 
 const nodeTypes = { routing: RoutingNode }
@@ -161,24 +192,42 @@ export interface RoutingGraphProps {
   compact?: boolean
   rtl?: boolean
   dark?: boolean
+  /** Ruta resaltada desde el panel lateral (id de arista). */
+  hoveredEdge?: string | null
 }
 
-function Canvas({ structure, view, running, selected, onSelect, compact, rtl = false, dark = false, aspect, size }: RoutingGraphProps & { aspect: number | null; size: string }) {
+function Canvas({ structure, view, running, selected, onSelect, compact, rtl = false, dark = false, hoveredEdge = null, aspect, size }: RoutingGraphProps & { aspect: number | null; size: string }) {
   const [layout, setLayout] = useState<{ key: GraphStructure; rtl: boolean; aspect: number; placed: Map<string, Placed> } | null>(null)
+  // Una forma ya calculada (en esta visita o en una anterior) se dibuja en el primer render, sin ELK
+  const cached = useMemo(() => (aspect === null ? null : cachedLayout(structure, rtl, aspect)), [structure, rtl, aspect])
   useEffect(() => {
-    if (aspect === null) return
+    if (aspect === null || cached) return
     let stale = false
     void layOut(structure, rtl, aspect).then((placed) => { if (!stale) setLayout({ key: structure, rtl, aspect, placed }) })
     return () => { stale = true }
-  }, [structure, rtl, aspect])
+  }, [structure, rtl, aspect, cached])
   // Mientras se recalcula (otra forma de lienzo) se sigue viendo la disposición anterior
-  const placed = layout && layout.key === structure && layout.rtl === rtl ? layout.placed : null
+  const placed = cached ?? (layout && layout.key === structure && layout.rtl === rtl ? layout.placed : null)
+  const layoutAspect = cached ? aspect : layout?.aspect
   const retryable = useMemo(
     () => new Set(structure.edges.filter((e) => e.kind === 'retry').map((e) => e.source)),
     [structure],
   )
   const tracing = view !== null
   const turnEdges = useMemo(() => new Set(view?.turnEdges ?? []), [view])
+  // Rutas del nodo seleccionado (numeradas como en el panel) y sus vecinos directos
+  const numbers = useMemo(() => (compact ? new Map<string, number>() : routeNumbers(structure, selected)), [structure, selected, compact])
+  const related = useMemo(() => {
+    if (!selected) return null
+    const ids = new Set([selected])
+    for (const e of structure.edges) {
+      if (e.source === selected) ids.add(e.target)
+      if (e.target === selected) ids.add(e.source)
+    }
+    if (selected === structure.hub) ids.add(structure.entry)
+    if (selected === structure.entry) ids.add(structure.hub)
+    return ids
+  }, [structure, selected])
 
   const nodes = useMemo<Node<NodeData>[]>(() => !placed ? [] : structure.nodes.map((n) => {
     const p = placed.get(n.id) ?? { x: 0, y: 0, width: 120, height: 40 }
@@ -205,10 +254,11 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
         retried: Boolean(view?.retried.has(n.id)),
         canRetry: retryable.has(n.id),
         dim: tracing && visits === 0 && !isCurrent && n.id !== structure.entry,
+        faded: !tracing && related !== null && !related.has(n.id),
         rtl,
       },
     }
-  }), [structure, placed, view, running, selected, retryable, tracing, rtl])
+  }), [structure, placed, view, running, selected, retryable, tracing, rtl, related])
 
   const edges = useMemo<Edge<EdgeData>[]>(() => {
     const maxTimes = Math.max(1, ...structure.edges.map((e) => e.times ?? 0))
@@ -249,16 +299,27 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
           condition: e.condition,
           width,
           loop,
-          label: !compact && !loop && (state === 'current' || (!tracing && touchesSelection && e.source === selected)),
+          label: !compact && !loop && state === 'current',
+          number: numbers.get(e.id) ?? null,
+          focus: selected === null ? null : e.source === selected ? 'out' : e.target === selected ? 'in' : tracing ? null : 'faded',
+          hovered: hoveredEdge === e.id,
         },
       })
     }
     return list
-  }, [structure, view, selected, turnEdges, tracing, compact, placed, rtl])
+  }, [structure, view, selected, turnEdges, tracing, compact, placed, rtl, numbers, hoveredEdge])
 
-  const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
-    if (sel.length === 1 && sel[0].id !== selected) onSelect(sel[0].id)
-  }, [onSelect, selected])
+  // La selección la decide solo esta vista (clic, o Intro/Espacio sobre un nodo con el foco).
+  // Antes también la movía `onSelectionChange` de React Flow: su almacén aún tenía el nodo
+  // anterior cuando llegaba el nuevo, cada lado devolvía al otro su nodo y React cortaba con
+  // «Maximum update depth exceeded»: la pantalla en blanco al pulsar varios nodos seguidos.
+  const onKeyDown = useCallback((ev: React.KeyboardEvent) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return
+    const id = (ev.target as HTMLElement).closest('.react-flow__node')?.getAttribute('data-id')
+    if (!id) return
+    ev.preventDefault()
+    onSelect(id)
+  }, [onSelect])
 
   // Ajustar al tamaño solo cuando cambia la estructura o el contenedor: nunca en cada paso
   // Encajar cuando los nodos están medidos y cada vez que cambia la disposición o el tamaño del
@@ -268,14 +329,23 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
   const fitted = useRef<string | null>(null)
   useEffect(() => {
     if (!placed || !initialized) return
-    const key = `${layout?.aspect}:${rtl}:${size}:${structure.nodes.length}`
+    const key = `${layoutAspect}:${rtl}:${size}:${structure.nodes.length}`
     if (fitted.current === key) return
     const first = fitted.current === null
     fitted.current = key
     void fitView({ padding: 0.04, duration: first ? 0 : 200 })
-  }, [placed, initialized, layout, structure, rtl, size, fitView])
+  }, [placed, initialized, layoutAspect, structure, rtl, size, fitView])
 
   return (
+    <>
+    {!placed && (
+      // Esqueleto ligero mientras ELK coloca los nodos (solo la primera vez: luego hay caché)
+      <div className="rv-canvas-skeleton" aria-busy="true" role="status">
+        <div className="rv-skel-row">{[0, 1, 2, 3].map((i) => <span key={i} className="rv-skel-box" />)}</div>
+        <div className="rv-skel-row">{[0, 1, 2].map((i) => <span key={i} className="rv-skel-box" />)}</div>
+        <span className="rv-muted rv-small">{t('routing.layout')}</span>
+      </div>
+    )}
     <ReactFlow
       nodes={nodes}
       edges={placed ? edges : []}
@@ -283,9 +353,10 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
       edgeTypes={edgeTypes}
       onNodeClick={(_, n) => onSelect(n.id)}
       onPaneClick={() => onSelect(null)}
-      onSelectionChange={onSelectionChange}
+      onKeyDown={onKeyDown}
       nodesDraggable={false}
       nodesConnectable={false}
+      elementsSelectable={false}
       edgesFocusable={false}
       fitView
       fitViewOptions={{ padding: 0.04 }}
@@ -295,6 +366,7 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
       colorMode={dark ? 'dark' : 'light'}
       aria-label={t('routing.canvas')}
     >
+      <ZoomVar />
       <Background gap={22} size={1} />
       <Controls showInteractive={false} position={rtl ? 'bottom-right' : 'bottom-left'} />
       {!compact && (
@@ -308,6 +380,7 @@ function Canvas({ structure, view, running, selected, onSelect, compact, rtl = f
         />
       )}
     </ReactFlow>
+    </>
   )
 }
 
@@ -328,9 +401,11 @@ export function RoutingGraph(props: RoutingGraphProps) {
   const aspect = box ? Math.min(3, Math.max(0.5, Math.round((box.w / box.h) * 4) / 4)) : null
   return (
     <div ref={ref} className={`rv-canvas ${props.compact ? 'is-compact' : ''}`} dir="ltr">
-      <ReactFlowProvider>
-        <Canvas {...props} aspect={aspect} size={box ? `${box.w}x${box.h}` : ''} />
-      </ReactFlowProvider>
+      <RoutingErrorBoundary compact onReset={() => props.onSelect(null)}>
+        <ReactFlowProvider>
+          <Canvas {...props} aspect={aspect} size={box ? `${box.w}x${box.h}` : ''} />
+        </ReactFlowProvider>
+      </RoutingErrorBoundary>
     </div>
   )
 }

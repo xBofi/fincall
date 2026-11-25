@@ -39,6 +39,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run test
+      # Routing view in a real browser (on /demo, no backend): crash, selection and labels
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:e2e
 
   gitleaks:
     runs-on: ubuntu-latest

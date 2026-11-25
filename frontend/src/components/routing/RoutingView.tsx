@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RoutingErrorBoundary } from './RoutingErrorBoundary'
 import { Alert, Badge, Button, Empty, Segmented, Select, Skeleton, Tabs } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { operations, type CallRecord, type CallView } from '../../api'
@@ -35,7 +36,17 @@ export interface RoutingViewProps {
 
 const loadDemo = () => import('./demo/demoCall.json').then((m) => m.default as unknown as DemoRecording)
 
-export function RoutingView({
+/** La vista entera va dentro de un límite de errores: un fallo enseña un aviso con «Reintentar»
+ * en lugar de dejar la consola en blanco. */
+export function RoutingView(props: RoutingViewProps) {
+  return (
+    <RoutingErrorBoundary compact={props.compact}>
+      <RoutingViewInner {...props} />
+    </RoutingErrorBoundary>
+  )
+}
+
+function RoutingViewInner({
   structure: fetched,
   error,
   onReload,
@@ -49,6 +60,7 @@ export function RoutingView({
   const [mode, setMode] = useState<Mode>(initialMode ?? (live?.callId ? 'live' : modes[0]))
   const [demo, setDemo] = useState<DemoRecording | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null)
   const [tab, setTab] = useState<PanelTab>('decision')
   const [follow, setFollow] = useState(true)
 
@@ -129,10 +141,11 @@ export function RoutingView({
     setPlaying(p)
   }
 
-  const onSelect = (id: string | null) => {
+  const onSelect = useCallback((id: string | null) => {
     setSelected(id)
+    setHoveredEdge(null)
     if (id) setTab('node')
-  }
+  }, [])
 
   const selectedNode = structure?.nodes.find((n) => n.id === (selected ?? (mode === 'structure' ? structure.hub : at?.node))) ?? null
 
@@ -167,6 +180,7 @@ export function RoutingView({
       compact={compact}
       rtl={rtl}
       dark={dark}
+      hoveredEdge={hoveredEdge}
     />
   )
 
@@ -203,7 +217,7 @@ export function RoutingView({
       key: 'conversation', label: t('routing.panel.conversation'), disabled: mode === 'structure',
       children: model && <ConversationPanel turns={model.turns} current={step?.turn ?? null} onJump={(turn) => moveCursor(firstStepOfTurn(model, turn))} />,
     },
-    { key: 'node', label: t('routing.panel.node'), children: structure && <NodePanel node={selectedNode} structure={structure} onSelect={onSelect} extra={selectedNode && nodeExtra?.(selectedNode.id)} /> },
+    { key: 'node', label: t('routing.panel.node'), children: structure && <NodePanel node={selectedNode} structure={structure} onSelect={onSelect} onHoverRoute={setHoveredEdge} extra={selectedNode && nodeExtra?.(selectedNode.id)} /> },
   ]
 
   return (

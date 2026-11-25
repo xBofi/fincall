@@ -82,6 +82,8 @@ function TemplateEditor({ template, onUpdate }: { template: Template; onUpdate: 
   )
 }
 
+let lastRead: { structure: GraphStructure; templates: Template[]; prompts: Prompts } | null = null
+
 /**
  * Pantalla «Flujo»: la vista de enrutado de LangGraph (estructura, en directo, repetición y demo)
  * y, en el panel de cada nodo, lo que el asistente dice (plantillas editables por el owner) y
@@ -96,16 +98,21 @@ export function FlowPanel({
   liveView?: CallView | null
   initialMode?: Mode
 }) {
-  const [structure, setStructure] = useState<GraphStructure | null>(null)
-  const [templates, setTemplates] = useState<Template[]>([])
-  const [prompts, setPrompts] = useState<Prompts | null>(null)
+  // Al volver a la pantalla se ve al instante lo último leído y se refresca por detrás
+  const [structure, setStructure] = useState<GraphStructure | null>(lastRead?.structure ?? null)
+  const [templates, setTemplates] = useState<Template[]>(lastRead?.templates ?? [])
+  const [prompts, setPrompts] = useState<Prompts | null>(lastRead?.prompts ?? null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
     try {
       const [g, p, pr] = await Promise.all([routing.structure(), flujo.templates(), flujo.prompts()])
-      setStructure(g); setTemplates(p); setPrompts(pr)
+      // Misma estructura que la guardada: se conserva el objeto (no se recalcula la disposición)
+      const same = lastRead && JSON.stringify(lastRead.structure) === JSON.stringify(g)
+      const structure = same ? lastRead!.structure : g
+      lastRead = { structure, templates: p, prompts: pr }
+      setStructure(structure); setTemplates(p); setPrompts(pr)
     } catch (e) {
       setError(e instanceof Error ? e.message : t('flow.loadError'))
     }

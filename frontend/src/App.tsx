@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import { Alert, Badge, Button, Dropdown, Popover, Segmented, Select, Slider, Spin, Switch, Tooltip, message } from 'antd'
 import {
   CheckOutlined,
@@ -60,11 +60,26 @@ import {
 // Pantallas que no se usan al simular: se descargan al abrirlas (el arranque pesa menos)
 const UserManagement = lazy(() => import('./components/UserManagement').then((m) => ({ default: m.UserManagement })))
 const AccessRequests = lazy(() => import('./components/AccessRequests').then((m) => ({ default: m.AccessRequests })))
-const FlowPanel = lazy(() => import('./components/FlowPanel').then((m) => ({ default: m.FlowPanel })))
+// «Flujo» se precarga en reposo: un `lazy` que suspende hace esperar a React 19 ~300 ms antes de
+// enseñar la pantalla (aunque el código ya esté en caché). Ya cargado se pinta directamente.
+const FlowPanel = preloadable(() => import('./components/FlowPanel').then((m) => m.FlowPanel))
 const LiveRouting = lazy(() => import('./components/routing/LiveRouting').then((m) => ({ default: m.LiveRouting })))
 const Inbox = lazy(() => import('./components/Inbox').then((m) => ({ default: m.Inbox })))
 const LatencyPanel = lazy(() => import('./components/LatencyPanel').then((m) => ({ default: m.LatencyPanel })))
 const KpiPanel = lazy(() => import('./components/KpiPanel').then((m) => ({ default: m.KpiPanel })))
+
+/** Un `lazy` que además se puede precargar; una vez cargado se pinta sin pasar por Suspense. */
+function preloadable<P extends object>(load: () => Promise<ComponentType<P>>) {
+  let loaded: ComponentType<P> | null = null
+  let pending: Promise<ComponentType<P>> | null = null
+  const get = () => (pending ??= load().then((c) => (loaded = c)).catch((e: unknown) => { pending = null; throw e }))
+  const Lazy = lazy(() => get().then((c) => ({ default: c }))) as unknown as ComponentType<P>
+  function Preloaded(props: P) {
+    const Loaded = loaded
+    return Loaded ? <Loaded {...props} /> : <Lazy {...props} />
+  }
+  return Object.assign(Preloaded, { preload: () => { void get().catch(() => undefined) } })
+}
 
 type SttMode = 'browser' | 'server' | 'streaming' | 'livekit' | 'twilio' | 'line'
 type Screen = 'simulate' | 'history' | 'inbox' | 'data' | 'flow' | 'latency' | 'users' | 'requests'
@@ -540,6 +555,9 @@ export default function App() {
     if (!sessionReady) return
     api.languages().then(setLanguages).catch(() => undefined)
     api.personas().then(setPersonaList).catch(() => undefined)
+    // Con la consola ya pintada y el navegador libre: la pantalla «Flujo» abre sin espera
+    const idle = window.requestIdleCallback ?? ((fn: () => void) => window.setTimeout(fn, 1500))
+    idle(() => FlowPanel.preload())
   }, [sessionReady])
   // The browser's recognition and voice follow the call, which may switch language mid-call
   const speechTag = languages?.languages.find((l) => l.code === (view?.language ?? callLanguage))?.browser_lang
