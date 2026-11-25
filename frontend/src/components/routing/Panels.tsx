@@ -7,6 +7,7 @@ import { edgeIdOf, END_ID, stateAt } from './trace'
 import { ROLE_ICON } from './roleIcons'
 import { t, useI18n } from '../../i18n'
 import { originKey, visitCondition } from './labels'
+import { outgoingRoutes } from './routes'
 
 const show = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '—'
@@ -272,16 +273,21 @@ export function NodePanel({
   node,
   structure,
   onSelect,
+  onHoverRoute,
   extra,
 }: {
   node: StructureNode | null
   structure: GraphStructure
   onSelect: (id: string) => void
+  /** Resalta en el lienzo la ruta bajo el ratón o el foco (null al salir). */
+  onHoverRoute?: (edgeId: string | null) => void
   extra?: React.ReactNode
 }) {
   const { lang: locale } = useI18n()
   if (!node) return <Empty className="rv-empty-panel" description={t('routing.panel.pick')} />
-  const exits = structure.edges.filter((e) => e.source === node.id)
+  // Mismo orden y número que las marcas del lienzo
+  const exits = outgoingRoutes(structure, node.id)
+  const retries = structure.edges.some((e) => e.source === node.id && (e.kind === 'retry' || e.target === node.id))
   return (
     <div className="rv-panel-body">
       <div className="rv-node-head">
@@ -310,17 +316,30 @@ export function NodePanel({
       {exits.length > 0 && (
         <section className="rv-section">
           <h4>{t('routing.node.exits')}</h4>
-          <ul className="rv-list rv-exits">
-            {exits.map((e) => (
-              <li key={e.id}>
-                <button type="button" className="rv-link" onClick={() => onSelect(e.target)}>
-                  <NodeChip id={e.target} structure={structure} />
-                </button>
-                <span className="rv-muted"> — {e.condition}</span>
-                {(e.times ?? 0) > 0 && <Tag className="rv-mono rv-times">{e.times}</Tag>}
+          <p className="rv-muted rv-small rv-exits-hint">{t('routing.node.exitsHint')}</p>
+          <ol className="rv-exits">
+            {exits.map((e, i) => (
+              <li
+                key={e.id}
+                data-edge={e.id}
+                className={`rv-exit is-${e.kind}`}
+                onMouseEnter={() => onHoverRoute?.(e.id)}
+                onMouseLeave={() => onHoverRoute?.(null)}
+                onFocus={() => onHoverRoute?.(e.id)}
+                onBlur={() => onHoverRoute?.(null)}
+              >
+                <span className="rv-exit-n" aria-hidden>{i + 1}</span>
+                <div className="rv-exit-body">
+                  <button type="button" className="rv-link" onClick={() => onSelect(e.target)}>
+                    <NodeChip id={e.target} structure={structure} />
+                  </button>
+                  {(e.times ?? 0) > 0 && <Tag className="rv-mono rv-times">{e.times}</Tag>}
+                  <p className="rv-exit-condition">{e.condition}</p>
+                </div>
               </li>
             ))}
-          </ul>
+          </ol>
+          {retries && <p className="rv-muted rv-small"><span className="rv-legend-retry" aria-hidden>↻</span> {t('routing.legend.retry')}</p>}
         </section>
       )}
       {extra}

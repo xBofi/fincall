@@ -11,6 +11,7 @@
     "lint": "node scripts/enforce-pnpm.mjs && oxlint",
     "preview": "node scripts/enforce-pnpm.mjs && vite preview",
     "test": "node scripts/enforce-pnpm.mjs && node --test \"src/**/*.test.ts\"",
+    "test:e2e": "node scripts/enforce-pnpm.mjs && node --test --test-concurrency=1 \"e2e/*.e2e.mjs\"",
     "test:package-manager": "node --test scripts/enforce-pnpm.test.mjs"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
+    "playwright": "1.55.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
   }

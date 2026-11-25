@@ -1,21 +1,28 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { operations, routing, type CallView } from '../../api'
 import type { TraceEvent, TurnRecord } from './types'
 import { applyEvent, dwellMs, emptyTrace, withTurns, type TraceModel } from './trace'
 
-/** Tema, idioma y dirección del documento. La vista sigue `<html data-theme|lang|dir>`. */
+/** Tema, idioma y dirección del documento. La vista sigue `<html data-theme|lang|dir>`.
+ * Con `useSyncExternalStore`: React vuelve a leer tras suscribirse, así que no se pierde un
+ * cambio hecho entre el render y el efecto (antes, abrir `/demo?lang=ar` dejaba el lienzo en
+ * LTR hasta recargar: el proveedor de idioma cambia `dir` en un efecto). */
+const subscribeDocumentAttrs = (onChange: () => void) => {
+  const obs = new MutationObserver(onChange)
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'dir', 'lang'] })
+  return () => obs.disconnect()
+}
+const documentAttrsKey = () => {
+  const el = document.documentElement
+  return `${el.dataset.theme === 'dark' ? 'dark' : 'light'}|${el.dir === 'rtl' ? 'rtl' : 'ltr'}|${el.lang}`
+}
+
 export function useDocumentAttrs() {
-  const read = () => {
-    const el = document.documentElement
-    return { dark: el.dataset.theme === 'dark', rtl: el.dir === 'rtl', lang: el.lang }
-  }
-  const [attrs, setAttrs] = useState(read)
-  useEffect(() => {
-    const obs = new MutationObserver(() => setAttrs(read()))
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'dir', 'lang'] })
-    return () => obs.disconnect()
-  }, [])
-  return attrs
+  const key = useSyncExternalStore(subscribeDocumentAttrs, documentAttrsKey)
+  return useMemo(() => {
+    const [theme, dir, lang] = key.split('|')
+    return { dark: theme === 'dark', rtl: dir === 'rtl', lang }
+  }, [key])
 }
 
 export type LiveStatus = 'idle' | 'connecting' | 'live' | 'reconnecting' | 'ended'

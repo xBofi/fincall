@@ -185,10 +185,85 @@
 }
 .rv-edge-label.is-current { border-color: var(--rv-accent); color: var(--rv-accent); font-weight: 600; }
 
+/* Nodo seleccionado: sus rutas resaltadas, lo demás en segundo plano */
+.rv-edge.is-out { stroke: var(--rv-accent); opacity: 1; stroke-dasharray: none; }
+.rv-edge.is-in { stroke: color-mix(in oklch, var(--rv-accent), var(--rv-edge) 55%); opacity: .9; }
+.rv-edge.is-faded { opacity: .14; }
+.rv-edge.is-hovered { stroke: var(--rv-accent); opacity: 1; }
+.rv-node.is-faded { opacity: .38; box-shadow: none; }
+
+/* Marca numerada de una ruta: junto a la entrada del destino, siempre por encima de las cajas.
+   La condición completa aparece al pasar el ratón (o al resaltar su fila en el panel). */
+.rv-edge-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: all;
+  cursor: default;
+}
+.rv-edge-badge-n {
+  /* Con el grafo encajado (zoom < 1) la marca no encoge por debajo de ~15 px en pantalla */
+  scale: clamp(1, calc(1.25 / var(--rv-zoom, 1)), 1.6);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--rv-accent); color: var(--rv-surface);
+  border: 2px solid var(--rv-surface);
+  box-shadow: var(--rv-shadow);
+  font: 700 .64rem/1 var(--rv-font-mono);
+}
+.rv-edge-badge-text {
+  display: none;
+  position: absolute;
+  top: 50%;
+  max-width: 260px;
+  width: max-content;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--rv-surface);
+  border: 1px solid var(--rv-accent);
+  box-shadow: var(--rv-shadow);
+  color: var(--rv-ink);
+  font: 500 .72rem/1.35 var(--font-body, inherit);
+  white-space: normal;
+  transform: translateY(-50%);
+  /* Texto a tamaño de lectura sea cual sea el zoom, creciendo hacia fuera de la marca */
+  scale: clamp(1, calc(1 / var(--rv-zoom, 1)), 2.4);
+  transform-origin: right center;
+}
+/* Hacia el hueco por el que llega la flecha, lejos de la caja de destino */
+.rv-edge-badge.side-left .rv-edge-badge-text { right: calc(100% + 6px); }
+.rv-edge-badge.side-right .rv-edge-badge-text { left: calc(100% + 6px); transform-origin: left center; }
+.rv-edge-badge.side-top .rv-edge-badge-text { bottom: calc(100% + 6px); top: auto; left: 50%; transform: translateX(-50%); transform-origin: center bottom; }
+.rv-edge-badge.side-bottom .rv-edge-badge-text { top: calc(100% + 6px); left: 50%; transform: translateX(-50%); transform-origin: center top; }
+.rv-edge-badge:hover .rv-edge-badge-text, .rv-edge-badge.is-hovered .rv-edge-badge-text { display: block; }
+.rv-edge-badge:hover .rv-edge-badge-n, .rv-edge-badge.is-hovered .rv-edge-badge-n { outline: 2px solid var(--rv-accent); outline-offset: 1px; }
+
+/* Esqueleto mientras ELK coloca los nodos */
+.rv-canvas-skeleton {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--rv-paper);
+}
+.rv-skel-row { display: flex; gap: 52px; }
+.rv-skel-box {
+  width: 150px; height: 52px; border-radius: 10px;
+  background: linear-gradient(90deg, var(--rv-rule) 0%, color-mix(in oklch, var(--rv-rule), var(--rv-surface) 60%) 50%, var(--rv-rule) 100%);
+  background-size: 200% 100%;
+  animation: rv-shimmer 1.2s linear infinite;
+}
+@keyframes rv-shimmer { to { background-position: -200% 0; } }
+@media (max-width: 700px) { .rv-skel-row { gap: 20px; } .rv-skel-box { width: 80px; } }
+
+/* Límite de errores: un aviso pequeño, no la pantalla en blanco */
+.rv-crash { padding: var(--space-sm, 1rem); }
+.rv-crash.is-compact { padding: .75rem; }
+
 @media (prefers-reduced-motion: reduce) {
   .rv-node, .rv-edge { transition: none; }
   .rv-node.is-running { animation: none; box-shadow: 0 0 0 3px var(--rv-role); }
   .rv-edge.is-current { animation: none; }
+  .rv-skel-box { animation: none; }
   .rv-pulse { animation: none !important; }
 }
 
@@ -294,7 +369,18 @@
 .rv-node-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
 .rv-link { all: unset; cursor: pointer; }
 .rv-link:focus-visible { outline: 2px solid var(--rv-accent); outline-offset: 2px; border-radius: 999px; }
-.rv-exits li { line-height: 1.6; }
+.rv-exits { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .2rem; }
+.rv-exits-hint { margin: -.15rem 0 .35rem; }
+.rv-exit { display: flex; align-items: flex-start; gap: .55rem; padding: .35rem .45rem; border-radius: 8px; transition: background-color 150ms ease; }
+.rv-exit:hover, .rv-exit:focus-within { background: var(--rv-accent-soft); }
+.rv-exit-n {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.35rem; height: 1.35rem; margin-top: .1rem; border-radius: 999px;
+  background: var(--rv-accent); color: var(--rv-surface); font: 700 .72rem var(--rv-font-mono);
+}
+.rv-exit.is-global .rv-exit-n { background: var(--rv-muted); }
+.rv-exit-body { min-width: 0; }
+.rv-exit-condition { margin: .15rem 0 0; color: var(--rv-muted); font-size: .82rem; line-height: 1.4; unicode-bidi: plaintext; }
 .rv-times { margin-inline-start: .35rem; }
 .rv-compact-line { margin: 0; font-size: .78rem; color: var(--rv-muted); min-height: 2.4em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
