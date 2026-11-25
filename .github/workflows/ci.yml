@@ -39,7 +39,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
       - run: pnpm run test
-      # Routing view in a real browser (on /demo, no backend): crash, selection and labels
+
+  # Routing view in a real browser (on /demo, no backend): crash, selection, labels, RTL.
+  # Pinned to 24.04: Playwright cannot install Chromium's system packages on newer images yet.
+  frontend-e2e:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run test:e2e
 
