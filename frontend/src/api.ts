@@ -411,6 +411,8 @@ export const api = {
     ask<unknown>(`/api/calls/${id}/metrics`, json(body)),
   delivery: (id: string, turn: number, state: string, ratio: number, delivered_text: string) =>
     ask<unknown>(`/api/calls/${id}/delivery`, json({ turn, state, ratio, delivered_text })),
+  /** El vecino cuelga: el servidor cierra la llamada como abandonada */
+  hangUp: (id: string) => ask<CallView>(`/api/calls/${id}/hang_up`, { method: 'POST' }),
   get: (id: string) => ask<CallView>(`/api/calls/${id}`),
   /** Tiempos por turno que guarda el servidor (los del agente de LiveKit incluidos) */
   callMetrics: (id: string) =>

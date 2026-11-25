@@ -47,6 +47,7 @@ greetings = ["hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", 
 verbal_tics = ["ah ay eh oh pues vale bueno mire oiga oye perdone perdona perdon disculpe hola buenas como que bien por favor si no lo le me te usted senor senora es"]
 person = ["persona", "humano", "operador", "operadora", "alguien", "hablar con", "que me atienda", "maquina", "robot", "administrador"]
 farewell = ["adios", "hasta luego", "hasta pronto", "nada mas", "ya llamare", "dejalo", "olvidalo", "no quiero seguir", "cuelgo", "gracias adios"]
+contact = ["hablar con", "poner en contacto", "ponga en contacto", "pongas en contacto", "pone en contacto", "pones en contacto", "que me llame", "que me llamen", "pasar con", "pasame con", "paseme con", "ponme con", "pongame con"]
 person_farewell_substring = true
 meta_bot = ["clasific", "urgencia", "resumen", "entendido", "has dicho", "diras", "dices", "asistente", "maquina"]
 address_stopwords = ["calle", "c", "avenida", "avda", "av", "plaza", "pza", "paseo", "numero", "n", "del", "de", "la", "el", "los", "las", "en", "vivo", "llamo", "desde", "es"]

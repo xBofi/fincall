@@ -451,6 +451,17 @@ class CallManager:
             publish(self.events, previous, state)
         return state
 
+    async def hang_up(self, call_id: str) -> CallState:
+        """El vecino cuelga a mitad de llamada: queda cerrada como abandonada (con lo que se
+        llegó a hablar) en vez de seguir "en curso"."""
+        state = previous = await self.get(call_id)
+        if not state.get("finished"):
+            state = {**state, "finished": True, "result": "abandoned", "awaiting_user": False}
+            await self._save_state(state)
+            await self._save_operation(state)
+            publish(self.events, previous, state)
+        return state
+
     async def record_delivery(
         self, call_id: str, turn: int, delivery_state: str, ratio: float, text: str | None
     ) -> CallState:

@@ -101,6 +101,14 @@ class FakeLLM:
             return {"intent": "question", "question": text}
         if "cuánto pago" in u or "cuota" in u:
             return {"intent": "out_of_scope"}
+        # What the real model did: asking for the administrator read as out of scope, and asking
+        # to be put in touch, as a question
+        if "hablar con el administrador" in u:
+            return {"intent": "out_of_scope"}
+        if "en contacto con" in u:
+            return {"intent": "question", "question": text}
+        if "eres una máquina" in u:
+            return {"intent": "question", "question": text}
         if u.startswith(("sí", "si,", "si ", "eso es", "correcto")) or u in ("sí", "si"):
             output["confirms"] = True
         elif u.startswith("no"):

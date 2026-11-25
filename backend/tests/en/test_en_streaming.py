@@ -85,6 +85,7 @@ def test_streaming_turn(ws_client: TestClient) -> None:
         ws.send_json({"type": "pause"})
         ws.send_json({"type": "end_turn"})
         ws.receive_json()  # parcial
+        assert ws.receive_json() == {"type": "barge_in"}  # the caller talks over the bot
         ws.receive_json()  # final "yes"
         reply = ws.receive_json()
         assert reply["data"]["estate_id"] == "estate-main-12"

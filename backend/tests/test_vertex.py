@@ -9,7 +9,12 @@ import httpx
 import pytest
 
 from building_call.llm.ollama import LLMError
-from building_call.llm.vertex import VertexModel, generation_url, validate_location
+from building_call.llm.vertex import (
+    VertexModel,
+    generation_url,
+    load_credentials,
+    validate_location,
+)
 
 SCHEMA = {
     "type": "object",
@@ -132,3 +137,26 @@ async def test_gemini_3_does_not_send_thinking_budget(monkeypatch: pytest.Monkey
         "s", "u", SCHEMA
     )
     assert "thinkingConfig" not in bodies[0]["generationConfig"]
+
+
+def test_credentials_accept_the_json_content_or_its_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A secret manager or a CI secret hands over the JSON itself; locally it is a file path
+    from google.oauth2 import service_account
+
+    calls: list[tuple[str, Any]] = []
+    monkeypatch.setattr(
+        service_account.Credentials,
+        "from_service_account_info",
+        lambda info, scopes: calls.append(("info", info)),
+    )
+    monkeypatch.setattr(
+        service_account.Credentials,
+        "from_service_account_file",
+        lambda path, scopes: calls.append(("file", path)),
+    )
+    load_credentials('  {"type": "service_account", "project_id": "p"}')
+    load_credentials("gcp-credentials.json")
+    assert calls == [
+        ("info", {"type": "service_account", "project_id": "p"}),
+        ("file", "gcp-credentials.json"),
+    ]

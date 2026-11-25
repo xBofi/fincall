@@ -295,6 +295,10 @@ def _ask(state: CallState, node: str, text: str, **extra: Any) -> dict[str, Any]
     _verify(state, node)
     _annotate_template(state, node, text, extra)
     base = extra.pop("history", state.get("history", []))
+    # After answering something on the side, the pending question is still the previous one: if
+    # the whole message were kept, every detour would stack it again ("Sorry... Sorry...
+    # Perfect. What's the problem?")
+    question = extra.pop("keep_question", None) or _question_only(text)
     return {
         "current_node": node,
         "awaiting_user": True,
@@ -303,7 +307,7 @@ def _ask(state: CallState, node: str, text: str, **extra: Any) -> dict[str, Any]
         "bot_messages": [*state.get("bot_messages", []), text],
         "history": [*base, {"role": "bot", "text": text}],
         # Para repetir/retomar se guarda solo la pregunta, sin saludos ni avisos
-        "last_question": _question_only(text),
+        "last_question": question,
     }
 
 
@@ -477,6 +481,10 @@ def _asks_for_person(text: str) -> bool:
     return _p().asks_for_person(text)
 
 
+def _asks_for_contact(text: str) -> bool:
+    return _p().asks_for_contact(text)
+
+
 def _says_goodbye(text: str) -> bool:
     return _p().says_goodbye(text)
 
@@ -597,13 +605,31 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 trace=_with_trace(state, node, "intent", "repeat"),
                 **extra,
             )
+        # Derivar o colgar son irreversibles: exigen palabras explícitas del vecino, no solo la
+        # opinión del modelo (una dirección mal transcrita llegó a derivarse como "humano").
+        utterance = state.get("user_utterance") or ""
+        # Asking to be put through is explicit even when the model reads it as a question or as
+        # out of scope ("I wanted to speak to the manager", "can you put me in touch with him?")
+        wants_contact = (
+            interp.intent in ("question", "out_of_scope")
+            and not provides_data
+            and _asks_for_contact(utterance)
+        )
+        if (interp.intent == "human" and _asks_for_person(utterance)) or wants_contact:
+            return _advance(
+                state,
+                "handoff_to_human",
+                history=history,
+                trace=_with_trace(state, node, "intent", "human"),
+                **extra,
+            )
         if (interp.intent == "question" or interp.question) and not provides_data:
             return _ask(
                 state,
                 node,
-                _answer_question(interp.question or state.get("user_utterance") or "")
-                + last,
+                _answer_question(interp.question or utterance) + last,
                 history=history,
+                keep_question=last,
                 trace=_with_trace(state, node, "intent", "question"),
                 **extra,
             )
@@ -613,18 +639,8 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
                 node,
                 render("global.out_of_scope", question=last),
                 history=history,
+                keep_question=last,
                 trace=_with_trace(state, node, "intent", "out_of_scope"),
-                **extra,
-            )
-        # Derivar o colgar son irreversibles: exigen palabras explícitas del vecino, no solo la
-        # opinión del modelo (una dirección mal transcrita llegó a derivarse como "humano").
-        utterance = state.get("user_utterance") or ""
-        if interp.intent == "human" and _asks_for_person(utterance):
-            return _advance(
-                state,
-                "handoff_to_human",
-                history=history,
-                trace=_with_trace(state, node, "intent", "human"),
                 **extra,
             )
         if interp.intent == "hang_up" and not provides_data and _says_goodbye(utterance):
@@ -1490,7 +1506,14 @@ def build_nodes(deps: Dependencies) -> dict[str, Any]:
         utterance = state.get("user_utterance")
         if utterance is None:
             greeting = render("collect_request.greeting")
-            return _ask(state, node, render("collect_request.ask", greeting=greeting))
+            return _ask(
+                state,
+                node,
+                render("collect_request.ask", greeting=greeting),
+                # The courtesy that leads into the question fits after the caller's answer, not
+                # when the question is taken up again after a detour
+                keep_question=render("collect_request.ask", greeting=""),
+            )
         interp, history, extra, output = await _turn(state, node)
         if output:
             return output

@@ -36,6 +36,7 @@ from building_call.audit.context import AuditContext, audit_context, set_actor
 from building_call.audit.http import AuditMiddleware
 from building_call.audit.retention import purge_audit
 from building_call.catalog_api import create_catalog_router
+from building_call.echo import is_echo
 from building_call.flow_api import create_flow_router
 from building_call.graph import templates
 from building_call.graph.ledger import heard_text_if_cut
@@ -772,10 +773,12 @@ def create_app(
         """Turnos por voz en streaming.
 
         Cliente -> servidor: binario = PCM16 mono (sample_rate en query, 16000 por defecto);
-        texto JSON: {"type":"fin_turno"} fuerza el cierre del turno, {"type":"pausa"|"reanudar"}
-        silencia la entrada mientras habla el asistente (se sigue enviando silencio al proveedor).
-        Servidor -> cliente: {"type":"listo"}, {"type":"parcial","texto"}, {"type":"final","texto",
-        "eou_at"}, {"type":"respuesta", ...vista, "tiempos"}, {"type":"error","mensaje"}.
+        texto JSON: {"type":"end_turn"} fuerza el cierre del turno; {"type":"pause"|"resume"}
+        marcan cuándo habla el asistente. Mientras habla, el audio sigue llegando al proveedor:
+        lo que sea eco de su propio mensaje se descarta y, si el vecino dice palabras de verdad,
+        se envía {"type":"barge_in"} para que la consola corte la voz del bot.
+        Servidor -> cliente: {"type":"ready"}, {"type":"partial","text"}, {"type":"final","text",
+        "eou_ms"}, {"type":"barge_in"}, {"type":"reply", ...vista}, {"type":"error","message"}.
         """
         await ws.accept()
         # Consola o, como en el resto de rutas de llamada, el secreto del agente (banco de voz)
@@ -800,7 +803,7 @@ def create_app(
         except ValueError:
             sample_rate = 0
         # El navegador pide 16 kHz, pero AudioContext puede caer al ritmo del equipo (44,1/48/96).
-        # El tope solo evita que un cliente reserve memoria arbitraria con el búfer de silencio.
+        # El tope solo descarta valores absurdos antes de abrir el reconocedor.
         if not 8000 <= sample_rate <= 192000:
             await ws.send_json({"type": "error", "message": "sample_rate fuera de rango"})
             await ws.close(code=1008)
@@ -824,7 +827,7 @@ def create_app(
             return
         await ws.send_json({"type": "ready", "connection_ms": getattr(session, "connection_ms", None)})
         paused = False
-        silence = b"\x00" * (int(sample_rate * 0.1) * 2)
+        barge_sent = False  # ya se pidió cortar al bot en esta intervención suya
         last_voice_at: float | None = None  # último audio con energía recibido del navegador
         # Grabación alineada de las dos voces (retención 14 días). Aquí el bot habla por el
         # navegador y el servidor nunca ve ese audio: su pista se reconstruye al cerrar
@@ -833,12 +836,18 @@ def create_app(
         recorder = ConversationRecorder()
         bot_turns: list[tuple[int, str]] = []  # (marca en bytes, texto que sonó)
         bot_mark: int | None = None  # puesta en `pause`, consumida en `delivery`
-        bot_text = ""  # último mensaje enviado al navegador, por si no llega `delivery`
+        # Último mensaje enviado al navegador: por si no llega `delivery`, y para reconocer el eco
+        bot_text = " ".join(initial_state.get("bot_messages") or []).strip()
         if not int(initial_state.get("turn", 0)):
             # El saludo suena mientras se abre el micrófono: se ancla al inicio de la grabación.
-            greeting = " ".join(initial_state.get("bot_messages") or []).strip()
-            if greeting:
-                bot_turns.append((0, greeting))
+            if bot_text:
+                bot_turns.append((0, bot_text))
+
+        async def barge_in() -> None:
+            nonlocal barge_sent
+            if paused and not barge_sent:
+                barge_sent = True
+                await ws.send_json({"type": "barge_in"})
 
         async def rebuild_bot_voice() -> None:
             """Sintetiza los turnos del bot y los coloca donde sonaron. Secuencial y en orden a
@@ -853,14 +862,19 @@ def create_app(
         async def pump_events() -> None:
             nonlocal bot_text, language
             async for ev in session.events():
+                if paused and ev.kind in ("partial", "final") and is_echo(ev.text, bot_text):
+                    continue  # el bot oyéndose por el altavoz: ni se enseña ni es un turno
                 if ev.kind == "partial":
                     await ws.send_json({"type": "partial", "text": ev.text})
+                    if len(ev.text.split()) >= settings.telephony_bargein_words:
+                        await barge_in()
                     speculate(call_id, ev.text)
                 elif ev.kind == "error":
                     await ws.send_json({"type": "error", "message": ev.text})
                 elif ev.kind == "final":
                     if not ev.text:
                         continue
+                    await barge_in()
                     t_final = perf_counter()
                     eou_ms = int((t_final - last_voice_at) * 1000) if last_voice_at else None
                     await ws.send_json({"type": "final", "text": ev.text, "eou_ms": eou_ms})
@@ -891,7 +905,7 @@ def create_app(
                         return
 
         async def receive_audio() -> None:
-            nonlocal paused, last_voice_at, bot_mark
+            nonlocal paused, last_voice_at, bot_mark, barge_sent
             while True:
                 packet = await ws.receive()
                 if packet.get("type") == "websocket.disconnect":
@@ -900,7 +914,7 @@ def create_app(
                     if not paused and _has_voice(packet["bytes"]):
                         last_voice_at = perf_counter()
                     recorder.write_client(packet["bytes"], sample_rate)
-                    await session.send_audio(silence if paused else packet["bytes"])
+                    await session.send_audio(packet["bytes"])
                 elif packet.get("text"):
                     order = json.loads(packet["text"])
                     if order.get("type") == "end_turn":
@@ -924,6 +938,7 @@ def create_app(
                             bot_turns.append((bot_mark, bot_text))  # sin `delivery` previa
                         bot_mark = recorder.mark()
                         paused = True
+                        barge_sent = False
                     elif order.get("type") == "resume":
                         paused = False
 
@@ -968,6 +983,17 @@ def create_app(
                 await ws.close()
             except Exception:  # noqa: BLE001
                 pass
+
+    @app.post("/api/calls/{call_id}/hang_up", dependencies=protected_call)
+    async def hang_up(call_id: str) -> dict[str, Any]:
+        """El vecino cuelga (botón Colgar de la consola): la llamada se cierra como abandonada
+        en vez de quedarse "en curso" para siempre."""
+        try:
+            state = await manager.hang_up(call_id)
+        except CallNotFound:
+            raise HTTPException(404, "Llamada no encontrada") from None
+        deps.discard_speculations(call_id)
+        return _view(state)
 
     @app.post("/api/calls/{call_id}/delivery", dependencies=protected_call)
     async def delivery(call_id: str, body: Delivery) -> dict[str, Any]:

@@ -4,6 +4,7 @@ Solo variables de entorno (`.env` en local, variables/secretos de CI en desplieg
 La configuración de negocio (fincas, especialistas, reglas) NO va aquí: vive en PostgreSQL.
 """
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,7 +52,8 @@ class Settings(BaseSettings):
 
     # Google Vertex AI (Gemini). Ubicación SOLO europea: "eu" (multi-región UE) o "europe-*"
     # (se valida al crear el cliente). Credenciales: JSON de cuenta de servicio en
-    # `vertex_credentials`; vacío = credenciales por defecto (`gcloud auth application-default login`).
+    # `vertex_credentials` (ruta al archivo o su contenido); vacío = credenciales por defecto
+    # (`gcloud auth application-default login`).
     vertex_project: str = ""
     vertex_location: str = "eu"
     vertex_model: str = (
@@ -219,6 +221,16 @@ class Settings(BaseSettings):
     # El agente entra en la API con este secreto (cabecera Authorization: Bearer). Vacío = no
     agent_secret: str = ""
     agent_api_url: str = "http://127.0.0.1:8000"
+
+    @field_validator("database_url")
+    @classmethod
+    def _asyncpg_driver(cls, url: str) -> str:
+        # Managed databases and secret managers hand the URL over as postgresql:// (or
+        # postgres://), without the async driver the repository needs
+        for prefix in ("postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                return "postgresql+asyncpg://" + url.removeprefix(prefix)
+        return url
 
 
 settings = Settings()

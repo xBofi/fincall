@@ -207,7 +207,7 @@ export default function App() {
       if (optionsRef.current.voiceEnabled && text) {
         setVoiceState('respondiendo')
         streamingRef.current?.should_pause()
-        // En streaming el barge-in lo detecta el propio micrófono de la sesión (onBargeIn);
+        // En streaming el barge-in lo decide el servidor por palabras, sin el eco (onBargeIn);
         // en los otros modos, la vigilancia interna de `hablar`
         const rep = speak(text, BARGE_IN && !v.finished && !streamingRef.current)
         cancelSpeakingRef.current = rep.cancel
@@ -254,8 +254,9 @@ export default function App() {
         streamingRef.current = null
       }
       setVoiceState(streamingRef.current && !v.finished ? 'awaiting_voice' : 'idle')
-      if (!v.finished && optionsRef.current.handsFree && loopActiveRef.current && mode !== 'streaming') {
-        void listen()
+      if (!v.finished && optionsRef.current.handsFree && loopActiveRef.current) {
+        // En streaming también: si la sesión se cayó, se reabre para seguir escuchando
+        if (mode !== 'streaming' || !streamingRef.current) void listen()
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -491,8 +492,9 @@ export default function App() {
       }
       const v = await api.begin({ language: callLanguage || null, persona: persona || null })
       if (optionsRef.current.sttMode === 'streaming' && optionsRef.current.handsFree) {
-        // Abrimos el STT mientras suena el saludo para que la conexión no cueste latencia
-        void openCallStreaming(v.call_id).catch((e) => message.error(errorMessage(e)))
+        // El micrófono se abre ANTES del saludo: si se abría mientras sonaba, cortar el saludo
+        // caía en un hueco sin sesión y la llamada se quedaba sin escuchar
+        await openCallStreaming(v.call_id).catch((e) => message.error(errorMessage(e)))
       }
       await respond(v, null, {})
     } catch (e) {
@@ -506,6 +508,18 @@ export default function App() {
     loopActiveRef.current = false
     stopVoice()
     setVoiceState('idle')
+    setPartial(null)
+    const v = viewRef.current
+    const mode = optionsRef.current.sttMode
+    // LiveKit and the phone line close the call on the server side themselves
+    if (v && !v.finished && mode !== 'livekit' && mode !== 'twilio' && mode !== 'line') {
+      // Se da por terminada al momento (el botón pasa a «Nueva llamada») y el servidor la cierra
+      // como abandonada; antes solo se apagaba el micrófono y la llamada seguía «en curso»
+      const ended = { ...v, finished: true }
+      viewRef.current = ended
+      setView(ended)
+      api.hangUp(v.call_id).catch(() => undefined)
+    }
   }
 
   const logout = async () => {

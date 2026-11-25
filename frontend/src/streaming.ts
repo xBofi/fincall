@@ -40,6 +40,7 @@ registerProcessor('captura-pcm', CapturaPcm);
 export type ServerMessage =
   | { type: 'ready'; connection_ms?: number }
   | { type: 'partial'; text: string }
+  | { type: 'barge_in' }
   | { type: 'final'; text: string }
   | ({ type: 'reply' } & CallView)
   | { type: 'error'; message: string }
@@ -51,7 +52,7 @@ export interface CallbacksStreaming {
   onResponse: (view: CallView, lastVoiceAt: number) => void
   onError: (message: string) => void
   onVoice: (speaking: boolean) => void
-  /** El vecino habla mientras el asistente está en pausa (reproduciendo): barge-in. */
+  /** El vecino dice palabras (no eco) mientras el asistente habla: el servidor pide cortarlo. */
   onBargeIn?: () => void
   onClosed: () => void
 }
@@ -95,7 +96,6 @@ export async function openStreaming(
   ws.binaryType = 'arraybuffer'
 
   let paused = false
-  let pausedSince = 0
   let lastVoiceAt = 0
   let speaking = false
   let voiceSince = 0
@@ -104,17 +104,9 @@ export async function openStreaming(
   const markVoice = (rms: number) => {
     const now = performance.now()
     if (paused) {
-      // Barge-in: el asistente está hablando; el altavoz puede colarse por el micrófono, así que
-      // el umbral es más alto, se exige voz sostenida y se ignoran los primeros 400 ms
-      if (rms >= voiceThreshold * 2.5 && now - pausedSince > 400) {
-        voiceSince ||= now
-        if (now - voiceSince >= 250) {
-          voiceSince = 0
-          cb.onBargeIn?.()
-        }
-      } else {
-        voiceSince = 0
-      }
+      // Con el asistente hablando no se decide nada por volumen: en manos libres su propia voz
+      // entra por el micrófono y lo cortaba a media frase. El audio sigue yendo al servidor, que
+      // descarta el eco y manda `barge_in` cuando el vecino dice palabras de verdad.
       return
     }
     if (rms >= voiceThreshold) {
@@ -151,6 +143,9 @@ export async function openStreaming(
         break
       case 'partial':
         cb.onPartial(m.text)
+        break
+      case 'barge_in':
+        cb.onBargeIn?.()
         break
       case 'final':
         speaking = false
@@ -194,7 +189,6 @@ export async function openStreaming(
   return {
     should_pause: () => {
       paused = true
-      pausedSince = performance.now()
       voiceSince = 0
       send({ type: 'pause' })
     },
